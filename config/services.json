@@ -1,0 +1,27 @@
+{
+  "_comment": "Single source of truth for local service ports + the LLM backend. Consumers (web/ai_infra/app.py, syfi_llm_runtime.py, web/server, web/local_sidecar, web/app/astro.config.mjs, the vLLM serve script) read this. Environment variables still override at runtime: env > this file > hardcoded fallback (e.g. MASTER_SERVER_ADDRESS, LOCAL_SIDECAR_PORT).",
+  "master_server_address": "https://master.example.com",
+  "ports": {
+    "ai_backend": 60980,
+    "contribute_backend": 60981,
+    "local_sidecar": 60982,
+    "vllm": 60995
+  },
+  "llm": {
+    "_comment": "provider selects the active LLM backend: 'vllm' (self-hosted deployment) or 'openrouter'. Override with SYFI_LLM_PROVIDER (an explicit pin also disables fallback). 'fallback' (optional) names a second provider used when the primary is unreachable: the runtime probes the primary's /models endpoint and, on a connection error or 5xx, transparently routes the turn to the fallback provider's own backend. API keys are NOT stored here — OpenRouter uses OPENROUTER_API_KEY, and protected vLLM endpoints use SYFI_LLM_API_KEY in the environment. The 'vllm' block also drives the serve script (serve_qwen36_35b_a3b_fp8_vllm.sh). 'provider_routing' (OpenRouter only) is passed through as the request 'provider' field; order entries may carry a quantization suffix like 'atlas-cloud/fp8', and allow_fallbacks=true lets OpenRouter pick another provider if the preferred one is down.",
+    "provider": "vllm",
+    "fallback": "openrouter",
+    "vllm": {
+      "base_url": "http://127.0.0.1:60995/v1",
+      "model": "qwen3.6-35b-a3b-fp8"
+    },
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "qwen/qwen3.6-35b-a3b",
+      "provider_routing": {
+        "order": ["atlas-cloud/fp8"],
+        "allow_fallbacks": true
+      }
+    }
+  }
+}

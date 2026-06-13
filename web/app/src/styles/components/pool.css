@@ -1,0 +1,73 @@
+  /* ---- contributed dashboard ---- */
+
+  /* direct-contribute entry point */
+  .pool-contribute {
+    margin-top: 16px;
+    display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 28px; align-items: center;
+    background: linear-gradient(150deg, var(--sage-wash), var(--card));
+    border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 30px 32px; box-shadow: var(--sh-1);
+  }
+  .pool-contribute .pc-copy h2 {
+    font-family: var(--serif); font-weight: 540; font-size: var(--fs-2xl); line-height: 1.08;
+    margin: 10px 0 10px; letter-spacing: -0.01em;
+  }
+  .pool-contribute .pc-copy h2 em { font-style: italic; color: var(--terra); }
+  .pool-contribute .pc-copy p { color: var(--muted); font-size: var(--fs-base); line-height: 1.55; margin: 0; max-width: 58ch; }
+  .pool-contribute code {
+    background: var(--card-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1px 6px; font-size: var(--fs-sm); font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .pc-drop {
+    border: 2px dashed var(--terra-soft); border-radius: var(--r-md);
+    background: var(--card); padding: 26px 22px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
+    transition: background .3s var(--ease), border-color .3s var(--ease), transform .3s var(--ease);
+  }
+  .pc-drop:hover, .pc-drop:focus-visible {
+    background: var(--card-2); border-color: var(--terra); transform: translateY(-2px); outline: none;
+  }
+  .pc-drop.busy { border-style: solid; border-color: var(--sage); background: var(--sage-wash); }
+  .pc-ico {
+    width: 54px; height: 54px; border-radius: 16px; background: var(--terra-wash);
+    display: grid; place-items: center; margin-bottom: 4px; transition: background .3s var(--ease);
+  }
+  .pc-drop.busy .pc-ico { background: var(--card); }
+  .pc-ico svg { width: 27px; height: 27px; }
+  .pc-title { font-family: var(--serif); font-weight: 540; font-size: var(--fs-lg); }
+  .pc-sub { color: var(--muted); font-size: var(--fs-sm); }
+  @media (max-width: 720px) {
+    .pool-contribute { grid-template-columns: 1fr; gap: 22px; }
+  }
+
+  .banner {
+    background: linear-gradient(150deg, var(--terra-wash), var(--card));
+    border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 26px 30px; box-shadow: var(--sh-1); display: flex; align-items: center; gap: 18px;
+  }
+  .banner .ico { width: 48px; height: 48px; border-radius: 14px; background: var(--terra); display: grid; place-items: center; flex: none; }
+  .banner .ico svg { width: 26px; height: 26px; }
+  .banner .bt { font-family: var(--serif); font-weight: 540; font-size: var(--fs-xl); line-height: 1.2; }
+  .banner .bs { color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; }
+
+  table.contrib {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    overflow: hidden; box-shadow: var(--sh-1);
+  }
+  table.contrib thead th {
+    text-align: left; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 16px 20px; background: var(--card-2);
+    border-bottom: 1px solid var(--line);
+  }
+  table.contrib tbody td { padding: 16px 20px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  table.contrib tbody tr:last-child td { border-bottom: none; }
+  table.contrib tbody tr { transition: background .25s var(--ease); }
+  table.contrib tbody tr:hover { background: var(--card-2); }
+  .pid { font-family: var(--serif); font-weight: 540; font-size: var(--fs-base); }
+  .prov-pill { font-size: var(--fs-2xs); font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--terra-wash); color: #9a4a28; margin-right: 4px; }
+  .prov-pill.sage { background: var(--sage-wash); color: #4f5b3f; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: var(--fs-xs); }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+  .status.ok { color: var(--sage); } .status.ok::before { background: var(--sage); }
+  .status.pend { color: var(--gold); } .status.pend::before { background: var(--gold); }

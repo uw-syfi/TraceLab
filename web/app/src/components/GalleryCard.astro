@@ -1,0 +1,51 @@
+---
+import { sageCategories } from '../lib/figures';
+import { motifFor, motifSvg } from '../lib/figureMotif';
+
+interface StatLine {
+  label: string;
+  value: string;
+}
+interface Props {
+  category: string;
+  title: string;
+  blurb: string;
+  variant: 'figure' | 'stat';
+  src?: string;
+  statLines?: StatLine[];
+  slug?: string;
+  delay?: number;
+}
+const { category, title, blurb, variant, src, statLines = [], slug, delay = 0 } = Astro.props;
+const tagCls = sageCategories.has(category) ? 'tag sage' : 'tag';
+
+// Figure cards show a themed motif preview (inferred from the real figure filename/metadata); the
+// real chart lives on the detail page. Stat cards keep their summary-number canvas.
+const motifKey = variant === 'figure' ? motifFor({ category, src, slug, title }) : undefined;
+const motifHtml = motifKey ? motifSvg(motifKey, `${category}:${slug ?? src ?? title}`) : '';
+
+// When a card maps to an experiment, render it as a link to its detail page.
+const Tag = slug ? 'a' : 'article';
+const href = slug ? `/exp/${slug}` : undefined;
+---
+
+<Tag class={`fig reveal${slug ? ' fig-link' : ''}`} style={`--d:${delay}ms`} href={href}>
+  <div class={`canvas${variant === 'figure' ? ' canvas--motif' : ''}`} data-motif={motifKey}>
+    {variant === 'figure' ? (
+      <Fragment set:html={motifHtml} />
+    ) : (
+      <div class="stat-canvas">
+        {statLines.map((s) => (
+          <div class="stat-line">
+            <span class="sl-label">{s.label}</span>
+            <span class="sl-val num">{s.value}</span>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+  <div class="tagrow"><span class={tagCls}>{category}</span></div>
+  <h4>{title}</h4>
+  <p>{blurb}</p>
+  {slug && <span class="fig-more">Read more <span aria-hidden="true">→</span></span>}
+</Tag>

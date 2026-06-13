@@ -1,0 +1,19 @@
+/* Global design system for SyFI Trace Atlas, split by concern.
+   Ported verbatim from web/mockups/scheme-04-atelier.html (the approved "Atelier" scheme).
+   Order matters: tokens -> base -> layout -> components -> responsive (cascade). */
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './components/kpi.css';
+@import './components/panels.css';
+@import './components/gallery.css';
+@import './components/figures.css';
+@import './components/compare.css';
+@import './components/analyze.css';
+@import './components/ask-trace.css';
+@import './components/pool.css';
+@import './components/modal.css';
+@import './components/lightbox.css';
+@import './components/footer.css';
+@import './components/exp.css';
+@import './responsive.css';

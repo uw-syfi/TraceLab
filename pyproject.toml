@@ -1,0 +1,40 @@
+[project]
+name = "tracelab"
+version = "0.1.0"
+description = "Utilities and public examples for inspecting agent interaction traces."
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.5.3",
+    "e2b-code-interpreter>=2.8.0",
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Ask-the-trace AI sidecar (web/ai_infra/app.py). Install with `uv sync --extra ai`.
+# uvicorn[standard] bundles the websockets stack the WS endpoint needs.
+ai = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+# Contribute sidecar (web/server). Install with `uv sync --extra server`.
+server = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+]
+# Local self-deploy sidecar (web/local_sidecar): serves dist/, streams local ~/.claude + ~/.codex
+# trace, and reverse-proxies /api/* (incl. the chat WebSocket) to the master server. Install with
+# `uv sync --extra local_sidecar`. uvicorn[standard] bundles the websockets client the WS proxy needs.
+local_sidecar = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+]
+# Test tooling. Install with `uv sync --extra server --extra dev`.
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv]
+package = false

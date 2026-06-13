@@ -1,0 +1,38 @@
+---
+interface Props {
+  delay?: number;
+}
+
+const { delay = 120 } = Astro.props;
+const terms = [
+  {
+    name: 'Session',
+    desc: 'one continuous trace of work, often spanning multiple requests or problems.',
+  },
+  {
+    name: 'Request',
+    desc: "one user input through the agent's final response.",
+  },
+  {
+    name: 'Agent step',
+    desc: 'one model call inside a request.',
+  },
+  {
+    name: 'User-initiated step',
+    desc: 'an agent step started by user input.',
+  },
+  {
+    name: 'Tool-triggered step',
+    desc: 'an agent step started by a tool result.',
+  },
+];
+---
+
+<div class="term-strip reveal" style={`--d:${delay}ms`} aria-label="Trace terminology">
+  {terms.map((term) => (
+    <div class="term">
+      <div class="term-name">{term.name}</div>
+      <div class="term-desc">{term.desc}</div>
+    </div>
+  ))}
+</div>

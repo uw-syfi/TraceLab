@@ -1,0 +1,12 @@
+---
+interface Props {
+  delay?: number;
+  mt?: boolean;
+}
+const { delay = 0, mt = false } = Astro.props;
+const style = `--d:${delay}ms;${mt ? ' margin-top:16px;' : ''}`;
+---
+
+<div class="kpi-grid reveal" style={style}>
+  <slot />
+</div>

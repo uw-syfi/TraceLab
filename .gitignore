@@ -1,0 +1,52 @@
+.venv/
+.uv-cache/
+__pycache__/
+*.py[cod]
+
+trace/*.jsonl
+trace/*.jsonl.gz
+trace/*.json
+trace/*.csv
+trace/*.duckdb
+
+# artifacts/: track experiment code (*.py) and README.md only; everything else
+# under artifacts/ is a generated output and stays ignored. Each experiment lives
+# in artifacts/<category>/<experiment>/ and writes its PNG/CSV/JSON/MD reports
+# next to its script.
+artifacts/**/*.png
+artifacts/**/*.csv
+artifacts/**/*.json
+artifacts/**/*.jsonl
+artifacts/**/*.svg
+artifacts/**/*.pdf
+artifacts/**/*.md
+!artifacts/**/README.md
+# pricing.json is hand-maintained config (the single price source), not a generated report
+!artifacts/utils/pricing.json
+# hand-written schema reference (not a generated report), so keep it tracked:
+!artifacts/utils/DB_SCHEMA.md
+
+summary.before_*.json
+copy_from_other.sh
+!trace/README.md
+!artifacts/README.md
+
+# validators/: track validator code (*.py) and README.md only; generated CSV/JSON/MD
+# reports stay ignored next to the validator that produced them.
+validators/**/*.png
+validators/**/*.csv
+validators/**/*.json
+validators/**/*.jsonl
+validators/**/*.svg
+validators/**/*.pdf
+validators/**/*.md
+!validators/**/README.md
+
+# Contribute sidecar runtime pool (uploads + index + snapshot)
+web/server/data/
+
+# Scratch screenshots, local test fixtures, and scratch design demos (not part of the build)
+/image*.png
+/test_workload_*.tar.gz
+/trace.tar.gz
+web/app/*-preview.html

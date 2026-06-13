@@ -1,0 +1,174 @@
+---
+// Image viewer / lightbox. Any `<img data-zoomable>` on the page opens here: a dimmed,
+// full-screen backdrop with the image fit to the viewport. Click (or wheel) to zoom toward
+// the pointer, drag to pan once zoomed, buttons + keyboard (Esc / + / - / 0) to control.
+// Include once on any page that has zoomable images (e.g. the experiment detail page).
+---
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Image viewer" aria-hidden="true">
+  <button class="lb-close" id="lb-close" type="button" aria-label="Close image viewer">×</button>
+  <div class="lb-caption" id="lb-caption"></div>
+  <img class="lb-img" id="lb-img" alt="" draggable="false" />
+  <div class="lb-toolbar" role="group" aria-label="Zoom controls">
+    <button class="lb-btn" id="lb-out" type="button" aria-label="Zoom out">−</button>
+    <span class="lb-zoom num" id="lb-zoom">100%</span>
+    <button class="lb-btn" id="lb-in" type="button" aria-label="Zoom in">+</button>
+    <button class="lb-btn" id="lb-reset" type="button" aria-label="Fit to screen" title="Fit to screen">⤢</button>
+  </div>
+</div>
+
+<script>
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const lb = $('lightbox');
+  const img = $<HTMLImageElement>('lb-img');
+  const caption = $('lb-caption');
+  const zoomLabel = $('lb-zoom');
+
+  const MIN = 1;
+  const MAX = 8;
+  const STEP = 1.8; // per click / button press
+
+  let scale = 1;
+  let tx = 0; // image-centre offset from viewport centre, in px
+  let ty = 0;
+  let lastFocus: Element | null = null;
+
+  function apply() {
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    zoomLabel.textContent = `${Math.round(scale * 100)}%`;
+    lb.classList.toggle('zoomed', scale > 1.001);
+  }
+
+  // Keep the image centre within the viewport so it can never be flung out of reach.
+  function clampPan() {
+    const mx = window.innerWidth / 2;
+    const my = window.innerHeight / 2;
+    tx = Math.max(-mx, Math.min(mx, tx));
+    ty = Math.max(-my, Math.min(my, ty));
+  }
+
+  // Zoom to `next`, keeping the point under (cx, cy) fixed. transform-origin is the image
+  // centre, so its on-screen centre is always (viewportCentre + t); solve t to pin the point.
+  function zoomTo(next: number, cx: number, cy: number) {
+    next = Math.max(MIN, Math.min(MAX, next));
+    const dx = cx - window.innerWidth / 2;
+    const dy = cy - window.innerHeight / 2;
+    const r = next / scale;
+    tx = dx - (dx - tx) * r;
+    ty = dy - (dy - ty) * r;
+    scale = next;
+    if (scale <= MIN + 0.001) {
+      scale = 1;
+      tx = 0;
+      ty = 0;
+    }
+    clampPan();
+    apply();
+  }
+
+  function reset() {
+    scale = 1;
+    tx = 0;
+    ty = 0;
+    apply();
+  }
+
+  function open(src: string, alt: string, cap: string) {
+    lastFocus = document.activeElement;
+    img.src = src;
+    img.alt = alt;
+    caption.textContent = cap;
+    caption.style.display = cap ? '' : 'none';
+    reset();
+    lb.classList.add('open');
+    lb.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    $<HTMLButtonElement>('lb-close').focus();
+  }
+
+  function close() {
+    lb.classList.remove('open');
+    lb.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    img.removeAttribute('src');
+    (lastFocus as HTMLElement | null)?.focus?.();
+  }
+
+  // Open from any zoomable image on the page. Delegated so images streamed in later
+  // (e.g. the Analyze tab's rendered figures) work without re-binding.
+  document.addEventListener('click', (e) => {
+    const el = (e.target as HTMLElement)?.closest?.('img[data-zoomable]') as HTMLImageElement | null;
+    if (!el) return;
+    const src = el.currentSrc || el.getAttribute('src');
+    if (!src) return; // placeholder not filled yet
+    open(src, el.alt, el.getAttribute('data-caption') || el.alt || '');
+  });
+
+  // Wheel zooms toward the cursor.
+  lb.addEventListener(
+    'wheel',
+    (e) => {
+      if (!lb.classList.contains('open')) return;
+      e.preventDefault();
+      zoomTo(scale * (e.deltaY < 0 ? 1.18 : 1 / 1.18), e.clientX, e.clientY);
+    },
+    { passive: false },
+  );
+
+  // Drag to pan; a press that doesn't move is a click → zoom in toward the point (reset at max).
+  let down = false;
+  let moved = false;
+  let px = 0;
+  let py = 0;
+  let startX = 0;
+  let startY = 0;
+
+  img.addEventListener('pointerdown', (e) => {
+    down = true;
+    moved = false;
+    px = startX = e.clientX;
+    py = startY = e.clientY;
+    img.setPointerCapture(e.pointerId);
+    lb.classList.add('dragging');
+  });
+  img.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) moved = true;
+    if (scale > 1) {
+      tx += e.clientX - px;
+      ty += e.clientY - py;
+      clampPan();
+      apply();
+    }
+    px = e.clientX;
+    py = e.clientY;
+  });
+  img.addEventListener('pointerup', (e) => {
+    lb.classList.remove('dragging');
+    if (!down) return;
+    down = false;
+    if (!moved) {
+      if (scale >= MAX - 0.001) reset();
+      else zoomTo(scale * STEP, e.clientX, e.clientY);
+    }
+  });
+
+  const mid = () => [window.innerWidth / 2, window.innerHeight / 2] as const;
+  $('lb-in').addEventListener('click', () => zoomTo(scale * STEP, ...mid()));
+  $('lb-out').addEventListener('click', () => zoomTo(scale / STEP, ...mid()));
+  $('lb-reset').addEventListener('click', reset);
+  $('lb-close').addEventListener('click', close);
+
+  // Click on the dimmed backdrop (not the image or toolbar) closes.
+  lb.addEventListener('click', (e) => {
+    if (e.target === lb) close();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!lb.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === '+' || e.key === '=') zoomTo(scale * STEP, ...mid());
+    else if (e.key === '-') zoomTo(scale / STEP, ...mid());
+    else if (e.key === '0') reset();
+  });
+</script>

@@ -1,0 +1,137 @@
+# SyFI Trace Atlas — build orchestration.
+# uv owns Python; npm owns JS; this file is the single command surface.
+#
+#   just all                              # render the default trace -> assets -> site
+#   just all input=trace/sample.jsonl     # same, but from a trace you pick
+#   just render input=trace/foo.jsonl     # just the toolkit render (figures + summary.json)
+#   just assets                           # copy figures + summary.json into app/public
+#   just start-all                        # remote vLLM + AI backend + contributor backend + frontend
+#   just dev-all                          # local AI backend + contributor backend + frontend dev server
+#   just status                           # health check the dev stack + remote vLLM
+#   just dev                              # astro dev server only
+#   just site                             # astro production build
+#
+# The figures AND the headline numbers both come from ONE render of `input`, so the site is
+# always internally consistent — no mixing of a sample render with a different summary.json.
+
+web_dir := justfile_directory()
+repo := justfile_directory() / ".."
+
+# Default trace the site is built from (relative to the repo root). Override per-invocation.
+input := "trace/syfi_coding_trace.jsonl"
+
+# Render figures + summary.json from the chosen trace (writes into artifacts/).
+render input=input:
+    cd "{{repo}}" && uv run python artifacts/run_all.py --input "{{input}}"
+
+# Fast render over the bundled sample trace (Claude-only — handy for quick UI iteration).
+render-sample:
+    cd "{{repo}}" && uv run python artifacts/run_all.py --input trace/sample.jsonl
+
+# Copy pre-rendered figures + summary.json into app/public (idempotent; skips what isn't rendered yet).
+assets:
+    node "{{web_dir}}/scripts/build-payload.mjs"
+
+# Astro dev server (predev hook copies assets first).
+dev:
+    cd "{{web_dir}}/app" && npm run dev -- --host 0.0.0.0 --port 60990
+
+# Astro production build -> app/dist (prebuild hook copies assets first).
+site:
+    cd "{{web_dir}}/app" && npm run build
+
+# End-to-end from one trace: render -> copy assets -> build the site.
+all input=input: (render input) assets site
+
+# Headless screenshots of a mockup (defaults to scheme-04-atelier). Dev utility — one-time setup:
+#   cd web/tools/shots && npm install && npm run browser
+shots target="":
+    cd "{{web_dir}}/tools/shots" && node shoot.mjs {{target}}
+
+# Two separate /api backends (different resource/failure/scaling profiles); all ports live in
+# config/services.json. The Astro dev proxy splits /api/chat -> AI and the rest of /api -> contribute.
+# `just serve` runs both.
+
+# Ask-the-trace AI sidecar.
+ai-serve:
+    cd "{{repo}}" && uv run --extra ai python web/ai_infra/app.py
+
+# Contribute sidecar (FastAPI): /api/pool + /api/contribute*. Port from config. One-time: `uv sync --extra server`.
+contrib-serve:
+    cd "{{repo}}" && uv run --extra server python -m web.server
+
+# Local self-deploy sidecar: serves dist/, streams local ~/.claude+~/.codex, proxies /api to the
+# master. Build the site first (`just site`). One-time: `uv sync --extra local_sidecar`. Leave
+# master= empty to use config/services.json:master_server_address.
+local-serve master="":
+    cd "{{repo}}" && MASTER_SERVER_ADDRESS="{{master}}" uv run --extra local_sidecar python -m web.local_sidecar
+
+# Run both /api backends together (Ctrl-C stops both). AI keys/LLM env pass through.
+serve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'kill 0' EXIT
+    cd "{{repo}}"
+    uv run --extra ai python web/ai_infra/app.py &
+    uv run --extra server python -m web.server &
+    wait
+
+# Run the complete dev stack.
+dev-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f "$HOME/.bashrc" ]]; then
+      set +u
+      source "$HOME/.bashrc"
+      set -u
+    fi
+    if [[ -z "${E2B_API_KEY:-}" && -n "${E2B_KEY:-}" ]]; then
+      export E2B_API_KEY="$E2B_KEY"
+    fi
+    trap 'kill 0' EXIT
+    cd "{{repo}}"
+    uv run --extra ai python web/ai_infra/app.py &
+    uv run --extra server python -m web.server &
+    cd "{{web_dir}}/app"
+    npm run dev -- --host 0.0.0.0 --port 60990 &
+    wait
+
+# Ensure the remote vLLM engine is running (set SYFI_VLLM_SSH_HOST to the host).
+vllm-ensure:
+    "{{web_dir}}/scripts/ensure-vllm.sh"
+
+# Ensure remote vLLM is up, then run the local dev stack.
+start-all: vllm-ensure dev-all
+
+# Health check frontend, both local API backends, and the configured remote vLLM endpoint.
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f "$HOME/.bashrc" ]]; then
+      set +u
+      source "$HOME/.bashrc"
+      set -u
+    fi
+    check() {
+      local name="$1"
+      shift
+      local code
+      if code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 "$@" 2>/dev/null)"; then
+        if [[ "$code" =~ ^[23] ]]; then
+          printf "%-18s ok (%s)\n" "$name" "$code"
+        else
+          printf "%-18s bad (%s)\n" "$name" "$code"
+        fi
+      else
+        printf "%-18s down\n" "$name"
+      fi
+    }
+    check "frontend" http://127.0.0.1:60990/
+    check "ai backend" http://127.0.0.1:60980/api/health
+    check "contrib backend" http://127.0.0.1:60981/api/health
+    check "frontend /api" http://127.0.0.1:60990/api/pool
+    if [[ -n "${SYFI_LLM_API_KEY:-}" ]]; then
+      check "vLLM" -H "Authorization: Bearer ${SYFI_LLM_API_KEY}" "${SYFI_LLM_BASE_URL:-http://127.0.0.1:60995/v1}/models"
+    else
+      printf "%-18s skipped (SYFI_LLM_API_KEY missing)\n" "vLLM"
+    fi

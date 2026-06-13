@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SyFI Trace Atlas · Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Hanken+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  /* ============ ATELIER — warm soft-luxury / organic ============ */
+  :root {
+    --canvas: #f3ece1;      /* warm sand */
+    --card: #fbf7f0;        /* cream */
+    --card-2: #f8f1e6;
+    --ink: #2a2622;         /* deep ink */
+    --muted: #6f655a;       /* muted clay — darkened for legible contrast on cream */
+    --line: #e7dccb;        /* hairline */
+    --terra: #c8643c;       /* primary terracotta */
+    --terra-soft: #e8a583;
+    --terra-wash: #f4dcc9;
+    --sage: #6f7d5e;        /* secondary sage */
+    --sage-soft: #a6b193;
+    --sage-wash: #dfe4d2;
+    --gold: #c9a25a;
+    /* warm-brown soft shadows */
+    --sh-1: 0 1px 2px rgba(94, 64, 40, 0.05), 0 8px 22px rgba(94, 64, 40, 0.06);
+    --sh-2: 0 2px 6px rgba(94, 64, 40, 0.06), 0 18px 44px rgba(94, 64, 40, 0.10);
+    --sh-3: 0 4px 10px rgba(94, 64, 40, 0.08), 0 30px 70px rgba(94, 64, 40, 0.16);
+    --r-sm: 14px;
+    --r-md: 20px;
+    --r-lg: 28px;
+    --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: "Hanken Grotesk", "Avenir Next", "Segoe UI", Helvetica, sans-serif;
+    --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* legible characterful display serif — crisp optical size, not wispy */
+  h1, h2, h3, h4, .brand .name, .name, .num,
+  .legend .val, .range-strip .rv, .pid {
+    font-optical-sizing: auto;
+  }
+
+  /* big stat numerals — clean sans, tabular figures, unmistakable at a glance */
+  .num {
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--canvas);
+    font-weight: 400;
+    font-size: 15.5px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  /* ---- floating organic background blobs ---- */
+  .blobs { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.55;
+    will-change: transform;
+  }
+  .blob.b1 { width: 46vw; height: 46vw; left: -12vw; top: -10vw;
+    background: radial-gradient(circle at 35% 35%, #f4dcc9, rgba(244,220,201,0)); animation: float1 26s var(--ease) infinite; }
+  .blob.b2 { width: 40vw; height: 40vw; right: -10vw; top: 18vh;
+    background: radial-gradient(circle at 60% 40%, #dfe4d2, rgba(223,228,210,0)); animation: float2 32s var(--ease) infinite; }
+  .blob.b3 { width: 38vw; height: 38vw; left: 30vw; bottom: -16vw;
+    background: radial-gradient(circle at 50% 50%, #f1d6b8, rgba(241,214,184,0)); animation: float3 38s var(--ease) infinite; opacity: 0.4; }
+
+  @keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(4vw,3vh) scale(1.08); } }
+  @keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-3vw,4vh) scale(1.1); } }
+  @keyframes float3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(2vw,-3vh) scale(0.94); } }
+
+  /* ---- layout shell ---- */
+  .shell { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 28px 80px; }
+
+  /* ---- top nav ---- */
+  header.topbar {
+    position: sticky; top: 0; z-index: 30;
+    backdrop-filter: blur(14px) saturate(1.1);
+    background: rgba(243, 236, 225, 0.72);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 1180px; margin: 0 auto; padding: 14px 28px;
+    display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+  .brand .mark {
+    width: 38px; height: 38px; border-radius: 12px; flex: none;
+    background: linear-gradient(150deg, var(--terra), #a94f2d);
+    display: grid; place-items: center; box-shadow: var(--sh-1);
+  }
+  .brand .mark svg { width: 22px; height: 22px; }
+  .brand .name { font-family: var(--serif); font-weight: 560; font-size: 24px; line-height: 1; letter-spacing: 0.1px; }
+  .brand .name em { font-style: italic; color: var(--terra); }
+
+  nav.tabs { display: flex; gap: 4px; background: rgba(251,247,240,0.6); padding: 5px; border-radius: 999px; border: 1px solid var(--line); }
+  nav.tabs button {
+    font-family: var(--sans); font-size: 14px; font-weight: 500; color: var(--muted);
+    border: none; background: transparent; padding: 9px 18px; border-radius: 999px;
+    cursor: pointer; transition: color .3s var(--ease), background .3s var(--ease), box-shadow .3s var(--ease);
+    white-space: nowrap;
+  }
+  nav.tabs button:hover { color: var(--ink); }
+  nav.tabs button.active {
+    color: var(--ink); background: var(--card);
+    box-shadow: var(--sh-1); font-weight: 600;
+  }
+  nav.tabs button:focus-visible { outline: 2px solid var(--terra); outline-offset: 2px; }
+
+  /* ---- surface switching ---- */
+  .surface { display: none; }
+  .surface.live { display: block; }
+
+  /* ---- reveal ---- */
+  .reveal { opacity: 0; transform: translateY(18px); }
+  .surface.live .reveal {
+    animation: fadeUp 0.9s var(--ease) forwards;
+    animation-delay: var(--d, 0ms);
+  }
+  @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+  /* ---- hero ---- */
+  .hero { padding: 64px 0 30px; max-width: 760px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--sage); font-weight: 600; margin-bottom: 22px;
+  }
+  .eyebrow::before { content: ""; width: 26px; height: 1.5px; background: var(--sage); display: inline-block; }
+  .hero h1 {
+    font-family: var(--serif); font-weight: 540;
+    font-size: clamp(44px, 7vw, 80px); line-height: 1.02;
+    margin: 0 0 22px; letter-spacing: -0.5px;
+  }
+  .hero h1 em { font-style: italic; color: var(--terra); }
+  .hero p.lede { font-size: clamp(18px, 2.2vw, 22px); color: var(--muted); max-width: 560px; margin: 0; font-weight: 400; line-height: 1.5; }
+
+  /* ---- section heading ---- */
+  .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 56px 0 22px; flex-wrap: wrap; }
+  .sec-head h2 { font-family: var(--serif); font-weight: 540; font-size: clamp(28px, 4vw, 38px); margin: 0; letter-spacing: -0.2px; }
+  .sec-head .sub { color: var(--muted); font-size: 15px; max-width: 420px; line-height: 1.5; }
+
+  /* ---- KPI tiles ---- */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .kpi-grid.small { grid-template-columns: repeat(4, 1fr); }
+  .kpi {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 22px 22px 20px; box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+  }
+  .kpi:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+  .kpi .label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .kpi .num { font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: clamp(33px, 4.2vw, 47px); line-height: 1.05; margin: 8px 0 0; letter-spacing: -0.8px; }
+  .kpi .num small { font-size: 0.44em; color: var(--muted); font-family: var(--sans); font-weight: 600; letter-spacing: 0; }
+  .kpi .foot { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .kpi.feature { background: linear-gradient(155deg, var(--terra-wash), var(--card)); }
+  .kpi.feature .num { color: var(--terra); }
+  .kpi.sagey { background: linear-gradient(155deg, var(--sage-wash), var(--card)); }
+  .kpi.sagey .num { color: var(--sage); }
+  .kpi.wide { grid-column: span 2; }
+
+  /* ---- two-column band ---- */
+  .band { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; margin-top: 20px; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 28px; box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+  }
+  .panel:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+  .panel h3 { font-family: var(--serif); font-weight: 540; font-size: 25px; margin: 0 0 4px; }
+  .panel .desc { color: var(--muted); font-size: 14.5px; margin: 0 0 18px; }
+
+  /* provider split legend */
+  .legend { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+  .legend .row { display: flex; align-items: center; gap: 12px; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+  .legend .nm { font-weight: 600; font-size: 15px; }
+  .legend .val { margin-left: auto; font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: 20px; letter-spacing: -0.3px; color: var(--ink); }
+  .legend .pct { color: var(--muted); font-size: 13px; margin-left: 8px; font-weight: 500; }
+
+  /* date range strip */
+  .range-strip {
+    display: flex; align-items: center; gap: 16px; margin-top: 22px;
+    background: var(--card-2); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 18px 24px;
+  }
+  .range-strip .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--sage-wash); display: grid; place-items: center; flex: none; }
+  .range-strip .ico svg { width: 22px; height: 22px; }
+  .range-strip .rt { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .range-strip .rv { font-family: var(--serif); font-weight: 540; font-size: 21px; }
+
+  /* ---- figure gallery ---- */
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .fig {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 18px 18px 20px; box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+    display: flex; flex-direction: column;
+  }
+  .fig:hover { transform: translateY(-6px); box-shadow: var(--sh-2); }
+  .fig .canvas {
+    border-radius: var(--r-md); overflow: hidden; background: var(--card-2);
+    border: 1px solid var(--line); margin-bottom: 14px;
+  }
+  .fig .canvas svg { display: block; width: 100%; height: auto; }
+  .fig .tagrow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .tag {
+    font-size: 11px; letter-spacing: 0.04em; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    background: var(--terra-wash); color: #9a4a28;
+  }
+  .tag.sage { background: var(--sage-wash); color: #4f5b3f; }
+  .tag.cache { background: #f0e4cb; color: #9a7a2e; }
+  .tag.hil { background: #ecddd1; color: #8a5a3a; }
+  .tag.sess { background: #e3e0d4; color: #6a6450; }
+  .badge {
+    margin-left: auto; font-size: 10.5px; font-weight: 600; color: var(--sage);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
+  .fig h4 { font-family: var(--serif); font-weight: 540; font-size: 20px; margin: 0 0 4px; line-height: 1.15; }
+  .fig p { color: var(--muted); font-size: 13.5px; margin: 0; line-height: 1.5; }
+
+  /* ---- provider comparison surface ---- */
+  .vs-head { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .vs-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 26px 28px; box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+  }
+  .vs-card:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+  .vs-card.terra { background: linear-gradient(155deg, var(--terra-wash), var(--card)); }
+  .vs-card.sage  { background: linear-gradient(155deg, var(--sage-wash), var(--card)); }
+  .vs-card .pv { display: flex; align-items: center; gap: 10px; }
+  .vs-card .pv .dot { width: 13px; height: 13px; border-radius: 5px; flex: none; }
+  .vs-card .pv .pnm { font-family: var(--serif); font-weight: 540; font-size: 24px; line-height: 1; }
+  .vs-card .pv .pshare { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
+  .vs-card .pbig { font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: clamp(34px, 5vw, 48px); line-height: 1.05; margin: 14px 0 2px; letter-spacing: -0.8px; }
+  .vs-card.terra .pbig { color: var(--terra); }
+  .vs-card.sage  .pbig { color: var(--sage); }
+  .vs-card .psub { font-size: 12.5px; color: var(--muted); }
+
+  /* ghosted "coming soon" provider slot */
+  .vs-card.ghost {
+    background: var(--card-2);
+    border: 1px dashed rgba(42, 38, 34, 0.28);
+    box-shadow: none;
+    color: var(--muted);
+  }
+  .vs-card.ghost:hover { transform: translateY(-4px); box-shadow: var(--sh-1); }
+  .vs-card.ghost .pv .dot { background: rgba(42, 38, 34, 0.22); }
+  .vs-card.ghost .pv .pnm { color: var(--muted); }
+  .vs-card.ghost .pbig { color: var(--muted); opacity: 0.65; }
+  .vs-card.ghost .psub { color: var(--muted); }
+
+  /* "coming soon" crossfade */
+  .ticker {
+    position: relative; display: inline-grid; vertical-align: bottom;
+    height: 1.25em; text-align: center;
+  }
+  .ticker > span {
+    grid-area: 1 / 1; white-space: nowrap; line-height: 1.25;
+    opacity: 0; animation: ticker-fade 8s ease-in-out infinite;
+  }
+  .ticker > span:nth-child(1) { animation-delay: 0s; }
+  .ticker > span:nth-child(2) { animation-delay: 2s; }
+  .ticker > span:nth-child(3) { animation-delay: 4s; }
+  .ticker > span:nth-child(4) { animation-delay: 6s; }
+  @keyframes ticker-fade {
+    0%   { opacity: 0; }
+    3%   { opacity: 1; }
+    22%  { opacity: 1; }
+    28%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
+  .soon-cap {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .soon-cap .gdot {
+    width: 6px; height: 6px; border-radius: 50%; flex: none;
+    border: 1px dashed rgba(42, 38, 34, 0.4);
+  }
+
+  /* ghost split segment */
+  .split-bar i.ghost {
+    background: repeating-linear-gradient(45deg, rgba(42,38,34,0.06), rgba(42,38,34,0.06) 4px, transparent 4px, transparent 8px);
+    border-left: 1px dashed rgba(42, 38, 34, 0.32);
+  }
+
+  /* ghosted comparison-table column */
+  table.h2h-tbl thead th.soon-col, table.h2h-tbl tbody td.soon-col { color: var(--muted); }
+  table.h2h-tbl tbody td.soon-col { opacity: 0.55; font-weight: 500; }
+  table.h2h-tbl thead th.soon-col .ticker { color: var(--muted); font-weight: 600; }
+
+  /* slim split bar */
+  .split-bar { display: flex; height: 16px; border-radius: 999px; overflow: hidden; border: 1px solid var(--line); margin-top: 8px; }
+  .split-bar i { display: block; height: 100%; }
+  .split-cap { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+
+  /* head-to-head KPI rows */
+  .h2h { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1); overflow: hidden; }
+  .h2h .h2h-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--line); }
+  .h2h .h2h-row:last-child { border-bottom: none; }
+  .h2h .h2h-row.head { background: var(--card-2); }
+  .h2h .cell { padding: 14px 22px; display: flex; flex-direction: column; gap: 2px; }
+  .h2h .cell + .cell { border-left: 1px solid var(--line); }
+  .h2h .mlabel { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .h2h .mval { font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: 22px; letter-spacing: -0.4px; }
+  .h2h .head .ph { display: flex; align-items: center; gap: 9px; font-family: var(--serif); font-weight: 540; font-size: 19px; }
+  .h2h .head .ph .dot { width: 11px; height: 11px; border-radius: 4px; flex: none; }
+  .h2h .cell.win-terra .mval { color: var(--terra); }
+  .h2h .cell.win-sage  .mval { color: var(--sage); }
+
+  /* comparison figure gallery — two-up */
+  .cmp-gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+
+  /* svg legend chip row */
+  .svg-legend { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; flex-wrap: wrap; }
+  .svg-legend .lg { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .svg-legend .lg .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+
+  /* paired gauges */
+  .gauge-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* head-to-head table */
+  table.h2h-tbl {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    overflow: hidden; box-shadow: var(--sh-1);
+  }
+  table.h2h-tbl thead th {
+    text-align: right; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 15px 20px; background: var(--card-2);
+    border-bottom: 1px solid var(--line);
+  }
+  table.h2h-tbl thead th:first-child { text-align: left; }
+  table.h2h-tbl tbody td { padding: 14px 20px; border-bottom: 1px solid var(--line); font-size: 14.5px; text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  table.h2h-tbl tbody td:first-child { text-align: left; font-weight: 600; }
+  table.h2h-tbl tbody tr:last-child td { border-bottom: none; }
+  table.h2h-tbl tbody tr { transition: background .25s var(--ease); }
+  table.h2h-tbl tbody tr:hover { background: var(--card-2); }
+  table.h2h-tbl td.win-terra { color: var(--terra); font-weight: 700; background: var(--terra-wash); }
+  table.h2h-tbl td.win-sage  { color: var(--sage); font-weight: 700; background: var(--sage-wash); }
+  table.h2h-tbl td.delta { color: var(--muted); font-weight: 600; }
+
+  /* consolidated comparison table — labelled group headers */
+  table.h2h-tbl tr.grp-head td {
+    text-align: left; padding: 16px 20px 8px;
+    background: var(--card); border-bottom: 1px solid var(--line);
+  }
+  table.h2h-tbl tr.grp-head td .gname {
+    font-family: var(--serif); font-weight: 540; font-size: 18px; color: var(--ink); letter-spacing: -0.2px;
+  }
+  table.h2h-tbl tr.grp-head td .gnote { font-size: 12.5px; color: var(--muted); margin-left: 10px; font-weight: 500; }
+  /* directional arrow chip on the metric label */
+  .dir { font-size: 11px; font-weight: 700; color: var(--muted); margin-left: 7px; font-variant-numeric: normal; }
+  /* profile rows — descriptive only, never judged */
+  table.h2h-tbl tr.profile td.val { color: var(--ink); font-weight: 600; }
+  table.h2h-tbl tr.profile td.val.na { color: var(--muted); font-weight: 500; }
+  /* winning side — subtle tint + left accent, follows the actual better provider */
+  table.h2h-tbl td.win-terra { box-shadow: inset 3px 0 0 var(--terra); }
+  table.h2h-tbl td.win-sage  { box-shadow: inset 3px 0 0 var(--sage); }
+  table.h2h-tbl td.delta b.who-terra { color: var(--terra); }
+  table.h2h-tbl td.delta b.who-sage  { color: var(--sage); }
+  table.h2h-tbl td.delta b { font-weight: 700; }
+  /* legend for the consolidated table */
+  .tbl-legend { display: flex; align-items: center; gap: 18px; margin: 14px 2px 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+  .tbl-legend .lg { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--ink); }
+  .tbl-legend .lg .ar { font-weight: 700; color: var(--muted); }
+
+  @media (max-width: 768px) {
+    .vs-head { grid-template-columns: 1fr; }
+    .cmp-gallery { grid-template-columns: 1fr; }
+    table.h2h-tbl { display: block; overflow-x: auto; }
+    table.h2h-tbl thead, table.h2h-tbl tbody, table.h2h-tbl tr { display: block; }
+    table.h2h-tbl thead { display: none; }
+    table.h2h-tbl tbody tr.grp-head td { padding: 14px 18px 6px; }
+    table.h2h-tbl tbody tr:not(.grp-head) { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+    table.h2h-tbl tbody tr:not(.grp-head) td { border-bottom: none; padding: 10px 18px; }
+    table.h2h-tbl tbody tr:not(.grp-head) td:first-child { grid-column: 1 / -1; padding-bottom: 2px; }
+    table.h2h-tbl tbody tr:not(.grp-head) td.delta { grid-column: 1 / -1; padding-top: 2px; text-align: left; }
+    table.h2h-tbl tbody td[data-h]::before { content: attr(data-h); display: block; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+  }
+
+  /* ---- analyze surface ---- */
+  .privacy-note {
+    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(150deg, var(--sage-wash), var(--card));
+    border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px 26px;
+    box-shadow: var(--sh-1); margin-bottom: 26px;
+  }
+  .privacy-note .ico { width: 46px; height: 46px; border-radius: 14px; background: var(--sage); display: grid; place-items: center; flex: none; }
+  .privacy-note .ico svg { width: 26px; height: 26px; }
+  .privacy-note .pt { font-family: var(--serif); font-weight: 540; font-size: 21px; line-height: 1.2; }
+  .privacy-note .ps { color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+
+  .dropzone {
+    border: 2px dashed var(--terra-soft); border-radius: var(--r-lg);
+    background: var(--card); padding: 54px 30px; text-align: center; cursor: pointer;
+    transition: background .35s var(--ease), border-color .35s var(--ease), transform .35s var(--ease);
+    box-shadow: var(--sh-1);
+  }
+  .dropzone:hover { background: var(--card-2); border-color: var(--terra); transform: translateY(-2px); }
+  .dropzone.busy { border-style: solid; border-color: var(--sage); }
+  .dropzone.done { border-style: solid; border-color: var(--sage); background: linear-gradient(150deg, var(--sage-wash), var(--card)); }
+  .dropzone .dz-ico {
+    width: 72px; height: 72px; border-radius: 22px; margin: 0 auto 18px;
+    background: var(--terra-wash); display: grid; place-items: center;
+    transition: background .35s var(--ease);
+  }
+  .dropzone.busy .dz-ico, .dropzone.done .dz-ico { background: var(--sage-wash); }
+  .dropzone .dz-ico svg { width: 36px; height: 36px; }
+  .dropzone .dz-title { font-family: var(--serif); font-weight: 540; font-size: 27px; margin-bottom: 6px; }
+  .dropzone .dz-sub { color: var(--muted); font-size: 14.5px; }
+  .progress { height: 6px; border-radius: 999px; background: var(--line); margin: 22px auto 0; max-width: 380px; overflow: hidden; display: none; }
+  .dropzone.busy .progress, .dropzone.done .progress { display: block; }
+  .progress > i { display: block; height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--terra), var(--sage)); transition: width .6s var(--ease); }
+
+  .results-wrap { margin-top: 30px; opacity: 0; max-height: 0; overflow: hidden; transition: opacity .6s var(--ease); }
+  .results-wrap.show { opacity: 1; max-height: none; overflow: visible; }
+
+  /* contribute panel */
+  .contribute {
+    margin-top: 26px; background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--r-lg); padding: 28px; box-shadow: var(--sh-1);
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  }
+  .contribute .ctxt { flex: 1 1 320px; }
+  .contribute h3 { font-family: var(--serif); font-weight: 540; font-size: 25px; margin: 0 0 6px; }
+  .contribute p { color: var(--muted); font-size: 14.5px; margin: 0; line-height: 1.5; }
+  .toggle-wrap { display: flex; align-items: center; gap: 12px; }
+  .switch { position: relative; width: 50px; height: 28px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; border-radius: 999px; background: var(--line);
+    transition: background .3s var(--ease); cursor: pointer;
+  }
+  .switch .track::before {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--card); box-shadow: var(--sh-1);
+    transition: transform .3s var(--ease);
+  }
+  .switch input:checked + .track { background: var(--sage); }
+  .switch input:checked + .track::before { transform: translateX(22px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--terra); outline-offset: 2px; }
+  .toggle-label { font-size: 14px; font-weight: 500; }
+
+  /* buttons */
+  .btn {
+    font-family: var(--sans); font-weight: 600; font-size: 14.5px; cursor: pointer;
+    border-radius: 999px; padding: 13px 26px; border: 1px solid transparent;
+    transition: transform .3s var(--ease), box-shadow .3s var(--ease), background .3s var(--ease);
+  }
+  .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .btn-primary { background: var(--terra); color: #fff; box-shadow: var(--sh-1); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: var(--sh-2); background: #b85733; }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { background: var(--card-2); transform: translateY(-2px); }
+
+  /* ---- contributed dashboard ---- */
+  .banner {
+    background: linear-gradient(150deg, var(--terra-wash), var(--card));
+    border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 26px 30px; box-shadow: var(--sh-1); display: flex; align-items: center; gap: 18px;
+  }
+  .banner .ico { width: 48px; height: 48px; border-radius: 14px; background: var(--terra); display: grid; place-items: center; flex: none; }
+  .banner .ico svg { width: 26px; height: 26px; }
+  .banner .bt { font-family: var(--serif); font-weight: 540; font-size: 23px; line-height: 1.2; }
+  .banner .bs { color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+
+  table.contrib {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    overflow: hidden; box-shadow: var(--sh-1);
+  }
+  table.contrib thead th {
+    text-align: left; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 16px 20px; background: var(--card-2);
+    border-bottom: 1px solid var(--line);
+  }
+  table.contrib tbody td { padding: 16px 20px; border-bottom: 1px solid var(--line); font-size: 14.5px; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  table.contrib tbody tr:last-child td { border-bottom: none; }
+  table.contrib tbody tr { transition: background .25s var(--ease); }
+  table.contrib tbody tr:hover { background: var(--card-2); }
+  .pid { font-family: var(--serif); font-weight: 540; font-size: 16px; }
+  .prov-pill { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--terra-wash); color: #9a4a28; margin-right: 4px; }
+  .prov-pill.sage { background: var(--sage-wash); color: #4f5b3f; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13.5px; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+  .status.ok { color: var(--sage); } .status.ok::before { background: var(--sage); }
+  .status.pend { color: var(--gold); } .status.pend::before { background: var(--gold); }
+
+  /* ---- modal ---- */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    background: rgba(42, 38, 34, 0.42); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal-overlay.open { display: flex; animation: fadeIn .3s var(--ease); }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--card); border-radius: var(--r-lg); max-width: 480px; width: 100%;
+    padding: 34px; box-shadow: var(--sh-3); border: 1px solid var(--line);
+    animation: popUp .4s var(--ease);
+  }
+  @keyframes popUp { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+  .modal .m-ico { width: 54px; height: 54px; border-radius: 16px; background: var(--terra-wash); display: grid; place-items: center; margin-bottom: 18px; }
+  .modal .m-ico svg { width: 30px; height: 30px; }
+  .modal h3 { font-family: var(--serif); font-weight: 540; font-size: 28px; margin: 0 0 12px; }
+  .modal p { color: var(--muted); font-size: 14.5px; margin: 0 0 14px; line-height: 1.55; }
+  .modal ul { margin: 0 0 22px; padding-left: 18px; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+  .modal ul li { margin-bottom: 7px; }
+  .modal ul li b { color: var(--ink); font-weight: 600; }
+  .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: var(--card); padding: 14px 24px; border-radius: 999px;
+    box-shadow: var(--sh-3); font-size: 14px; font-weight: 500; z-index: 70;
+    opacity: 0; pointer-events: none; transition: opacity .4s var(--ease), transform .4s var(--ease);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- footer ---- */
+  footer.foot {
+    margin-top: 70px; padding-top: 26px; border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; flex-wrap: wrap;
+  }
+  footer.foot .dotmark { width: 7px; height: 7px; border-radius: 50%; background: var(--terra); }
+  footer.foot .spacer { margin-left: auto; }
+
+  /* ---- responsive ---- */
+  @media (max-width: 980px) {
+    .kpi-grid, .kpi-grid.small { grid-template-columns: repeat(2, 1fr); }
+    .gallery { grid-template-columns: repeat(2, 1fr); }
+    .band { grid-template-columns: 1fr; }
+    .kpi.wide { grid-column: span 2; }
+  }
+  @media (max-width: 768px) {
+    .shell { padding: 0 18px 60px; }
+    .topbar-inner { padding: 12px 18px; }
+    nav.tabs { order: 3; width: 100%; justify-content: center; }
+    .brand { margin-right: 0; }
+    .gallery { grid-template-columns: 1fr; }
+    .hero { padding: 44px 0 20px; }
+    .contribute { flex-direction: column; align-items: stretch; }
+    .modal-actions { flex-direction: column-reverse; }
+    .modal-actions .btn { width: 100%; }
+    table.contrib { display: block; overflow-x: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+    .reveal { opacity: 1 !important; transform: none !important; }
+    .ticker > span { animation: none !important; opacity: 0 !important; }
+    .ticker > span:first-child { opacity: 1 !important; }
+  }
+  /* ============================================================================
+     ASK-THE-TRACE ASSISTANT — floating dock ⇄ full page, source switch, history
+     (all class names verified collision-free against the rest of this file)
+     ============================================================================ */
+  :root { --code: #221f1b; }
+
+  .btn-primary:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; box-shadow: none; transform: none; }
+  .iconbtn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--muted); display: grid; place-items: center; cursor: pointer; flex: none; transition: background .25s var(--ease), color .25s var(--ease); }
+  .iconbtn:hover { background: var(--card-2); color: var(--ink); }
+  .iconbtn.on { background: var(--terra-wash); color: #9a4a28; border-color: var(--terra-soft); }
+  .iconbtn svg { width: 17px; height: 17px; }
+
+  /* the Overview entry point */
+  .ask-teaser {
+    margin-top: 26px; display: flex; align-items: center; gap: 20px; cursor: pointer;
+    background: linear-gradient(150deg, var(--terra-wash), var(--card));
+    border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px 28px; box-shadow: var(--sh-1);
+    transition: transform .35s var(--ease), box-shadow .35s var(--ease);
+  }
+  .ask-teaser:hover { transform: translateY(-3px); box-shadow: var(--sh-2); }
+  .ask-teaser .ico { width: 50px; height: 50px; border-radius: 15px; background: var(--terra); display: grid; place-items: center; flex: none; box-shadow: var(--sh-1); }
+  .ask-teaser .ico svg { width: 26px; height: 26px; }
+  .ask-teaser .tt { font-family: var(--serif); font-weight: 540; font-size: 23px; line-height: 1.15; }
+  .ask-teaser .ts { color: var(--muted); font-size: 14.5px; }
+  .ask-teaser .go { margin-left: auto; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--terra); font-weight: 700; white-space: nowrap; }
+
+  /* floating launcher */
+  .launcher {
+    position: fixed; right: 30px; bottom: 30px; z-index: 40;
+    display: inline-flex; align-items: center; gap: 11px;
+    background: linear-gradient(150deg, var(--terra), #a94f2d); color: #fff;
+    border: none; border-radius: 999px; padding: 15px 22px 15px 18px; cursor: pointer;
+    box-shadow: 0 8px 26px rgba(168,79,45,.36), var(--sh-2);
+    font: 600 15px var(--sans); transition: transform .35s var(--ease), box-shadow .35s var(--ease), opacity .3s var(--ease);
+  }
+  .launcher:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 14px 36px rgba(168,79,45,.42), var(--sh-3); }
+  .launcher .spark { width: 26px; height: 26px; display: grid; place-items: center; }
+  .launcher .spark svg { width: 22px; height: 22px; }
+  .launcher .pulse { position: absolute; right: 16px; top: 12px; width: 9px; height: 9px; border-radius: 50%; background: var(--sage-soft); animation: pulse 2.6s var(--ease) infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(166,177,147,.55); } 70% { box-shadow: 0 0 0 10px rgba(166,177,147,0); } 100% { box-shadow: 0 0 0 0 rgba(166,177,147,0); } }
+  body.assistant-open .launcher { opacity: 0; pointer-events: none; transform: translateY(12px) scale(.9); }
+
+  .scrim { position: fixed; inset: 0; z-index: 44; background: rgba(42,38,34,.42); backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .4s var(--ease); }
+  body.assistant-expanded .scrim { opacity: 1; pointer-events: auto; }
+  /* full-page overlay is up → lock the page behind it so the wheel can't reach it */
+  body.assistant-expanded { overflow: hidden; }
+
+  .assistant {
+    position: fixed; z-index: 45; display: none; flex-direction: column; overflow: hidden;
+    background: var(--card); border: 1px solid var(--line); box-shadow: var(--sh-3);
+    right: 30px; bottom: 30px; width: 416px; height: min(640px, calc(100vh - 60px));
+    border-radius: var(--r-lg); transform-origin: bottom right;
+    transition: width .42s var(--ease), height .42s var(--ease), right .42s var(--ease),
+                bottom .42s var(--ease), top .42s var(--ease), left .42s var(--ease), border-radius .42s var(--ease);
+  }
+  body.assistant-open .assistant { display: flex; animation: dockIn .4s var(--ease); }
+  @keyframes dockIn { from { opacity: 0; transform: translateY(16px) scale(.97); } to { opacity: 1; transform: none; } }
+  body.assistant-expanded .assistant {
+    left: 50%; right: auto; top: 4vh; bottom: 4vh;
+    width: min(1040px, calc(100vw - 48px)); height: auto;
+    transform: translateX(-50%); border-radius: var(--r-lg);
+  }
+  @media (max-width: 560px) {
+    .assistant { right: 12px; left: 12px; bottom: 12px; width: auto; height: min(80vh, 640px); }
+    body.assistant-expanded .assistant { right: 0; left: 0; top: 0; bottom: 0; width: 100%; transform: none; border-radius: 0; }
+    .launcher { right: 16px; bottom: 16px; }
+  }
+
+  .a-head { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--line); background: var(--card-2); flex: none; }
+  .a-id { display: flex; align-items: center; gap: 10px; margin-right: auto; min-width: 0; }
+  .a-id .mark { width: 32px; height: 32px; border-radius: 10px; flex: none; background: linear-gradient(150deg, var(--terra), #a94f2d); display: grid; place-items: center; box-shadow: var(--sh-1); }
+  .a-id .mark svg { width: 18px; height: 18px; }
+  .a-id .ttl { font-family: var(--serif); font-weight: 560; font-size: 18px; line-height: 1.05; }
+  .a-id .sub { font-size: 11.5px; color: var(--muted); }
+  .a-head .tools { display: flex; align-items: center; gap: 7px; }
+  .collapse-only { display: none; } body.assistant-expanded .collapse-only { display: grid; }
+  .expand-only { display: grid; } body.assistant-expanded .expand-only { display: none; }
+
+  .a-main { position: relative; flex: 1 1 auto; display: flex; min-height: 0; }
+  .a-col { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  .hist {
+    position: absolute; z-index: 3; top: 0; left: 0; bottom: 0; width: min(320px, 86%);
+    background: var(--card-2); border-right: 1px solid var(--line); display: flex; flex-direction: column;
+    transform: translateX(-103%); transition: transform .36s var(--ease); box-shadow: 8px 0 30px rgba(94,64,40,.10);
+  }
+  .assistant.hist-open .hist { transform: none; }
+  .hist-scrim { position: absolute; inset: 0; z-index: 2; background: rgba(42,38,34,.26); opacity: 0; pointer-events: none; transition: opacity .3s var(--ease); }
+  .assistant.hist-open .hist-scrim { opacity: 1; pointer-events: auto; }
+  body.assistant-expanded .hist { position: relative; transform: none; box-shadow: none; width: 284px; flex: none; }
+  body.assistant-expanded .assistant:not(.hist-open) .hist { display: none; }
+  body.assistant-expanded .hist-scrim { display: none; }
+  @media (max-width: 560px) {
+    body.assistant-expanded .hist { position: absolute; width: min(320px, 86%); box-shadow: 8px 0 30px rgba(94,64,40,.10); transform: translateX(-103%); display: flex; }
+    body.assistant-expanded .assistant.hist-open .hist { transform: none; }
+    body.assistant-expanded .hist-scrim { display: block; }
+  }
+  .hist-top { padding: 13px 13px 11px; border-bottom: 1px solid var(--line); flex: none; }
+  .hist-new { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 14px var(--sans); color: #fff; background: var(--terra); border: none; border-radius: var(--r-sm); padding: 11px 14px; cursor: pointer; box-shadow: var(--sh-1); transition: background .25s var(--ease), transform .25s var(--ease); }
+  .hist-new:hover { background: #b85733; transform: translateY(-1px); }
+  .hist-new svg { width: 16px; height: 16px; }
+  .hist-label { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 14px 16px 4px; }
+  .hist-list { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 9px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .hist-item { text-align: left; border: 1px solid transparent; background: transparent; border-radius: var(--r-sm); padding: 10px 12px; cursor: pointer; transition: background .2s var(--ease), border-color .2s var(--ease); display: flex; flex-direction: column; gap: 5px; width: 100%; font-family: var(--sans); }
+  .hist-item:hover { background: var(--card); border-color: var(--line); }
+  .hist-item.active { background: var(--card); border-color: var(--terra-soft); box-shadow: var(--sh-1); }
+  .hist-item .ti { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .hist-item .mt { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .hist-pill { font-size: 10px; font-weight: 700; letter-spacing: .03em; padding: 2px 7px; border-radius: 999px; }
+  .hist-pill.public { background: var(--terra-wash); color: #9a4a28; }
+  .hist-pill.user { background: var(--sage-wash); color: #4f5b3f; }
+  .hist-empty { padding: 18px 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  .source-bar { padding: 12px 16px; border-bottom: 1px solid var(--line); flex: none; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--card-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px; position: relative; }
+  .seg button { position: relative; z-index: 1; font: 600 13.5px var(--sans); color: var(--muted); border: none; background: transparent; padding: 9px 12px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: color .3s var(--ease); white-space: nowrap; }
+  .seg button .d { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .seg button[data-src="public"] .d { background: var(--terra); }
+  .seg button[data-src="user"] .d { background: var(--sage); }
+  .seg .thumb { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: var(--card); box-shadow: var(--sh-1); transition: transform .34s var(--ease); }
+  .seg[data-active="user"] .thumb { transform: translateX(100%); }
+  .seg button.on { color: var(--ink); }
+  .seg button[data-src="user"] .lk { display: none; align-items: center; color: var(--muted); }
+  .seg button[data-src="user"] .lk svg { width: 13px; height: 13px; }
+  .seg[data-trace="none"] button[data-src="user"] .lk { display: inline-flex; }
+  .seg[data-trace="none"] button[data-src="user"] .d { display: none; }
+  .gate.no-trace .g-ico { background: var(--gold); }
+  .src-cap { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .src-cap .lock { color: var(--sage); display: inline-flex; } .src-cap .lock svg { width: 13px; height: 13px; }
+
+  .a-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  body.assistant-expanded .a-body { padding: 28px 28px; }
+  body.assistant-expanded .a-body > * { max-width: 760px; width: 100%; margin-left: auto; margin-right: auto; }
+  body.assistant-expanded .composer-inner, body.assistant-expanded .composer .foot { max-width: 760px; margin-left: auto; margin-right: auto; }
+
+  .empty { margin: auto 0; }
+  .empty .hello { font-family: var(--serif); font-weight: 540; font-size: 24px; line-height: 1.18; margin: 0 0 8px; }
+  .empty .hello em { font-style: italic; color: var(--terra); }
+  .empty .blurb { color: var(--muted); font-size: 14px; margin: 0 0 18px; line-height: 1.55; }
+  .chips-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+  .chips { display: flex; flex-direction: column; gap: 9px; }
+  .chip { text-align: left; font: 500 14px var(--sans); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 14px; cursor: pointer; display: flex; align-items: center; gap: 11px; transition: background .25s var(--ease), border-color .25s var(--ease), transform .25s var(--ease); }
+  .chip:hover { background: var(--card-2); border-color: var(--terra-soft); transform: translateX(3px); }
+  .chip .ci { color: var(--terra); flex: none; display: inline-flex; } .chip .ci svg { width: 16px; height: 16px; }
+  .chip.muted .ci { color: var(--muted); }
+
+  .msg .who { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+  .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+  .msg.user .who { align-self: flex-end; }
+  .msg.user .bubble { background: var(--terra-wash); border: 1px solid #eccdb6; border-radius: var(--r-md); padding: 12px 15px; color: #4a2c1c; max-width: 86%; width: fit-content; }
+  .msg.bot .bubble { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; box-shadow: var(--sh-1); line-height: 1.58; }
+  .bubble p { margin: 0 0 10px; } .bubble p:last-child { margin-bottom: 0; }
+  .bubble strong { font-weight: 700; }
+  .bubble .stat { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--terra); }
+
+  .working { display: flex; flex-direction: column; gap: 9px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; box-shadow: var(--sh-1); }
+  .work-step { display: flex; align-items: center; gap: 11px; font-size: 13.5px; color: var(--muted); transition: color .3s var(--ease); }
+  .work-step .tick { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); flex: none; display: grid; place-items: center; }
+  .work-step .tick svg { width: 11px; height: 11px; opacity: 0; }
+  .work-step.done { color: var(--ink); }
+  .work-step.done .tick { border-color: var(--sage); background: var(--sage); }
+  .work-step.done .tick svg { opacity: 1; stroke: #fff; }
+  .work-step.active { color: var(--ink); font-weight: 600; }
+  .work-step.active .tick { border-color: var(--terra); border-right-color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  details.code-fold { border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; background: var(--card-2); }
+  details.code-fold > summary { cursor: pointer; padding: 10px 14px; font-size: 12.5px; font-weight: 600; color: var(--muted); list-style: none; display: flex; align-items: center; gap: 8px; }
+  details.code-fold > summary::-webkit-details-marker { display: none; }
+  details.code-fold > summary .chev { transition: transform .25s var(--ease); display: inline-flex; } details.code-fold > summary .chev svg { width: 13px; height: 13px; }
+  details.code-fold[open] > summary .chev { transform: rotate(90deg); }
+  details.code-fold pre { margin: 0; padding: 14px; background: var(--code); color: #f0e7d8; font: 12px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-x: auto; }
+  .pre-tok-k { color: #e0a06a; } .pre-tok-s { color: #a9b98a; } .pre-tok-c { color: #8c8275; }
+
+  .plot { border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; padding: 12px; box-shadow: var(--sh-1); }
+  .plot svg { display: block; width: 100%; height: auto; }
+  .plot .cap { margin-top: 9px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .plot .cap .dl { margin-left: auto; color: var(--terra); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .plot .cap .dl svg { width: 13px; height: 13px; }
+
+  .refusal { background: var(--card-2); border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: var(--r-sm); padding: 12px 15px; color: var(--ink); font-size: 14px; }
+
+  /* gentle, dismissible "contribute to the pool" nudge after the first answer */
+  .contrib-nudge { position: relative; display: flex; align-items: flex-start; gap: 13px; background: linear-gradient(150deg, var(--sage-wash), var(--card)); border: 1px solid var(--line); border-radius: var(--r-md); padding: 15px 16px; box-shadow: var(--sh-1); animation: cnIn .45s var(--ease); }
+  @keyframes cnIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .contrib-nudge.out { opacity: 0; transform: translateY(6px); transition: opacity .26s var(--ease), transform .26s var(--ease); }
+  .contrib-nudge .cn-ico { width: 36px; height: 36px; border-radius: 11px; background: var(--sage); color: #fff; display: grid; place-items: center; flex: none; }
+  .contrib-nudge .cn-ico svg { width: 20px; height: 20px; }
+  .contrib-nudge .cn-body { min-width: 0; padding-right: 14px; }
+  .contrib-nudge .cn-title { font-family: var(--serif); font-weight: 540; font-size: 16px; line-height: 1.2; }
+  .contrib-nudge .cn-sub { color: var(--muted); font-size: 13px; line-height: 1.45; margin-top: 3px; }
+  .contrib-nudge .cn-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .contrib-nudge .cn-actions .btn { padding: 8px 16px; font-size: 13px; }
+  .contrib-nudge .cn-x { position: absolute; top: 9px; right: 9px; width: 24px; height: 24px; border: none; background: transparent; color: var(--muted); cursor: pointer; border-radius: 7px; display: grid; place-items: center; transition: background .2s var(--ease), color .2s var(--ease); }
+  .contrib-nudge .cn-x:hover { background: rgba(42,38,34,.06); color: var(--ink); }
+  .contrib-nudge .cn-x svg { width: 14px; height: 14px; }
+
+  .gate { margin: auto 0; }
+  .gate .g-ico { width: 52px; height: 52px; border-radius: 15px; background: var(--sage); display: grid; place-items: center; box-shadow: var(--sh-1); margin-bottom: 16px; }
+  .gate .g-ico svg { width: 28px; height: 28px; }
+  .gate h3 { font-family: var(--serif); font-weight: 540; font-size: 22px; margin: 0 0 8px; } .gate h3 em { font-style: italic; color: var(--sage); }
+  .gate p { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 14px; }
+  .gate ul { margin: 0 0 18px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .gate li { display: flex; gap: 10px; font-size: 13.5px; color: var(--ink); line-height: 1.45; }
+  .gate li .li-ico { color: var(--sage); flex: none; margin-top: 1px; } .gate li .li-ico svg { width: 16px; height: 16px; }
+  .gate li b { font-weight: 700; }
+  .consent { display: flex; align-items: flex-start; gap: 11px; background: var(--card-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 13px 15px; margin-bottom: 16px; cursor: pointer; }
+  .consent input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--sage); flex: none; }
+  .consent span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .gate-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .no-trace-hint { font-size: 12.5px; color: var(--muted); margin-top: 14px; } .no-trace-hint code { background: var(--card-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+
+  .composer { border-top: 1px solid var(--line); background: var(--card-2); padding: 14px 16px; flex: none; }
+  .composer-inner { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px 8px 8px 14px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; transition: border-color .25s var(--ease), box-shadow .25s var(--ease); }
+  .composer-inner:focus-within { border-color: var(--terra); box-shadow: 0 0 0 3px rgba(200,100,60,.14); }
+  .composer textarea { border: none; background: transparent; resize: none; outline: none; font: 400 15px/1.5 var(--sans); color: var(--ink); padding: 7px 0; max-height: 140px; min-height: 24px; }
+  .composer textarea::placeholder { color: var(--muted); }
+  .send { width: 42px; height: 42px; border-radius: 13px; border: none; background: var(--terra); color: #fff; display: grid; place-items: center; cursor: pointer; box-shadow: var(--sh-1); transition: background .25s var(--ease), transform .25s var(--ease); flex: none; }
+  .send:hover { background: #b85733; transform: translateY(-1px); }
+  .send:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; box-shadow: none; transform: none; }
+  .send svg { width: 19px; height: 19px; }
+  .composer .foot { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 11.5px; color: var(--muted); }
+  .composer .foot .gd { width: 5px; height: 5px; border-radius: 50%; background: var(--terra); flex: none; }
+  .composer.locked { opacity: .5; pointer-events: none; }
+
+  .a-body::-webkit-scrollbar, .hist-list::-webkit-scrollbar { width: 9px; }
+  .a-body::-webkit-scrollbar-thumb, .hist-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; border: 2px solid var(--card); }
+</style>
+</head>
+<body>
+
+<div class="blobs" aria-hidden="true">
+  <span class="blob b1"></span>
+  <span class="blob b2"></span>
+  <span class="blob b3"></span>
+</div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 7l-4 5 4 5M16 7l4 5-4 5"/>
+        </svg>
+      </span>
+      <span class="name">SyFI <em>Trace Atlas</em></span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Surfaces">
+      <button role="tab" class="active" data-surface="overview" aria-selected="true">Overview</button>
+      <button role="tab" data-surface="compare" aria-selected="false">Provider Comparison</button>
+      <button role="tab" data-surface="analyze" aria-selected="false">Analyze your trace</button>
+      <button role="tab" data-surface="pool" aria-selected="false">Contributed pool</button>
+    </nav>
+  </div>
+</header>
+
+<div class="shell">
+
+  <section class="surface live" id="overview" role="tabpanel" aria-label="Overview">
+
+    <div class="hero reveal" style="--d:60ms">
+      <span class="eyebrow">The curated public pool</span>
+      <h1>Inside the LLM <em>rounds</em> of coding agents.</h1>
+      <p class="lede">A quiet, careful look at how Claude&nbsp;Code and Codex actually spend their tokens, their tools, and their time — one round at a time.</p>
+    </div>
+
+    <div class="sec-head reveal" style="--d:140ms">
+      <h2>What we have</h2>
+      <span class="sub">Aggregated across every session in the public head pool.</span>
+    </div>
+
+    <div class="kpi-grid reveal" style="--d:200ms">
+      <div class="kpi"><div class="label">Distinct users</div><div class="num">43</div></div>
+      <div class="kpi"><div class="label">Sessions</div><div class="num">4,156</div></div>
+      <div class="kpi feature"><div class="label">LLM rounds</div><div class="num">357,161</div><div class="foot">one round = one invocation</div></div>
+      <div class="kpi"><div class="label">Tool calls</div><div class="num">432,510</div></div>
+    </div>
+    <div class="kpi-grid reveal" style="--d:260ms; margin-top:16px;">
+      <div class="kpi sagey"><div class="label">Total input tokens</div><div class="num">55.2<small>B</small></div></div>
+      <div class="kpi"><div class="label">Cached-read tokens</div><div class="num">52.99<small>B</small></div><div class="foot">96% of input served from cache</div></div>
+      <div class="kpi"><div class="label">New input tokens</div><div class="num">2.26<small>B</small></div></div>
+      <div class="kpi"><div class="label">Cache efficiency</div><div class="num">96<small>%</small></div></div>
+    </div>
+
+    <div class="band reveal" style="--d:320ms">
+      <div class="panel">
+        <h3>Provider split</h3>
+        <p class="desc">Where the 357,161 rounds come from.</p>
+        <div style="display:flex; gap:28px; align-items:center; flex-wrap:wrap;">
+          <svg viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="Provider donut: Claude 39 percent, Codex 61 percent">
+            <circle cx="90" cy="90" r="64" fill="none" stroke="var(--line)" stroke-width="26"/>
+            <circle cx="90" cy="90" r="64" fill="none" stroke="var(--terra)" stroke-width="26"
+                    stroke-dasharray="245 402" stroke-linecap="round" transform="rotate(-90 90 90)"/>
+            <circle cx="90" cy="90" r="64" fill="none" stroke="var(--sage)" stroke-width="26"
+                    stroke-dasharray="157 402" stroke-dashoffset="-249" stroke-linecap="round" transform="rotate(-90 90 90)"/>
+            <text x="90" y="84" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="700" font-size="32" fill="#2a2622" letter-spacing="-0.5">357K</text>
+            <text x="90" y="104" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="600" font-size="11" fill="#6f655a" letter-spacing="1.5">ROUNDS</text>
+          </svg>
+          <div class="legend" style="flex:1; min-width:180px;">
+            <div class="row"><span class="dot" style="background:var(--sage)"></span><span class="nm">Claude</span><span class="val">140,338<span class="pct">39%</span></span></div>
+            <div class="row"><span class="dot" style="background:var(--terra)"></span><span class="nm">Codex</span><span class="val">216,823<span class="pct">61%</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Collection window</h3>
+        <p class="desc">A steady stream of traces over eight months.</p>
+        <div class="range-strip" style="margin-top:6px;">
+          <span class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--sage)" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+          </span>
+          <div>
+            <div class="rt">Date range</div>
+            <div class="rv">Sep 23 2025 — Jun 2 2026</div>
+          </div>
+        </div>
+        <div style="margin-top:18px;">
+          <svg viewBox="0 0 360 70" width="100%" height="70" preserveAspectRatio="none" role="img" aria-label="Collection volume over time">
+            <defs><linearGradient id="tlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--terra)" stop-opacity="0.28"/><stop offset="1" stop-color="var(--terra)" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0,58 C40,52 60,44 90,40 C130,34 150,24 190,26 C230,28 250,16 290,14 C320,12 340,18 360,12 L360,70 L0,70 Z" fill="url(#tlg)"/>
+            <path d="M0,58 C40,52 60,44 90,40 C130,34 150,24 190,26 C230,28 250,16 290,14 C320,12 340,18 360,12" fill="none" stroke="var(--terra)" stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="ask-teaser reveal" id="askTeaser" style="--d:360ms">
+      <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/></svg></span>
+      <div>
+        <div class="tt">Ask anything about the data</div>
+        <div class="ts">“Which tools do Claude and Codex use the most?” — get the answer, with the chart and the exact query, in seconds.</div>
+      </div>
+      <span class="go">Ask the trace →</span>
+    </div>
+
+    <div class="sec-head reveal" style="--d:380ms">
+      <h2>Figure gallery</h2>
+      <span class="sub">Each card is self-contained — it embeds its own README, CSV, and the code that drew it.</span>
+    </div>
+
+    <div class="gallery">
+
+      <article class="fig reveal" style="--d:420ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Tool latency CDF line">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <line x1="34" y1="20" x2="34" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <path d="M34,138 C70,134 95,118 120,86 C145,54 170,36 200,30 C235,24 260,23 284,22" fill="none" stroke="var(--terra)" stroke-width="2.6" stroke-linecap="round"/>
+            <circle cx="120" cy="86" r="3.2" fill="var(--terra)"/>
+            <line x1="120" y1="86" x2="120" y2="140" stroke="var(--terra-soft)" stroke-width="1" stroke-dasharray="3 3"/>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag">tool_calls</span><span class="badge">self-contained</span></div>
+        <h4>Tool latency distribution</h4>
+        <p>Cumulative distribution of per-call tool latency.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:460ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Tool call counts horizontal bars">
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="var(--muted)">
+              <rect x="64" y="22" width="200" height="15" rx="6" fill="var(--terra)"/>
+              <rect x="64" y="48" width="156" height="15" rx="6" fill="var(--terra-soft)"/>
+              <rect x="64" y="74" width="120" height="15" rx="6" fill="var(--sage)"/>
+              <rect x="64" y="100" width="86" height="15" rx="6" fill="var(--sage-soft)"/>
+              <rect x="64" y="126" width="52" height="15" rx="6" fill="var(--gold)"/>
+              <text x="58" y="33" text-anchor="end">Read</text>
+              <text x="58" y="59" text-anchor="end">Edit</text>
+              <text x="58" y="85" text-anchor="end">Bash</text>
+              <text x="58" y="111" text-anchor="end">Grep</text>
+              <text x="58" y="137" text-anchor="end">Write</text>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag">tool_calls</span><span class="badge">self-contained</span></div>
+        <h4>Tool call counts by tool</h4>
+        <p>Which tools the agents use the most.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:500ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Prefix vs append stacked bars">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <g>
+              <rect x="56" y="58" width="26" height="82" rx="4" fill="var(--sage)"/><rect x="56" y="40" width="26" height="18" rx="4" fill="var(--terra)"/>
+              <rect x="100" y="66" width="26" height="74" rx="4" fill="var(--sage)"/><rect x="100" y="44" width="26" height="22" rx="4" fill="var(--terra)"/>
+              <rect x="144" y="52" width="26" height="88" rx="4" fill="var(--sage)"/><rect x="144" y="30" width="26" height="22" rx="4" fill="var(--terra)"/>
+              <rect x="188" y="70" width="26" height="70" rx="4" fill="var(--sage)"/><rect x="188" y="52" width="26" height="18" rx="4" fill="var(--terra)"/>
+              <rect x="232" y="60" width="26" height="80" rx="4" fill="var(--sage)"/><rect x="232" y="42" width="26" height="18" rx="4" fill="var(--terra)"/>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sage">llm_generation</span><span class="badge">self-contained</span></div>
+        <h4>Prefix vs append token composition</h4>
+        <p>Cached prefix against freshly appended input.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:540ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Output token histogram">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <g fill="var(--terra)">
+              <rect x="44" y="112" width="18" height="28" rx="3"/>
+              <rect x="68" y="86" width="18" height="54" rx="3"/>
+              <rect x="92" y="52" width="18" height="88" rx="3"/>
+              <rect x="116" y="38" width="18" height="102" rx="3" fill="#a94f2d"/>
+              <rect x="140" y="60" width="18" height="80" rx="3"/>
+              <rect x="164" y="84" width="18" height="56" rx="3"/>
+              <rect x="188" y="104" width="18" height="36" rx="3" fill="var(--terra-soft)"/>
+              <rect x="212" y="118" width="18" height="22" rx="3" fill="var(--terra-soft)"/>
+              <rect x="236" y="128" width="18" height="12" rx="3" fill="var(--terra-soft)"/>
+              <rect x="260" y="132" width="18" height="8" rx="3" fill="var(--terra-soft)"/>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sage">llm_generation</span><span class="badge">self-contained</span></div>
+        <h4>Output token distribution</h4>
+        <p>How long the agents' completions run.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:580ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Generation time CDF line">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <line x1="34" y1="20" x2="34" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <path d="M34,138 C58,132 78,104 108,72 C140,40 172,30 206,27 C242,24 268,23 284,22" fill="none" stroke="var(--sage)" stroke-width="2.6" stroke-linecap="round"/>
+            <circle cx="206" cy="27" r="3.2" fill="var(--sage)"/>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sage">llm_generation</span><span class="badge">self-contained</span></div>
+        <h4>Generation-time CDF</h4>
+        <p>Wall-clock time to produce a full response.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:620ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Cache hit ratio gauge">
+            <path d="M40,140 A90,90 0 0 1 260,140" fill="none" stroke="var(--line)" stroke-width="20" stroke-linecap="round"/>
+            <path d="M40,140 A90,90 0 0 1 246,82" fill="none" stroke="var(--terra)" stroke-width="20" stroke-linecap="round"/>
+            <text x="150" y="118" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="700" font-size="42" fill="#c8643c" letter-spacing="-1">96%</text>
+            <text x="150" y="138" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="600" font-size="10" fill="#6f655a" letter-spacing="1.5">CACHE HITS</text>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag cache">prefix_cache</span><span class="badge">self-contained</span></div>
+        <h4>Cache hit ratio</h4>
+        <p>Share of input tokens served from cache.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:660ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="KV cache active ratio line">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <line x1="34" y1="20" x2="34" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <path d="M34,96 C70,70 96,108 128,82 C160,56 188,98 220,70 C248,46 268,76 284,58" fill="none" stroke="var(--sage)" stroke-width="2.6" stroke-linecap="round"/>
+            <line x1="34" y1="118" x2="284" y2="118" stroke="var(--sage-soft)" stroke-width="1" stroke-dasharray="4 4"/>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag cache">prefix_cache</span><span class="badge">self-contained</span></div>
+        <h4>KV cache active ratio</h4>
+        <p>Live KV occupancy over the session.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:700ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Human input wait histogram">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <g fill="var(--sage)">
+              <rect x="48" y="50" width="20" height="90" rx="3" fill="#5b6a4c"/>
+              <rect x="74" y="68" width="20" height="72" rx="3"/>
+              <rect x="100" y="92" width="20" height="48" rx="3"/>
+              <rect x="126" y="106" width="20" height="34" rx="3" fill="var(--sage-soft)"/>
+              <rect x="152" y="116" width="20" height="24" rx="3" fill="var(--sage-soft)"/>
+              <rect x="178" y="122" width="20" height="18" rx="3" fill="var(--sage-soft)"/>
+              <rect x="204" y="128" width="20" height="12" rx="3" fill="var(--sage-soft)"/>
+              <rect x="230" y="131" width="20" height="9" rx="3" fill="var(--sage-soft)"/>
+              <rect x="256" y="134" width="20" height="6" rx="3" fill="var(--sage-soft)"/>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag hil">human_in_the_loop</span><span class="badge">self-contained</span></div>
+        <h4>Human input wait</h4>
+        <p>How long rounds pause for a person.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:740ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="User turn response time CDF">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <line x1="34" y1="20" x2="34" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <path d="M34,138 C64,128 86,96 116,74 C148,50 178,40 210,34 C244,28 268,25 284,24" fill="none" stroke="var(--terra)" stroke-width="2.6" stroke-linecap="round"/>
+            <circle cx="116" cy="74" r="3.2" fill="var(--terra)"/>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag hil">human_in_the_loop</span><span class="badge">self-contained</span></div>
+        <h4>User-turn response time</h4>
+        <p>Latency from prompt to first agent action.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:780ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Session token steps step line">
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <line x1="34" y1="20" x2="34" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <path d="M34,128 H78 V104 H120 V108 H160 V74 H200 V78 H240 V44 H284" fill="none" stroke="var(--sage)" stroke-width="2.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sess">session</span><span class="badge">self-contained</span></div>
+        <h4>Session token steps</h4>
+        <p>Cumulative tokens across each round.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:820ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 170" role="img" aria-label="Total input growth area">
+            <defs><linearGradient id="ig" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--terra)" stop-opacity="0.3"/><stop offset="1" stop-color="var(--terra)" stop-opacity="0"/></linearGradient></defs>
+            <line x1="34" y1="140" x2="284" y2="140" stroke="var(--line)" stroke-width="1.2"/>
+            <path d="M34,132 C72,124 96,100 130,84 C168,66 196,42 232,34 C258,28 270,26 284,22 L284,140 L34,140 Z" fill="url(#ig)"/>
+            <path d="M34,132 C72,124 96,100 130,84 C168,66 196,42 232,34 C258,28 270,26 284,22" fill="none" stroke="var(--terra)" stroke-width="2.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sess">session</span><span class="badge">self-contained</span></div>
+        <h4>Total input growth</h4>
+        <p>Input footprint accumulating per session.</p>
+      </article>
+
+    </div>
+
+    <footer class="foot">
+      <span class="dotmark" aria-hidden="true"></span>
+      <span>Mockup · fake data · scheme preview.</span>
+      <span class="spacer"></span>
+      <span>Atelier — scheme 04</span>
+    </footer>
+  </section>
+
+  <section class="surface" id="compare" role="tabpanel" aria-label="Provider comparison">
+
+    <div class="hero reveal" style="--d:60ms; padding-bottom:18px;">
+      <span class="eyebrow">Across providers</span>
+      <h1>How <em>providers</em> compare.</h1>
+      <p class="lede">Per-provider cuts of the same public pool. Claude and Codex are live today — DeepSeek, Moonshot, GLM and more are on the way.</p>
+    </div>
+
+    <div class="svg-legend reveal" style="--d:120ms">
+      <span class="lg"><span class="sw" style="background:var(--terra)"></span>Claude</span>
+      <span class="lg"><span class="sw" style="background:var(--sage)"></span>Codex</span>
+      <span class="lg"><span class="sw" style="background:var(--card-2); border:1px dashed rgba(42,38,34,0.32);"></span>Coming soon</span>
+      <span style="font-size:12.5px; color:var(--muted); margin-left:auto;">Per-provider cuts of the same trace · several map to real experiments.</span>
+    </div>
+
+    <div class="vs-head reveal" style="--d:180ms">
+      <div class="vs-card terra">
+        <div class="pv"><span class="dot" style="background:var(--terra)"></span><span class="pnm">Claude</span><span class="pshare">39% of rounds</span></div>
+        <div class="pbig">140,338</div>
+        <div class="psub">LLM rounds attributed to Claude</div>
+      </div>
+      <div class="vs-card sage">
+        <div class="pv"><span class="dot" style="background:var(--sage)"></span><span class="pnm">Codex</span><span class="pshare">61% of rounds</span></div>
+        <div class="pbig">216,823</div>
+        <div class="psub">LLM rounds attributed to Codex</div>
+      </div>
+      <div class="vs-card ghost">
+        <div class="pv"><span class="dot"></span><span class="pnm"><span class="ticker" aria-label="Upcoming providers: DeepSeek, Moonshot, GLM, Qwen"><span>DeepSeek</span><span>Moonshot</span><span>GLM</span><span>Qwen</span></span></span><span class="soon-cap"><span class="gdot"></span>Soon</span></div>
+        <div class="pbig">—</div>
+        <div class="psub">Coming soon · not yet live</div>
+      </div>
+    </div>
+    <div class="reveal" style="--d:220ms; margin-top:14px;">
+      <div class="split-bar" role="img" aria-label="Round share split: Claude 39 percent, Codex 61 percent, with more providers on the way">
+        <i style="width:37%; background:var(--terra)"></i>
+        <i style="width:58%; background:var(--sage)"></i>
+        <i class="ghost" style="width:5%;" title="More providers coming soon"></i>
+      </div>
+      <div class="split-cap"><span>Claude · 39%</span><span>Codex · 61%</span><span style="color:var(--muted);">soon</span></div>
+      <div style="font-size:12.5px; color:var(--muted); font-weight:600; margin-top:6px;">Live providers — more on the way.</div>
+    </div>
+
+    <div class="sec-head reveal" style="--d:260ms">
+      <h2>Side by side</h2>
+      <span class="sub">How live providers compare across usage and performance, with more on the way.</span>
+    </div>
+    <div class="tbl-legend reveal" style="--d:290ms">
+      <span class="lg"><span class="ar">↑</span> higher is better</span>
+      <span class="lg"><span class="ar">↓</span> lower is better</span>
+      <span>Usage figures are totals &amp; averages — not ranked.</span>
+    </div>
+    <div class="reveal" style="--d:320ms">
+      <table class="h2h-tbl">
+        <thead>
+          <tr><th>Metric</th><th>Claude</th><th>Codex</th><th class="soon-col"><span class="ticker" aria-label="Coming soon: DeepSeek, Moonshot, GLM, Qwen"><span>DeepSeek</span><span>Moonshot</span><span>GLM</span><span>Qwen</span></span></th></tr>
+        </thead>
+        <tbody>
+          <tr class="grp-head"><td colspan="4"><span class="gname">Usage</span><span class="gnote">totals &amp; averages</span></td></tr>
+          <tr class="profile">
+            <td>LLM rounds</td>
+            <td class="val" data-h="Claude">140,338</td>
+            <td class="val" data-h="Codex">216,823</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr class="profile">
+            <td>Sessions</td>
+            <td class="val" data-h="Claude">1,712</td>
+            <td class="val" data-h="Codex">2,444</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr class="profile">
+            <td>Tool calls</td>
+            <td class="val" data-h="Claude">198,420</td>
+            <td class="val" data-h="Codex">234,090</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr class="profile">
+            <td>Avg new input tokens / round</td>
+            <td class="val" data-h="Claude">7,100</td>
+            <td class="val" data-h="Codex">5,900</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr class="profile">
+            <td>Avg output tokens / round</td>
+            <td class="val" data-h="Claude">312</td>
+            <td class="val" data-h="Codex">540</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr class="profile">
+            <td>Avg reasoning tokens / round</td>
+            <td class="val na" data-h="Claude">— <span style="font-size:11px;">(n/a)</span></td>
+            <td class="val" data-h="Codex">280</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr class="grp-head"><td colspan="4"><span class="gname">Performance</span><span class="gnote">speed, latency &amp; cache</span></td></tr>
+          <tr>
+            <td>Prefix cache hit rate <span class="dir">↑</span></td>
+            <td class="win-terra" data-h="Claude">96%</td>
+            <td data-h="Codex">92%</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr>
+            <td>Decode throughput — output tok/s <span class="dir">↑</span></td>
+            <td data-h="Claude">60 tok/s</td>
+            <td class="win-sage" data-h="Codex">69 tok/s</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr>
+            <td>Tool latency p50 <span class="dir">↓</span></td>
+            <td class="win-terra" data-h="Claude">1.8s</td>
+            <td data-h="Codex">2.4s</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr>
+            <td>Tool latency p90 <span class="dir">↓</span></td>
+            <td class="win-terra" data-h="Claude">9.1s</td>
+            <td data-h="Codex">12.3s</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr>
+            <td>Generation time p50 <span class="dir">↓</span></td>
+            <td class="win-terra" data-h="Claude">5.2s</td>
+            <td data-h="Codex">7.8s</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+          <tr>
+            <td>Generation time p90 <span class="dir">↓</span></td>
+            <td class="win-terra" data-h="Claude">14.6s</td>
+            <td data-h="Codex">21.0s</td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size:13px; color:var(--muted); margin:16px 2px 0; line-height:1.5;">All fake data. Prefix cache footnote: Codex has no cache-creation accounting. Tool latency, the generation-time CDF, and the cache hit ratio map to real experiments.</p>
+    </div>
+
+    <div class="sec-head reveal" style="--d:360ms">
+      <h2>Side-by-side figures</h2>
+      <span class="sub">Hand-drawn from each provider's slice of the rounds. DeepSeek · Moonshot · GLM · Qwen coming soon.</span>
+    </div>
+
+    <div class="cmp-gallery">
+
+      <article class="fig reveal" style="--d:400ms">
+        <div class="svg-legend">
+          <span class="lg"><span class="sw" style="background:var(--terra)"></span>Claude</span>
+          <span class="lg"><span class="sw" style="background:var(--sage)"></span>Codex</span>
+          <span class="lg" style="color:var(--muted);"><span class="sw" style="background:var(--card-2); border:1px dashed rgba(42,38,34,0.32);"></span>Coming soon</span>
+        </div>
+        <div class="canvas">
+          <svg viewBox="0 0 300 180" role="img" aria-label="Grouped bars: average input, output and reasoning tokens per round by provider">
+            <line x1="40" y1="150" x2="288" y2="150" stroke="#e7dccb" stroke-width="1.2"/>
+            <line x1="40" y1="20" x2="40" y2="150" stroke="#e7dccb" stroke-width="1.2"/>
+            <rect x="60" y="34" width="20" height="116" rx="3" fill="#c8643c"/>
+            <rect x="82" y="54" width="20" height="96" rx="3" fill="#6f7d5e"/>
+            <rect x="140" y="120" width="20" height="30" rx="3" fill="#c8643c"/>
+            <rect x="162" y="98" width="20" height="52" rx="3" fill="#6f7d5e"/>
+            <rect x="220" y="146" width="20" height="4" rx="2" fill="#e8a583"/>
+            <rect x="242" y="123" width="20" height="27" rx="3" fill="#6f7d5e"/>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#6f655a" text-anchor="middle">
+              <text x="81" y="166">input</text>
+              <text x="161" y="166">output</text>
+              <text x="241" y="166">reasoning</text>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag">llm_generation</span><span class="badge">self-contained</span></div>
+        <h4>Avg tokens per round</h4>
+        <p>Input, output and reasoning tokens by provider.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:440ms">
+        <div class="svg-legend">
+          <span class="lg"><span class="sw" style="background:var(--terra)"></span>Claude</span>
+          <span class="lg"><span class="sw" style="background:var(--sage)"></span>Codex</span>
+        </div>
+        <div class="canvas">
+          <svg viewBox="0 0 300 180" role="img" aria-label="Overlaid generation time CDF curves for Claude and Codex">
+            <line x1="40" y1="150" x2="288" y2="150" stroke="#e7dccb" stroke-width="1.2"/>
+            <line x1="40" y1="20" x2="40" y2="150" stroke="#e7dccb" stroke-width="1.2"/>
+            <path d="M40,148 C70,140 96,96 128,62 C160,40 196,30 232,26 C258,24 274,23 288,22" fill="none" stroke="#c8643c" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M40,148 C76,144 104,124 140,96 C176,68 210,46 244,36 C264,30 278,27 288,25" fill="none" stroke="#6f7d5e" stroke-width="2.6" stroke-linecap="round"/>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#6f655a">
+              <text x="164" y="172" text-anchor="middle">generation time (s) →</text>
+              <text x="18" y="86" text-anchor="middle" transform="rotate(-90 18 86)">CDF</text>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sage">llm_generation</span><span class="badge">real experiment</span></div>
+        <h4>Generation-time CDF by provider</h4>
+        <p>Claude reaches its plateau sooner than Codex.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:480ms">
+        <div class="svg-legend">
+          <span class="lg"><span class="sw" style="background:var(--terra)"></span>Claude</span>
+          <span class="lg"><span class="sw" style="background:var(--sage)"></span>Codex</span>
+        </div>
+        <div class="canvas">
+          <svg viewBox="0 0 300 180" role="img" aria-label="Grouped bars: tool latency p50 and p90 by provider">
+            <line x1="40" y1="150" x2="288" y2="150" stroke="#e7dccb" stroke-width="1.2"/>
+            <line x1="40" y1="20" x2="40" y2="150" stroke="#e7dccb" stroke-width="1.2"/>
+            <rect x="74" y="132" width="22" height="18" rx="3" fill="#c8643c"/>
+            <rect x="98" y="126" width="22" height="24" rx="3" fill="#6f7d5e"/>
+            <rect x="186" y="59" width="22" height="91" rx="3" fill="#c8643c"/>
+            <rect x="210" y="27" width="22" height="123" rx="3" fill="#6f7d5e"/>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#6f655a" text-anchor="middle">
+              <text x="108" y="166">p50</text>
+              <text x="220" y="166">p90</text>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag">tool_calls</span><span class="badge">real experiment</span></div>
+        <h4>Tool latency by provider</h4>
+        <p>p50 and p90 per-call tool latency by provider.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:520ms">
+        <div class="svg-legend">
+          <span class="lg"><span class="sw" style="background:var(--terra)"></span>Claude · 96%</span>
+          <span class="lg"><span class="sw" style="background:var(--sage)"></span>Codex · 92%</span>
+        </div>
+        <div class="gauge-pair">
+          <div class="canvas">
+            <svg viewBox="0 0 300 170" role="img" aria-label="Claude prefix cache hit ratio gauge, 96 percent">
+              <path d="M40,140 A90,90 0 0 1 260,140" fill="none" stroke="#e7dccb" stroke-width="20" stroke-linecap="round"/>
+              <path d="M40,140 A90,90 0 0 1 246,82" fill="none" stroke="#c8643c" stroke-width="20" stroke-linecap="round"/>
+              <text x="150" y="118" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="700" font-size="42" fill="#c8643c" letter-spacing="-1">96%</text>
+              <text x="150" y="138" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="600" font-size="10" fill="#6f655a" letter-spacing="1.5">CLAUDE</text>
+            </svg>
+          </div>
+          <div class="canvas">
+            <svg viewBox="0 0 300 170" role="img" aria-label="Codex prefix cache hit ratio gauge, 92 percent">
+              <path d="M40,140 A90,90 0 0 1 260,140" fill="none" stroke="#e7dccb" stroke-width="20" stroke-linecap="round"/>
+              <path d="M40,140 A90,90 0 0 1 236,90" fill="none" stroke="#6f7d5e" stroke-width="20" stroke-linecap="round"/>
+              <text x="150" y="118" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="700" font-size="42" fill="#6f7d5e" letter-spacing="-1">92%</text>
+              <text x="150" y="138" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="600" font-size="10" fill="#6f655a" letter-spacing="1.5">CODEX</text>
+            </svg>
+          </div>
+        </div>
+        <div class="tagrow" style="margin-top:14px;"><span class="tag cache">prefix_cache</span><span class="badge">real experiment</span></div>
+        <h4>Prefix cache hit ratio</h4>
+        <p>Claude edges Codex; Codex has no cache-creation accounting.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:560ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 110" role="img" aria-label="Claude model mix segmented bar">
+            <rect x="20" y="30" width="57.2" height="32" rx="6" fill="#e8a583"/>
+            <rect x="79.2" y="30" width="132.6" height="32" fill="#c8643c"/>
+            <rect x="213.8" y="30" width="70.2" height="32" rx="6" fill="#a94f2d"/>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">
+              <text x="48.6" y="50">22%</text>
+              <text x="145.5" y="50">51%</text>
+              <text x="248.9" y="50">27%</text>
+            </g>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#6f655a">
+              <text x="20" y="84">Haiku 4.5</text>
+              <text x="150" y="84" text-anchor="middle">Sonnet 4.6</text>
+              <text x="284" y="84" text-anchor="end">Opus 4.8</text>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag">model_mix</span><span class="badge">self-contained</span></div>
+        <h4>Claude model mix</h4>
+        <p>Haiku 4.5 · Sonnet 4.6 · Opus 4.8.</p>
+      </article>
+
+      <article class="fig reveal" style="--d:600ms">
+        <div class="canvas">
+          <svg viewBox="0 0 300 110" role="img" aria-label="Codex model mix segmented bar">
+            <rect x="20" y="30" width="114.4" height="32" rx="6" fill="#6f7d5e"/>
+            <rect x="134.4" y="30" width="85.8" height="32" fill="#a6b193"/>
+            <rect x="220.2" y="30" width="59.8" height="32" rx="6" fill="#5b6a4c"/>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#fff" text-anchor="middle" font-weight="600">
+              <text x="77.2" y="50">44%</text>
+              <text x="177.3" y="50">33%</text>
+              <text x="250.1" y="50">23%</text>
+            </g>
+            <g font-family="Hanken Grotesk, sans-serif" font-size="9" fill="#6f655a">
+              <text x="20" y="84">gpt-5-codex</text>
+              <text x="177" y="84" text-anchor="middle">o3</text>
+              <text x="284" y="84" text-anchor="end">o4-mini</text>
+            </g>
+          </svg>
+        </div>
+        <div class="tagrow"><span class="tag sage">model_mix</span><span class="badge">self-contained</span></div>
+        <h4>Codex model mix</h4>
+        <p>gpt-5-codex · o3 · o4-mini.</p>
+      </article>
+
+    </div>
+
+    <footer class="foot">
+      <span class="dotmark" aria-hidden="true"></span>
+      <span>Mockup · fake data · scheme preview.</span>
+      <span class="spacer"></span>
+      <span>Atelier — scheme 04</span>
+    </footer>
+  </section>
+
+  <section class="surface" id="analyze" role="tabpanel" aria-label="Analyze your trace">
+
+    <div class="hero reveal" style="--d:60ms; padding-bottom:18px;">
+      <span class="eyebrow">Your trace, your machine</span>
+      <h1>Analyze your <em>own</em> trace.</h1>
+      <p class="lede">Drop a sanitized export and explore it in seconds — nothing is uploaded, nothing is logged.</p>
+    </div>
+
+    <div class="privacy-note reveal" style="--d:140ms">
+      <span class="ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      </span>
+      <div>
+        <div class="pt">Runs entirely in your browser via Pyodide.</div>
+        <div class="ps">Your trace never leaves your machine — analysis happens locally in a WebAssembly sandbox.</div>
+      </div>
+    </div>
+
+    <div class="dropzone reveal" id="dropzone" style="--d:200ms" tabindex="0" role="button" aria-label="Drop your sanitized trace to begin analysis">
+      <div class="dz-ico" aria-hidden="true">
+        <svg id="dz-svg" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+      </div>
+      <div class="dz-title" id="dz-title">Drop your sanitized .gz trace</div>
+      <div class="dz-sub" id="dz-sub">or click to choose a file · processed locally</div>
+      <div class="progress"><i id="dz-bar"></i></div>
+    </div>
+
+    <div class="results-wrap" id="results">
+      <div class="sec-head reveal" style="--d:60ms">
+        <h2>Your results</h2>
+        <span class="sub">A private view, computed from your own rounds.</span>
+      </div>
+      <div class="kpi-grid small reveal" style="--d:120ms">
+        <div class="kpi"><div class="label">Your users</div><div class="num">3</div></div>
+        <div class="kpi"><div class="label">Sessions</div><div class="num">120</div></div>
+        <div class="kpi feature"><div class="label">Rounds</div><div class="num">8,214</div></div>
+        <div class="kpi sagey"><div class="label">Tokens</div><div class="num">1.1<small>B</small></div></div>
+      </div>
+
+      <div class="band reveal" style="--d:180ms">
+        <div class="panel">
+          <h3>Your output tokens</h3>
+          <p class="desc">Completion length across your 8,214 rounds.</p>
+          <svg viewBox="0 0 360 150" width="100%" height="150" role="img" aria-label="Your output token histogram">
+            <line x1="20" y1="124" x2="348" y2="124" stroke="var(--line)" stroke-width="1.2"/>
+            <g fill="var(--terra)">
+              <rect x="34" y="96" width="26" height="28" rx="3"/>
+              <rect x="66" y="70" width="26" height="54" rx="3"/>
+              <rect x="98" y="40" width="26" height="84" rx="3" fill="#a94f2d"/>
+              <rect x="130" y="56" width="26" height="68" rx="3"/>
+              <rect x="162" y="78" width="26" height="46" rx="3"/>
+              <rect x="194" y="94" width="26" height="30" rx="3" fill="var(--terra-soft)"/>
+              <rect x="226" y="106" width="26" height="18" rx="3" fill="var(--terra-soft)"/>
+              <rect x="258" y="112" width="26" height="12" rx="3" fill="var(--terra-soft)"/>
+              <rect x="290" y="116" width="26" height="8" rx="3" fill="var(--terra-soft)"/>
+            </g>
+          </svg>
+        </div>
+        <div class="panel">
+          <h3>Your cache efficiency</h3>
+          <p class="desc">Input served from prefix cache.</p>
+          <svg viewBox="0 0 320 150" width="100%" height="150" role="img" aria-label="Your cache hit gauge">
+            <path d="M44,124 A86,86 0 0 1 276,124" fill="none" stroke="var(--line)" stroke-width="20" stroke-linecap="round"/>
+            <path d="M44,124 A86,86 0 0 1 256,72" fill="none" stroke="var(--sage)" stroke-width="20" stroke-linecap="round"/>
+            <text x="160" y="106" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="700" font-size="40" fill="#6f7d5e" letter-spacing="-1">94%</text>
+            <text x="160" y="124" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="600" font-size="10" fill="#6f655a" letter-spacing="1.5">CACHE HITS</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="contribute reveal" style="--d:240ms">
+        <div class="ctxt">
+          <h3>Contribute to the community pool</h3>
+          <p>Share your already-sanitized, pseudonymous rows to help the public research dataset grow. You stay in control.</p>
+        </div>
+        <label class="toggle-wrap" for="contrib-toggle">
+          <span class="switch"><input type="checkbox" id="contrib-toggle" /><span class="track"></span></span>
+          <span class="toggle-label">Contribute my sanitized trace</span>
+        </label>
+        <button class="btn btn-primary" id="open-modal">Contribute</button>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <span class="dotmark" aria-hidden="true"></span>
+      <span>Mockup · fake data · scheme preview.</span>
+      <span class="spacer"></span>
+      <span>Atelier — scheme 04</span>
+    </footer>
+  </section>
+
+  <section class="surface" id="pool" role="tabpanel" aria-label="Contributed pool dashboard">
+
+    <div class="hero reveal" style="--d:60ms; padding-bottom:18px;">
+      <span class="eyebrow">Staged, never auto-merged</span>
+      <h1>The <em>contributed</em> pool.</h1>
+      <p class="lede">Everything the community has shared, kept deliberately apart from the curated head pool.</p>
+    </div>
+
+    <div class="banner reveal" style="--d:140ms">
+      <span class="ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M12 21a7 7 0 0 0 7-7M5 14a7 7 0 0 0 7 7"/><circle cx="12" cy="11" r="2.4"/></svg>
+      </span>
+      <div>
+        <div class="bt">Community contributions — staged separately from the curated head pool.</div>
+        <div class="bs">Not merged automatically. Each contribution is validated before it can ever join the head dataset.</div>
+      </div>
+    </div>
+
+    <div class="kpi-grid reveal" style="--d:200ms; margin-top:22px;">
+      <div class="kpi"><div class="label">Contributors</div><div class="num">17</div></div>
+      <div class="kpi feature"><div class="label">Rounds</div><div class="num">612,940</div></div>
+      <div class="kpi sagey"><div class="label">Tokens</div><div class="num">91.4<small>B</small></div></div>
+      <div class="kpi"><div class="label">Last contribution</div><div class="num">2<small>h ago</small></div></div>
+    </div>
+
+    <div class="band reveal" style="--d:260ms">
+      <div class="panel">
+        <h3>Contributed provider split</h3>
+        <p class="desc">Across all 612,940 staged rounds.</p>
+        <div style="display:flex; gap:28px; align-items:center; flex-wrap:wrap;">
+          <svg viewBox="0 0 180 180" width="160" height="160" role="img" aria-label="Contributed provider donut">
+            <circle cx="90" cy="90" r="64" fill="none" stroke="var(--line)" stroke-width="24"/>
+            <circle cx="90" cy="90" r="64" fill="none" stroke="var(--terra)" stroke-width="24" stroke-dasharray="217 402" stroke-linecap="round" transform="rotate(-90 90 90)"/>
+            <circle cx="90" cy="90" r="64" fill="none" stroke="var(--sage)" stroke-width="24" stroke-dasharray="185 402" stroke-dashoffset="-221" stroke-linecap="round" transform="rotate(-90 90 90)"/>
+            <text x="90" y="86" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="700" font-size="29" fill="#2a2622" letter-spacing="-0.5">613K</text>
+            <text x="90" y="104" text-anchor="middle" font-family="Hanken Grotesk, sans-serif" font-weight="600" font-size="10" fill="#6f655a" letter-spacing="1.5">ROUNDS</text>
+          </svg>
+          <div class="legend" style="flex:1; min-width:160px;">
+            <div class="row"><span class="dot" style="background:var(--terra)"></span><span class="nm">Codex</span><span class="val">331,420<span class="pct">54%</span></span></div>
+            <div class="row"><span class="dot" style="background:var(--sage)"></span><span class="nm">Claude</span><span class="val">281,520<span class="pct">46%</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Contribution cadence</h3>
+        <p class="desc">Staged rows arriving over recent weeks.</p>
+        <svg viewBox="0 0 360 150" width="100%" height="150" role="img" aria-label="Contribution cadence area">
+          <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sage)" stop-opacity="0.3"/><stop offset="1" stop-color="var(--sage)" stop-opacity="0"/></linearGradient></defs>
+          <line x1="20" y1="124" x2="348" y2="124" stroke="var(--line)" stroke-width="1.2"/>
+          <path d="M20,110 C60,104 84,88 120,92 C156,96 180,70 216,66 C252,62 276,44 312,40 C330,38 340,42 348,34 L348,124 L20,124 Z" fill="url(#cg)"/>
+          <path d="M20,110 C60,104 84,88 120,92 C156,96 180,70 216,66 C252,62 276,44 312,40 C330,38 340,42 348,34" fill="none" stroke="var(--sage)" stroke-width="2.6" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="sec-head reveal" style="--d:320ms">
+      <h2>Recent contributions</h2>
+      <span class="sub">Pseudonymous, row-level, awaiting or passing validation.</span>
+    </div>
+
+    <div class="reveal" style="--d:380ms">
+      <table class="contrib">
+        <thead>
+          <tr><th>Contributor</th><th>When</th><th>Rows</th><th>Providers</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="pid">atelier-7f3a</td><td>2 hours ago</td><td>18,402</td><td><span class="prov-pill">Codex</span><span class="prov-pill sage">Claude</span></td><td><span class="status ok">Validated</span></td></tr>
+          <tr><td class="pid">quiet-loom-2c</td><td>5 hours ago</td><td>9,118</td><td><span class="prov-pill sage">Claude</span></td><td><span class="status ok">Validated</span></td></tr>
+          <tr><td class="pid">sandkiln-91</td><td>Yesterday</td><td>26,740</td><td><span class="prov-pill">Codex</span></td><td><span class="status pend">Pending</span></td></tr>
+          <tr><td class="pid">umber-fox-44</td><td>Yesterday</td><td>4,506</td><td><span class="prov-pill">Codex</span><span class="prov-pill sage">Claude</span></td><td><span class="status ok">Validated</span></td></tr>
+          <tr><td class="pid">slowriver-0e</td><td>2 days ago</td><td>33,981</td><td><span class="prov-pill sage">Claude</span></td><td><span class="status pend">Pending</span></td></tr>
+          <tr><td class="pid">terra-8b1d</td><td>3 days ago</td><td>12,260</td><td><span class="prov-pill">Codex</span></td><td><span class="status ok">Validated</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="foot">
+      <span class="dotmark" aria-hidden="true"></span>
+      <span>Mockup · fake data · scheme preview.</span>
+      <span class="spacer"></span>
+      <span>Atelier — scheme 04</span>
+    </footer>
+  </section>
+
+</div>
+
+<div class="modal-overlay" id="modal-overlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="m-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+    </div>
+    <h3 id="modal-title">Contribute your trace?</h3>
+    <p>Only rows you have already sanitized will be shared. Everything stays pseudonymous.</p>
+    <ul>
+      <li>We share <b>only already-sanitized, pseudonymous rows</b> from your trace.</li>
+      <li>Your contribution <b>will not appear</b> on the head / overview page.</li>
+      <li>It surfaces <b>only on the Contributed dashboard</b>, staged separately.</li>
+      <li>Nothing is merged into the curated pool automatically.</li>
+    </ul>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">Contribution staged — thank you.</div>
+
+<!-- ===================== Ask-the-trace assistant ===================== -->
+<button class="launcher" id="launcher" aria-label="Open the trace assistant">
+  <span class="spark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/></svg></span>
+  Ask the trace
+  <span class="pulse"></span>
+</button>
+
+<div class="scrim" id="scrim"></div>
+<section class="assistant" id="assistant" aria-label="Trace assistant">
+  <div class="a-head">
+    <div class="a-id">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/></svg></span>
+      <div>
+        <div class="ttl">Trace assistant</div>
+        <div class="sub" id="headSub">Reading the public SYFI pool</div>
+      </div>
+    </div>
+    <div class="tools">
+      <button class="iconbtn" id="btnHistory" title="Conversations" aria-label="Conversations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+      <button class="iconbtn" id="btnNew" title="New conversation" aria-label="New conversation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+      <button class="iconbtn expand-only" id="btnExpand" title="Expand to full page" aria-label="Expand to full page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H3v6M3 3l7 7M15 21h6v-6M21 21l-7-7"/></svg></button>
+      <button class="iconbtn collapse-only" id="btnCollapse" title="Collapse to corner" aria-label="Collapse to corner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4v6H4M10 10L3 3M14 20v-6h6M14 14l7 7"/></svg></button>
+      <button class="iconbtn" id="btnClose" title="Close" aria-label="Close assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+  </div>
+
+  <div class="a-main">
+    <aside class="hist" id="hist">
+      <div class="hist-top">
+        <button class="hist-new" id="histNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>New conversation</button>
+      </div>
+      <div class="hist-label">Recent</div>
+      <div class="hist-list" id="histList"></div>
+    </aside>
+    <div class="hist-scrim" id="histScrim"></div>
+
+    <div class="a-col">
+      <div class="source-bar">
+        <div class="seg" id="seg" data-active="public" data-trace="none">
+          <div class="thumb"></div>
+          <button class="on" data-src="public"><span class="d"></span>Public SYFI</button>
+          <button data-src="user"><span class="d"></span><span class="lk" aria-label="locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>Your trace</button>
+        </div>
+        <div class="src-cap" id="srcCap">
+          <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></span>
+          <span id="srcCapText">357,161 rounds across Claude &amp; Codex — public, shareable.</span>
+        </div>
+      </div>
+
+      <div class="a-body" id="asstBody"></div>
+
+      <div class="composer" id="composer">
+        <div class="composer-inner">
+          <textarea id="asstInput" rows="1" placeholder="Ask about tools, tokens, cache, sessions…"></textarea>
+          <button class="send" id="asstSend" aria-label="Send" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <div class="foot"><span class="gd"></span><span id="footNote">Answers run real DuckDB/Python in a sandbox · code is shown</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  (function () {
+    "use strict";
+
+    /* ---------- tab navigation ---------- */
+    var tabs = document.querySelectorAll('nav.tabs button');
+    var surfaces = document.querySelectorAll('.surface');
+    function show(name) {
+      surfaces.forEach(function (s) { s.classList.toggle('live', s.id === name); });
+      tabs.forEach(function (t) {
+        var on = t.dataset.surface === name;
+        t.classList.toggle('active', on);
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      // re-trigger reveal animation by reflow
+      var live = document.getElementById(name);
+      if (live) { void live.offsetWidth; }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { show(t.dataset.surface); });
+    });
+
+    /* ---------- dropzone fake progress ---------- */
+    var dz = document.getElementById('dropzone');
+    var dzTitle = document.getElementById('dz-title');
+    var dzSub = document.getElementById('dz-sub');
+    var dzBar = document.getElementById('dz-bar');
+    var results = document.getElementById('results');
+    var running = false;
+
+    function runAnalysis() {
+      if (running) return;
+      running = true;
+      dz.classList.remove('done');
+      dz.classList.add('busy');
+      results.classList.remove('show');
+
+      var steps = [
+        { t: 'Booting analysis engine…', s: 'Loading Pyodide runtime locally', p: 22 },
+        { t: 'Analyzing 8,214 rounds…',  s: 'Parsing tool calls and token usage', p: 68 },
+        { t: 'Finishing up…',            s: 'Drawing your figures', p: 92 }
+      ];
+      var i = 0;
+      dzBar.style.width = '6%';
+      function next() {
+        if (i < steps.length) {
+          dzTitle.textContent = steps[i].t;
+          dzSub.textContent = steps[i].s;
+          dzBar.style.width = steps[i].p + '%';
+          i++;
+          setTimeout(next, 950);
+        } else {
+          dz.classList.remove('busy');
+          dz.classList.add('done');
+          dzTitle.textContent = 'Analysis complete';
+          dzSub.textContent = '8,214 rounds · 120 sessions · processed locally';
+          dzBar.style.width = '100%';
+          results.classList.add('show');
+          running = false;
+          setTimeout(function () {
+            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 350);
+        }
+      }
+      setTimeout(next, 500);
+    }
+    dz.addEventListener('click', runAnalysis);
+    dz.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); runAnalysis(); }
+    });
+
+    /* ---------- modal ---------- */
+    var overlay = document.getElementById('modal-overlay');
+    var openBtn = document.getElementById('open-modal');
+    var cancelBtn = document.getElementById('modal-cancel');
+    var confirmBtn = document.getElementById('modal-confirm');
+    var toast = document.getElementById('toast');
+    var lastFocus = null;
+
+    function openModal() {
+      lastFocus = document.activeElement;
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+      confirmBtn.focus();
+    }
+    function closeModal() {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      if (lastFocus) lastFocus.focus();
+    }
+    function showToast() {
+      toast.classList.add('show');
+      setTimeout(function () { toast.classList.remove('show'); }, 3000);
+    }
+    openBtn.addEventListener('click', openModal);
+    cancelBtn.addEventListener('click', closeModal);
+    confirmBtn.addEventListener('click', function () { closeModal(); showToast(); });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) closeModal();
+    });
+  })();
+</script>
+
+<script>
+  // ===================== Ask-the-trace assistant (self-contained) =====================
+  (function () {
+    const assistant = document.getElementById('assistant');
+    const body = document.getElementById('asstBody');
+    const input = document.getElementById('asstInput');
+    const send = document.getElementById('asstSend');
+    const seg = document.getElementById('seg');
+    const composer = document.getElementById('composer');
+    const headSub = document.getElementById('headSub');
+    const srcCapText = document.getElementById('srcCapText');
+    const footNote = document.getElementById('footNote');
+    const histList = document.getElementById('histList');
+    const btnHistory = document.getElementById('btnHistory');
+
+    const state = { source: 'public', traceAvailable: false, userConsented: false, busy: false, contributeShown: false, conversations: [], activeId: null };
+
+    const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+    const scrollDown = () => { body.scrollTop = body.scrollHeight; };
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let _seq = 0; const uid = () => 'c' + (++_seq);
+    const byId = (id) => state.conversations.find(c => c.id === id);
+    const activeConv = () => byId(state.activeId);
+    const isExpanded = () => document.body.classList.contains('assistant-expanded');
+
+    function barPlot(title, rows) {
+      const w = 640, h = 300, padL = 150, padR = 24, padT = 16, padB = 28;
+      const max = Math.max(...rows.map(r => r.v));
+      const bh = (h - padT - padB) / rows.length;
+      let bars = '';
+      rows.forEach((r, i) => {
+        const y = padT + i * bh + 5, bw = (w - padL - padR) * (r.v / max), barH = bh - 14;
+        const fill = r.c === 'sage' ? 'var(--sage)' : 'var(--terra)';
+        bars += `<rect x="${padL}" y="${y}" width="${bw}" height="${barH}" rx="5" fill="${fill}" opacity="0.92"/>`;
+        bars += `<text x="${padL - 12}" y="${y + barH / 2 + 4}" text-anchor="end" font-size="13" fill="#6f655a" font-family="Hanken Grotesk, sans-serif">${r.k}</text>`;
+        bars += `<text x="${padL + bw + 8}" y="${y + barH / 2 + 4}" font-size="12.5" fill="#2a2622" font-weight="700" font-family="Hanken Grotesk, sans-serif" style="font-variant-numeric:tabular-nums">${r.label}</text>`;
+      });
+      return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${title}"><text x="0" y="12" font-size="13" font-weight="700" fill="#2a2622" font-family="Fraunces, serif">${title}</text>${bars}</svg>`;
+    }
+
+    const CANNED = {
+      tools: {
+        steps: ['Planning the query', 'Writing DuckDB SQL', 'Running in the sandbox', 'Composing the answer'],
+        code: `<span class="pre-tok-k">import</span> duckdb, json\ncon = duckdb.connect(<span class="pre-tok-s">"/data/syfi_coding_trace.duckdb"</span>, read_only=<span class="pre-tok-k">True</span>)\nrows = con.execute(<span class="pre-tok-s">"""\n  SELECT provider, tool_name, count(*) AS n\n  FROM effective_tool_calls\n  GROUP BY 1, 2 ORDER BY n DESC LIMIT 5\n"""</span>).fetchall()\n<span class="pre-tok-c"># save chart to /out/top_tools.png …</span>\nprint(json.dumps(rows))`,
+        answer: `<p>Across <span class="stat">2.1M</span> tool calls, both agents lean on shell + file edits, but the mix differs:</p><p><strong>Codex</strong> reaches for <strong>exec_command</strong> and <strong>apply_patch</strong> most; <strong>Claude</strong> leads with <strong>Bash</strong> and <strong>Read</strong>. <span class="stat">write_stdin</span> is almost entirely Codex.</p>`,
+        plot: () => barPlot('Top tools — share of all calls', [
+          { k: 'exec_command', v: 38, label: '38%', c: 'terra' }, { k: 'Bash', v: 27, label: '27%', c: 'sage' },
+          { k: 'apply_patch', v: 16, label: '16%', c: 'terra' }, { k: 'Read', v: 12, label: '12%', c: 'sage' },
+          { k: 'write_stdin', v: 7, label: '7%', c: 'terra' }]),
+        cap: '/out/top_tools.png',
+      },
+      cache: {
+        steps: ['Planning the query', 'Aggregating token columns', 'Running in the sandbox', 'Composing the answer'],
+        code: `<span class="pre-tok-k">import</span> duckdb\ncon = duckdb.connect(<span class="pre-tok-s">"/data/syfi_coding_trace.duckdb"</span>, read_only=<span class="pre-tok-k">True</span>)\nprint(con.execute(<span class="pre-tok-s">"""\n  SELECT provider,\n         sum(cached_read_input_tokens) AS cached,\n         sum(total_input_tokens)       AS total\n  FROM round_token_summary GROUP BY 1\n"""</span>).fetchall())`,
+        answer: `<p>Prefix caching is doing a lot of work: <span class="stat">71%</span> of all input tokens are served from cache.</p><p><strong>Claude</strong> sits a touch higher (<span class="stat">74%</span>) than <strong>Codex</strong> (<span class="stat">68%</span>) — consistent with longer, more cache-friendly sessions.</p>`,
+        plot: () => barPlot('Cached-read share of input tokens', [
+          { k: 'Claude', v: 74, label: '74%', c: 'terra' }, { k: 'Codex', v: 68, label: '68%', c: 'sage' }]),
+        cap: '/out/cache_share.png',
+      },
+      generic: {
+        steps: ['Planning the query', 'Writing DuckDB SQL', 'Running in the sandbox', 'Composing the answer'],
+        code: `<span class="pre-tok-k">import</span> duckdb, json\ncon = duckdb.connect(DB, read_only=<span class="pre-tok-k">True</span>)\nrows = con.execute(<span class="pre-tok-s">"SELECT provider, count(*) FROM rounds GROUP BY 1"</span>).fetchall()\nprint(json.dumps(rows))`,
+        answer: `<p>Here's what the data shows: of <span class="stat">357,161</span> rounds, <strong>Codex</strong> accounts for <span class="stat">216,823</span> and <strong>Claude</strong> for <span class="stat">140,338</span>.</p>`,
+        plot: () => barPlot('Rounds by provider', [
+          { k: 'Codex', v: 216823, label: '216,823', c: 'sage' }, { k: 'Claude', v: 140338, label: '140,338', c: 'terra' }]),
+        cap: '/out/rounds_by_provider.png',
+      },
+    };
+    function pickCanned(q) {
+      const t = q.toLowerCase();
+      if (/(tool|exec|patch|bash|read|command)/.test(t)) return CANNED.tools;
+      if (/(cache|cached|prefix|token)/.test(t)) return CANNED.cache;
+      return CANNED.generic;
+    }
+    const OFF_TOPIC = /(weather|stock|recipe|football|capital of|who won)/i;
+
+    const EXAMPLES = {
+      public: [
+        { icon: 'tool', text: 'Which tools do Claude and Codex use the most?' },
+        { icon: 'cache', text: 'How much input is served from the prefix cache?' },
+        { icon: 'token', text: 'What is the distribution of output tokens?' },
+        { icon: 'off', muted: true, text: "What's the weather tomorrow?  (watch it decline)" },
+      ],
+      user: [
+        { icon: 'tool', text: 'What are my most-used tools this month?' },
+        { icon: 'cache', text: 'Is my prefix-cache hit rate better than the pool?' },
+        { icon: 'time', text: 'Plot my session lengths over time.' },
+      ],
+    };
+    const CHIP_ICONS = {
+      tool: '<path d="M14.7 6.3a4 4 0 0 0-5 5l-6 6 2 2 6-6a4 4 0 0 0 5-5l-2.5 2.5-2-2 2.5-2.5z"/>',
+      cache: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+      time: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      off: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
+    };
+
+    function createConversation(src) { const c = { id: uid(), source: src, title: null, ts: 'Now', messages: [] }; state.conversations.unshift(c); state.activeId = c.id; return c; }
+    function seedConversations() {
+      const t = CANNED.tools, c = CANNED.cache, g = CANNED.generic;
+      state.conversations = [
+        { id: uid(), source: 'public', title: 'Top tools — Claude vs Codex', ts: '2h ago', messages: [{ role: 'user', text: 'Which tools do Claude and Codex use the most?' }, { role: 'assistant', answer: t.answer, plot: t.plot(), cap: t.cap, code: t.code }] },
+        { id: uid(), source: 'public', title: 'Prefix-cache hit rate', ts: 'Yesterday', messages: [{ role: 'user', text: 'How much input is served from the prefix cache?' }, { role: 'assistant', answer: c.answer, plot: c.plot(), cap: c.cap, code: c.code }] },
+        { id: uid(), source: 'public', title: 'Rounds by provider', ts: 'Mar 4', messages: [{ role: 'user', text: 'How many rounds does each provider have?' }, { role: 'assistant', answer: g.answer, plot: g.plot(), cap: g.cap, code: g.code }] },
+      ];
+    }
+    function renderHistory() {
+      histList.innerHTML = '';
+      const convs = state.conversations.filter(c => c.messages.length || c.id === state.activeId);
+      if (!convs.length) { histList.innerHTML = '<div class="hist-empty">No conversations yet. Ask something to get started.</div>'; return; }
+      convs.forEach(c => {
+        const item = el('button', 'hist-item' + (c.id === state.activeId ? ' active' : ''));
+        const title = c.title || 'New conversation';
+        const label = c.source === 'public' ? 'Public' : 'Your trace';
+        item.innerHTML = `<span class="ti">${escapeHtml(title)}</span><span class="mt"><span class="hist-pill ${c.source}">${label}</span>${c.ts}</span>`;
+        item.addEventListener('click', () => loadConversation(c.id));
+        histList.appendChild(item);
+      });
+    }
+    function loadConversation(id) {
+      if (state.busy) return;
+      const c = byId(id); if (!c) return;
+      state.activeId = id; state.source = c.source;
+      updateSourceUI(); renderThread(); renderHistory();
+      if (!isExpanded()) setHistory(false);
+      input.focus();
+    }
+    function startNewConversation() {
+      if (state.busy) return;
+      const a = activeConv();
+      if (!a || a.messages.length) createConversation(state.source);
+      updateSourceUI(); renderThread(); renderHistory();
+      if (!isExpanded()) setHistory(false);
+      input.focus();
+    }
+    function updateSourceUI() {
+      seg.dataset.active = state.source;
+      seg.dataset.trace = state.traceAvailable ? 'ready' : 'none';   // toggles the lock on "Your trace"
+      seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.src === state.source));
+      if (state.source === 'public') {
+        headSub.textContent = 'Reading the public SYFI pool';
+        srcCapText.innerHTML = '357,161 rounds across Claude &amp; Codex — public, shareable.';
+        footNote.textContent = 'Answers run real DuckDB/Python in a sandbox · code is shown';
+      } else if (!state.traceAvailable) {
+        headSub.textContent = 'No trace loaded yet';
+        srcCapText.innerHTML = 'Analyze a trace first to ask about your own data.';
+        footNote.textContent = 'Your trace is analyzed privately · never added to the pool';
+      } else {
+        headSub.textContent = 'Reading your uploaded trace';
+        srcCapText.innerHTML = state.userConsented ? 'Your trace only · sent to the sandbox just for this chat.' : 'Private · stays in your browser until you opt in.';
+        footNote.textContent = 'Your trace is analyzed privately · never added to the pool';
+      }
+    }
+    function selectSource(src) {
+      if (state.busy) return;
+      const a = activeConv();
+      if (state.source === src && a && a.source === src) { updateSourceUI(); return; }
+      state.source = src;
+      if (a && a.messages.length === 0) a.source = src; else createConversation(src);
+      updateSourceUI(); renderThread(); renderHistory();
+    }
+    function renderThread() {
+      const conv = activeConv();
+      if (!conv || !conv.messages.length) { renderEmpty(); return; }
+      composer.classList.remove('locked');
+      body.innerHTML = '';
+      conv.messages.forEach(m => body.appendChild(buildMessage(m)));
+      scrollDown();
+    }
+    function renderEmpty() {
+      body.innerHTML = '';
+      // user-trace mode, no trace analyzed yet → locked, prompt to upload
+      if (state.source === 'user' && !state.traceAvailable) {
+        composer.classList.add('locked');
+        const gate = el('div', 'gate no-trace');
+        gate.innerHTML = `
+          <div class="g-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+          <h3>No trace loaded <em>yet</em></h3>
+          <p>To ask about your own data, analyze a trace first. Open <b>Analyze your trace</b>, drop your sanitized <code>.gz</code> — it's processed locally in your browser — and this unlocks automatically.</p>
+          <div class="gate-actions">
+            <button class="btn btn-primary" id="goAnalyze">Analyze your trace</button>
+            <button class="btn btn-ghost" id="toPublicLocked">Use the public pool</button>
+          </div>`;
+        body.appendChild(gate);
+        gate.querySelector('#goAnalyze').addEventListener('click', () => {
+          closeAssistant();
+          const t = document.querySelector('nav.tabs button[data-surface="analyze"]'); if (t) t.click();
+        });
+        gate.querySelector('#toPublicLocked').addEventListener('click', () => selectSource('public'));
+        return;
+      }
+      if (state.source === 'user' && !state.userConsented) {
+        composer.classList.add('locked');
+        const gate = el('div', 'gate');
+        gate.innerHTML = `
+          <div class="g-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 4.4-3.1 7.9-8 9-4.9-1.1-8-4.6-8-9V7l8-4z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Ask questions about <em>your</em> trace</h3>
+          <p>Your trace was analyzed locally in your browser and never uploaded. To ask free-form questions, the assistant needs to send <strong>just this trace's data</strong> to the cloud sandbox for the duration of the chat.</p>
+          <ul>
+            <li><span class="li-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>Only your <b>sanitized, normalized</b> rows are sent — the same shape as a public trace.</span></li>
+            <li><span class="li-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>It's used <b>only to answer you</b>, then discarded with the sandbox. Not added to the pool.</span></li>
+            <li><span class="li-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>Contributing to the public pool stays a <b>separate, explicit</b> choice.</span></li>
+          </ul>
+          <label class="consent"><input type="checkbox" id="consentBox"><span>I understand my trace data will be sent to the cloud AI sandbox to answer my questions for this session.</span></label>
+          <div class="gate-actions">
+            <button class="btn btn-primary" id="enableBtn" disabled>Enable cloud analysis</button>
+            <button class="btn btn-ghost" id="toPublicBtn">Use the public pool instead</button>
+          </div>
+          <p class="no-trace-hint">No trace loaded? Open <b>Analyze your trace</b> first, drop your sanitized <code>.gz</code>, then come back here.</p>`;
+        body.appendChild(gate);
+        const box = gate.querySelector('#consentBox'), enable = gate.querySelector('#enableBtn');
+        box.addEventListener('change', () => { enable.disabled = !box.checked; });
+        enable.addEventListener('click', () => { state.userConsented = true; updateSourceUI(); renderThread(); composer.classList.remove('locked'); input.focus(); });
+        gate.querySelector('#toPublicBtn').addEventListener('click', () => selectSource('public'));
+        return;
+      }
+      composer.classList.remove('locked');
+      const list = EXAMPLES[state.source];
+      const hello = state.source === 'public'
+        ? `<div class="hello">What would you like to know about <em>the pool</em>?</div><p class="blurb">Ask in plain language. I'll write a small DuckDB/Python program, run it in a sandbox over the public SYFI trace, and answer — with the chart and the exact code.</p>`
+        : `<div class="hello">Ask about <em>your</em> trace</div><p class="blurb">Same engine, pointed at the trace you just analyzed. I'll compare it to the public pool whenever that helps.</p>`;
+      const chips = list.map(c => `<button class="chip ${c.muted ? 'muted' : ''}" data-q="${c.text.replace(/"/g, '&quot;')}"><span class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${CHIP_ICONS[c.icon]}</svg></span>${c.text}</button>`).join('');
+      const wrap = el('div', 'empty', `${hello}<div class="chips-label">Try one</div><div class="chips">${chips}</div>`);
+      body.appendChild(wrap);
+      wrap.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => { input.value = ch.dataset.q; syncSend(); ask(); }));
+    }
+    function buildMessage(m) {
+      if (m.role === 'user') return el('div', 'msg user', `<div class="who">You</div><div class="bubble">${escapeHtml(m.text)}</div>`);
+      const n = el('div', 'msg bot');
+      let inner = `<div class="who">Assistant</div>`;
+      if (m.refusal) { n.innerHTML = inner + `<div class="refusal">${escapeHtml(m.refusal)}</div>`; return n; }
+      inner += `<div class="bubble">${m.answer}</div>`;
+      if (m.plot) inner += `<div style="height:12px"></div><div class="plot">${m.plot}<div class="cap"><span>${m.cap}</span><span class="dl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 11l5 5 5-5M5 21h14"/></svg>Download PNG</span></div></div>`;
+      if (m.code) inner += `<div style="height:12px"></div><details class="code-fold"><summary><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>Show the code &amp; output</summary><pre>${m.code}</pre></details>`;
+      n.innerHTML = inner; return n;
+    }
+    async function ask() {
+      if (state.busy) return;
+      const q = input.value.trim(); if (!q) return;
+      if (state.source === 'user' && (!state.traceAvailable || !state.userConsented)) return;
+      state.busy = true; send.disabled = true;
+      const conv = activeConv();
+      conv.messages.push({ role: 'user', text: q });
+      if (!conv.title) conv.title = q.length > 48 ? q.slice(0, 46) + '…' : q;
+      conv.ts = 'Now';
+      if (conv.messages.length === 1) body.innerHTML = '';
+      body.appendChild(buildMessage({ role: 'user', text: q }));
+      input.value = ''; autoGrow(); scrollDown(); renderHistory();
+      if (OFF_TOPIC.test(q)) {
+        await wait(700);
+        const msg = { role: 'assistant', refusal: 'I can only answer questions about the SYFI / coding-trace data and trace analysis.' };
+        conv.messages.push(msg); body.appendChild(buildMessage(msg)); scrollDown();
+        state.busy = false; syncSend(); return;
+      }
+      const kb = pickCanned(q);
+      const work = el('div', 'working', kb.steps.map((s, i) => `<div class="work-step ${i === 0 ? 'active' : ''}"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>${s}</div>`).join(''));
+      body.appendChild(work); scrollDown();
+      const steps = [...work.querySelectorAll('.work-step')];
+      for (let i = 0; i < steps.length; i++) {
+        await wait(i === 2 ? 1100 : 650);
+        steps[i].classList.remove('active'); steps[i].classList.add('done');
+        if (steps[i + 1]) steps[i + 1].classList.add('active');
+        scrollDown();
+      }
+      await wait(350); work.remove();
+      const msg = { role: 'assistant', answer: kb.answer, plot: kb.plot ? kb.plot() : null, cap: kb.cap, code: kb.code };
+      conv.messages.push(msg); body.appendChild(buildMessage(msg)); scrollDown();
+      state.busy = false; syncSend();   // re-enable input *before* the nudge so it never blocks the next question
+      if (!state.contributeShown) { await wait(550); showContributeNudge(); }
+    }
+    function showContributeNudge() {
+      if (state.contributeShown) return;
+      state.contributeShown = true;
+      const has = state.traceAvailable;   // can only contribute a trace you actually have
+      const card = el('div', 'contrib-nudge');
+      card.innerHTML = `
+        <span class="cn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5l-1.1-1.1a4 4 0 0 0-5.7 5.6L12 18l6.8-7a4 4 0 0 0-5.7-5.6L12 6.5z"/></svg></span>
+        <div class="cn-body">
+          <div class="cn-title">${has ? 'Contribute your trace?' : 'Have your own traces?'}</div>
+          <div class="cn-sub">${has ? 'Add your sanitized trace to the public pool — you stay in control, and it helps everyone study coding agents.' : 'Contribute a sanitized trace to make the public pool richer for everyone.'}</div>
+          <div class="cn-actions">
+            <button class="btn btn-primary cn-yes">${has ? 'Contribute' : 'Contribute a trace'}</button>
+            <button class="btn btn-ghost cn-no">Maybe later</button>
+          </div>
+        </div>
+        <button class="cn-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+      body.appendChild(card); scrollDown();
+      const dismiss = () => { card.classList.add('out'); setTimeout(() => card.remove(), 280); };
+      card.querySelector('.cn-no').addEventListener('click', dismiss);
+      card.querySelector('.cn-x').addEventListener('click', dismiss);
+      card.querySelector('.cn-yes').addEventListener('click', () => {
+        if (has) {
+          card.innerHTML = `<span class="cn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><div class="cn-body"><div class="cn-title">Thanks — added to the pool ♥</div><div class="cn-sub">Your sanitized trace will help others analyze coding agents.</div></div>`;
+          setTimeout(dismiss, 3200);
+        } else {
+          closeAssistant();
+          const t = document.querySelector('nav.tabs button[data-surface="analyze"]'); if (t) t.click();
+        }
+      });
+    }
+    function defaultSource() { const live = document.querySelector('.surface.live'); return live && live.id === 'analyze' ? 'user' : 'public'; }
+    function openAssistant(forceSrc) {
+      selectSource(forceSrc || defaultSource());
+      document.body.classList.add('assistant-open');
+      renderHistory(); renderThread();
+      setTimeout(() => input.focus(), 80);
+    }
+    function closeAssistant() { document.body.classList.remove('assistant-open', 'assistant-expanded'); setHistory(false); btnHistory.classList.remove('on'); }
+    function setHistory(open) { assistant.classList.toggle('hist-open', open); btnHistory.classList.toggle('on', assistant.classList.contains('hist-open')); }
+    function toggleHistory() { setHistory(!assistant.classList.contains('hist-open')); }
+    function autoGrow() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; }
+    function syncSend() { send.disabled = state.busy || !input.value.trim() || (state.source === 'user' && (!state.traceAvailable || !state.userConsented)); }
+
+    document.getElementById('launcher').addEventListener('click', () => openAssistant());
+    const teaser = document.getElementById('askTeaser');
+    if (teaser) teaser.addEventListener('click', () => openAssistant('public'));
+    document.getElementById('btnClose').addEventListener('click', closeAssistant);
+    document.getElementById('btnExpand').addEventListener('click', () => { document.body.classList.add('assistant-expanded'); setHistory(true); });
+    document.getElementById('btnCollapse').addEventListener('click', () => { document.body.classList.remove('assistant-expanded'); setHistory(false); });
+    document.getElementById('scrim').addEventListener('click', () => { document.body.classList.remove('assistant-expanded'); setHistory(false); });
+    btnHistory.addEventListener('click', toggleHistory);
+    document.getElementById('histScrim').addEventListener('click', () => setHistory(false));
+    document.getElementById('btnNew').addEventListener('click', startNewConversation);
+    document.getElementById('histNew').addEventListener('click', startNewConversation);
+    seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => selectSource(b.dataset.src)));
+    send.addEventListener('click', ask);
+    input.addEventListener('input', () => { autoGrow(); syncSend(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (assistant.classList.contains('hist-open') && !isExpanded()) setHistory(false);
+      else if (isExpanded()) { document.body.classList.remove('assistant-expanded'); setHistory(false); }
+      else if (document.body.classList.contains('assistant-open')) closeAssistant();
+    });
+
+    // "Your trace" availability is driven by the real Analyze flow: when the dropzone reaches its
+    // done state (trace analyzed locally), unlock the source. Observed, so no edit to that script.
+    function markTraceReady() {
+      if (state.traceAvailable) return;
+      state.traceAvailable = true;
+      updateSourceUI();
+      if (state.source === 'user') renderThread();
+      syncSend();
+    }
+    const dz = document.getElementById('dropzone');
+    if (dz) {
+      if (dz.classList.contains('done')) markTraceReady();
+      new MutationObserver(() => { if (dz.classList.contains('done')) markTraceReady(); })
+        .observe(dz, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    seedConversations();
+    createConversation('public');
+    updateSourceUI(); renderHistory(); renderThread();
+    window.__asst = { state, loadConversation, openAssistant, selectSource, markTraceReady };  // test hook
+  })();
+</script>
+</body>
+</html>

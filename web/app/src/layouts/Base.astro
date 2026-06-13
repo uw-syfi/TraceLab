@@ -1,0 +1,101 @@
+---
+import '../styles/index.css';
+import Topbar from '../components/Topbar.astro';
+import AskTrace from '../components/AskTrace.astro';
+
+interface Props {
+  title?: string;
+}
+const { title = 'SyFI Trace Atlas' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    {/* Set the theme before first paint to avoid a flash: an explicit saved choice wins, otherwise
+        default to dark (ignoring the OS preference). */}
+    <script is:inline>
+      (() => {
+        try {
+          const saved = localStorage.getItem('theme');
+          const dark = saved ? saved === 'dark' : true;
+          if (dark) document.documentElement.dataset.theme = 'dark';
+        } catch (_) {}
+      })();
+    </script>
+    <title>{title}</title>
+    <meta name="description" content="Inside real agent workloads: tools, tokens, cache, and time across Claude Code and Codex." />
+    <link rel="icon" href="/syfi-favicon.svg" type="image/svg+xml" />
+    <script is:inline>
+      (() => {
+        const isIndex = location.pathname === '/' || location.pathname.endsWith('/index.html');
+        const initial = location.hash.slice(1);
+        if (isIndex && ['compare', 'analyze', 'pool'].includes(initial)) {
+          document.documentElement.dataset.initialSurface = initial;
+        }
+      })();
+    </script>
+    {/* TODO: self-host Fraunces + Hanken Grotesk woff2 for offline; Google link for now. */}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Hanken+Grotesk:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="blobs" aria-hidden="true">
+      <span class="blob b1"></span>
+      <span class="blob b2"></span>
+      <span class="blob b3"></span>
+    </div>
+
+    <Topbar />
+    <AskTrace />
+
+    <div class="shell">
+      <slot />
+    </div>
+
+    {/* Register the Pyodide-cache service worker (see public/sw.js): downloads the ~40 MB runtime +
+        packages once, then serves them from the Cache API on every later boot/visit. */}
+    <script is:inline>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+
+    {/* Pageview beacon — access counts + top pages (no dwell time). The compare/analyze/pool
+        surfaces are hash views on '/', switched via the 'surface:show' event (Topbar), so we beacon
+        those too. Fire-and-forget same-origin POST to the contribute sidecar through the /api proxy. */}
+    <script is:inline>
+      (() => {
+        const send = (surface) => {
+          try {
+            const body = JSON.stringify({
+              path: location.pathname,
+              hash: surface || location.hash.replace('#', ''),
+              ref: document.referrer,
+            });
+            if (navigator.sendBeacon) {
+              navigator.sendBeacon('/api/metrics', new Blob([body], { type: 'application/json' }));
+            } else {
+              fetch('/api/metrics', {
+                method: 'POST',
+                body,
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+              }).catch(() => {});
+            }
+          } catch (_) {}
+        };
+        send();
+        document.addEventListener('surface:show', (e) => send(e && e.detail));
+      })();
+    </script>
+  </body>
+</html>

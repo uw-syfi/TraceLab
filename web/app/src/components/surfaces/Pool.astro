@@ -1,0 +1,248 @@
+---
+import { poolEmpty } from '../../lib/pool';
+import { intComma, magnitude, relativeParts } from '../../lib/format';
+import KpiGrid from '../KpiGrid.astro';
+import Band from '../Band.astro';
+import Panel from '../Panel.astro';
+import ProviderDonut from '../ProviderDonut.astro';
+import Footer from '../Footer.astro';
+
+// Build-time skeleton from the zeroed default; a client script hydrates it from GET /api/pool so
+// the static site stays static while the numbers stay live. KPI/table/donut markup carries
+// data-* hooks the script targets (mirrors the Analyze surface's hydration pattern).
+const p = poolEmpty;
+const tok = magnitude(p.totalInputTokens);
+const last = relativeParts(p.lastContributionAt);
+---
+
+<section class="surface" id="pool" role="tabpanel" aria-label="Contributed pool dashboard">
+  <div class="hero reveal" style="--d:60ms; padding-bottom:18px;">
+    <span class="eyebrow">Community contributions</span>
+    <h1>Contributed <em>traces</em>.</h1>
+    <p class="lede">Each contribution adds coverage to the public workload map. Uploaded rows are validated, deduplicated, and credited pseudonymously.</p>
+  </div>
+
+  <KpiGrid delay={200} mt>
+    <div class="kpi"><div class="label">Contributors</div><div class="num" data-pool="contributors">{intComma(p.contributors)}</div></div>
+    <div class="kpi feature"><div class="label">Agent steps</div><div class="num" data-pool="rounds">{intComma(p.rounds)}</div></div>
+    <div class="kpi sagey"><div class="label">Input tokens</div><div class="num"><span data-pool="tokens">{tok.num}</span>{tok.unit && <small data-pool="tokens-unit">{tok.unit}</small>}{!tok.unit && <small data-pool="tokens-unit" hidden></small>}</div></div>
+    <div class="kpi"><div class="label">Last contribution</div><div class="num"><span data-pool="last">{last.value}</span><small data-pool="last-unit">{last.unit}</small></div></div>
+  </KpiGrid>
+
+  <Band delay={260}>
+    <Panel title="Provider split" desc="Claude and Codex agent steps in contributed traces.">
+      <ProviderDonut claude={p.split.claude} codex={p.split.codex} />
+    </Panel>
+    <Panel title="Contribution cadence" desc="Placeholder until contribution history is available.">
+      <svg viewBox="0 0 360 150" width="100%" height="150" role="img" aria-label="Contribution cadence area">
+        <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sage)" stop-opacity="0.3"></stop><stop offset="1" stop-color="var(--sage)" stop-opacity="0"></stop></linearGradient></defs>
+        <line x1="20" y1="124" x2="348" y2="124" stroke="var(--line)" stroke-width="1.2"></line>
+        <path d="M20,110 C60,104 84,88 120,92 C156,96 180,70 216,66 C252,62 276,44 312,40 C330,38 340,42 348,34 L348,124 L20,124 Z" fill="url(#cg)"></path>
+        <path d="M20,110 C60,104 84,88 120,92 C156,96 180,70 216,66 C252,62 276,44 312,40 C330,38 340,42 348,34" fill="none" stroke="var(--sage)" stroke-width="2.6" stroke-linecap="round"></path>
+      </svg>
+    </Panel>
+  </Band>
+
+  <div class="pool-contribute reveal" style="--d:300ms">
+    <div class="pc-copy">
+      <span class="eyebrow">Add to the pool</span>
+      <h2>Contribute a <em>trace</em>.</h2>
+      <p>Drop raw Claude/Codex sessions or a sanitized <code>.gz</code>. Raw files are normalized and sanitized locally before upload.</p>
+    </div>
+    <div class="pc-drop" id="pool-drop" tabindex="0" role="button" aria-label="Drop raw sessions or a sanitized .gz to contribute">
+      <span class="pc-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg>
+      </span>
+      <span class="pc-title">Drop a trace to contribute</span>
+      <span class="pc-sub">raw sessions or .gz · local sanitization first</span>
+    </div>
+    <input type="file" id="pool-file" accept=".gz,.tgz,.zip,.tar,.jsonl,.json,.ndjson" hidden />
+  </div>
+
+  <!-- Shared ingest result (same component as Analyze): detection + conditional downloads. -->
+  <div class="ingest-host" id="pool-ingest" hidden></div>
+
+  <div class="sec-head reveal" style="--d:360ms">
+    <h2>Recent contributions</h2>
+    <span class="sub">Validated uploads, shown with pseudonymous contributor IDs.</span>
+  </div>
+
+  <div class="reveal" style="--d:380ms">
+    <table class="contrib">
+      <thead>
+        <tr><th>Contributor</th><th>When</th><th>Agent steps</th><th>Providers</th><th>Status</th></tr>
+      </thead>
+      <tbody id="pool-tbody">
+        <tr data-pool-empty><td colspan="5" class="pid">No contributions yet — be the first from the Analyze tab.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <Footer left="SyFI Trace Atlas · contributed pool" right="Pseudonymous rows" />
+</section>
+
+<script>
+  import { intComma, magnitude, relativeParts, relativeWhen } from '../../lib/format';
+  import type { PoolPreview } from '../../lib/pool';
+  import { requestContribution } from '../../lib/contribute-ui';
+  import { prepareTrace } from '../../lib/worker/prepare';
+  import { renderIngestSummary } from '../../lib/ingestUi';
+
+  const setText = (role: string, text: string) => {
+    const el = document.querySelector(`[data-pool="${role}"]`);
+    if (el) el.textContent = text;
+  };
+
+  // Recompute the donut arcs/legend (geometry mirrors ProviderDonut.astro: r=64, gap=4).
+  function updateDonut(claude: number, codex: number) {
+    const R = 64;
+    const C = 2 * Math.PI * R;
+    const GAP = 4;
+    const usable = C - 2 * GAP;
+    const total = claude + codex || 1;
+    const claudeLen = (claude / total) * usable;
+    const codexLen = (codex / total) * usable;
+    const claudePct = Math.round((claude / total) * 100);
+    // Scope to the pool surface: Overview renders its own ProviderDonut with the same data-donut
+    // hooks and sits earlier in the DOM, so a global querySelector would update the wrong donut.
+    const root = document.getElementById('pool');
+    const set = (role: string, fn: (el: Element) => void) => {
+      const el = root?.querySelector(`[data-donut="${role}"]`);
+      if (el) fn(el);
+    };
+    set('claude-arc', (el) => el.setAttribute('stroke-dasharray', `${claudeLen} ${C}`));
+    set('codex-arc', (el) => {
+      el.setAttribute('stroke-dasharray', `${codexLen} ${C}`);
+      el.setAttribute('stroke-dashoffset', String(-(claudeLen + GAP)));
+    });
+    set('center', (el) => (el.textContent = `${magnitude(claude + codex).num}${magnitude(claude + codex).unit}`));
+    set('claude-val', (el) => (el.textContent = intComma(claude)));
+    set('codex-val', (el) => (el.textContent = intComma(codex)));
+    set('claude-pct', (el) => (el.textContent = `${claudePct}%`));
+    set('codex-pct', (el) => (el.textContent = `${100 - claudePct}%`));
+  }
+
+  function renderTable(contributions: PoolPreview['contributions']) {
+    const tbody = document.getElementById('pool-tbody');
+    if (!tbody) return;
+    if (!contributions.length) return; // keep the empty-state row
+    tbody.innerHTML = contributions
+      .map((c) => {
+        const pills = c.providers
+          .map((prov) =>
+            prov === 'claude'
+              ? '<span class="prov-pill sage">Claude</span>'
+              : '<span class="prov-pill">Codex</span>',
+          )
+          .join('');
+        return `<tr><td class="pid">${c.id}</td><td>${relativeWhen(c.receivedAt)}</td>` +
+          `<td>${intComma(c.rows)}</td><td>${pills}</td>` +
+          `<td><span class="status ok">Validated</span></td></tr>`;
+      })
+      .join('');
+  }
+
+  async function hydrate() {
+    let data: PoolPreview;
+    try {
+      const res = await fetch('/api/pool');
+      if (!res.ok) return; // service absent (e.g. static preview) → keep the skeleton
+      data = await res.json();
+    } catch {
+      return;
+    }
+    setText('contributors', intComma(data.contributors));
+    setText('rounds', intComma(data.rounds));
+    const tok = magnitude(data.totalInputTokens);
+    setText('tokens', tok.num);
+    const unitEl = document.querySelector('[data-pool="tokens-unit"]') as HTMLElement | null;
+    if (unitEl) {
+      unitEl.textContent = tok.unit;
+      unitEl.hidden = !tok.unit;
+    }
+    const last = relativeParts(data.lastContributionAt);
+    setText('last', last.value);
+    setText('last-unit', last.unit);
+    updateDonut(data.split.claude, data.split.codex);
+    renderTable(data.contributions);
+  }
+
+  hydrate();
+  // The pool starts empty at page load; re-fetch when a contribution lands or when the user
+  // opens the Contributed pool tab, so the dashboard reflects the latest snapshot.
+  window.addEventListener('contrib:success', () => hydrate());
+  document.querySelector('[data-surface="pool"]')?.addEventListener('click', () => hydrate());
+
+  // Direct-contribute entry point: drop/pick raw sessions or a .gz here. Shares the Analyze ingest
+  // pipeline — normalize + sanitize locally first (so raw uploads aren't rejected by the server gate),
+  // show the same detection card + downloads, then hand the sanitized .gz to the shared dialog.
+  const drop = document.getElementById('pool-drop');
+  const fileEl = document.getElementById('pool-file') as HTMLInputElement | null;
+  const poolIngest = document.getElementById('pool-ingest') as HTMLElement | null;
+  let poolBusy = false;
+
+  async function handlePoolFile(file: File): Promise<void> {
+    if (poolBusy) return;
+    poolBusy = true;
+    const drv = drop as HTMLElement;
+    const sub = drv.querySelector('.pc-sub');
+    const subText = sub?.textContent ?? '';
+    drv.classList.add('busy');
+    if (sub) sub.textContent = 'Reading your trace…';
+    try {
+      const prepared = await prepareTrace(file, {
+        buildDb: false,
+        // Show each conversion stage (loading runtime → detecting → extracting → sanitizing).
+        onStage: (m) => {
+          if (sub) sub.textContent = m.replace(/…$/, '') + '…';
+        },
+      });
+      if (poolIngest) {
+        renderIngestSummary(poolIngest, prepared);
+        poolIngest.hidden = false;
+      }
+      requestContribution(prepared.sanitizedFile);
+    } catch (err) {
+      if (poolIngest) {
+        poolIngest.hidden = false;
+        poolIngest.innerHTML =
+          '<div class="ingest-card" data-kind="error"><div class="ig-head"><div class="ig-titles">' +
+          '<div class="ig-title">Couldn’t read this trace</div><div class="ig-sub"></div></div></div></div>';
+        const m = poolIngest.querySelector('.ig-sub');
+        if (m) m.textContent = err instanceof Error ? err.message : String(err);
+      }
+    } finally {
+      drv.classList.remove('busy');
+      if (sub) sub.textContent = subText;
+      poolBusy = false;
+    }
+  }
+
+  if (drop && fileEl) {
+    const pick = () => fileEl.click();
+    drop.addEventListener('click', pick);
+    drop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        pick();
+      }
+    });
+    fileEl.addEventListener('change', () => {
+      const f = fileEl.files?.[0];
+      if (f) void handlePoolFile(f);
+      fileEl.value = ''; // allow re-selecting the same file
+    });
+    drop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      drop.classList.add('busy');
+    });
+    drop.addEventListener('dragleave', () => {
+      if (!poolBusy) drop.classList.remove('busy');
+    });
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const f = (e as DragEvent).dataTransfer?.files?.[0];
+      if (f) void handlePoolFile(f);
+    });
+  }
+</script>

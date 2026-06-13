@@ -1,0 +1,14 @@
+{
+  "name": "coding-trace-shots",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless-browser screenshots for the web mockups (dev utility, kept out of the Astro app's deps).",
+  "scripts": {
+    "browser": "playwright install chromium",
+    "shoot": "node shoot.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
+}

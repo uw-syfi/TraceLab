@@ -1,0 +1,33 @@
+---
+// Agent-step share split between live providers, with a thin ghost segment reserved for the
+// providers still to come. Captions show the true shares; the bar is scaled to leave the
+// ghost sliver visible.
+interface Props {
+  claudePct: number;
+  codexPct: number;
+}
+const { claudePct, codexPct } = Astro.props;
+const claudeW = Math.round(claudePct * 0.95);
+const codexW = Math.round(codexPct * 0.95);
+const ghostW = Math.max(0, 100 - claudeW - codexW);
+---
+
+<div>
+  <div
+    class="split-bar"
+    role="img"
+    aria-label={`Agent-step share: Claude ${claudePct}%, Codex ${codexPct}%, with more providers on the way`}
+  >
+    <i style={`width:${claudeW}%; background:var(--terra)`}></i>
+    <i style={`width:${codexW}%; background:var(--sage)`}></i>
+    <i class="ghost" style={`width:${ghostW}%`} title="More providers coming soon"></i>
+  </div>
+  <div class="split-cap">
+    <span>Claude · {claudePct}%</span>
+    <span>Codex · {codexPct}%</span>
+    <span style="color:var(--muted);">soon</span>
+  </div>
+  <div style="font-size: var(--fs-xs); color:var(--muted); font-weight:600; margin-top:6px;">
+    Live providers — more on the way.
+  </div>
+</div>

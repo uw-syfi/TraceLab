@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Trace Sanitize"
+  short_description: "Sanitize traces for sharing"
+  default_prompt: "Use $coding-trace-sanitize to prepare a normalized coding trace for sharing."

@@ -1,0 +1,8 @@
+  /* ---- footer ---- */
+  footer.foot {
+    margin-top: 70px; padding-top: 26px; border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: var(--fs-xs); flex-wrap: wrap;
+  }
+  footer.foot .dotmark { width: 7px; height: 7px; border-radius: 50%; background: var(--terra); }
+  footer.foot .spacer { margin-left: auto; }
+

@@ -1,0 +1,538 @@
+---
+import Footer from '../Footer.astro';
+import AnalyticsDashboard from '../AnalyticsDashboard.astro';
+
+// The Analyze surface drives the shared interactive dashboard (AnalyticsDashboard.astro +
+// lib/analytics/dashboard.ts) from real, locally-computed data: a dropped trace is normalized +
+// sanitized + materialized in the browser (AnalyticsSource), then every KPI / chart / session
+// timeline / superlative is computed in Python and rendered with ECharts here. No PNGs, no upload.
+---
+
+<section class="surface" id="analyze" role="tabpanel" aria-label="Analyze your trace">
+  <div class="hero reveal" style="--d:60ms; padding-bottom:18px;">
+    <span class="eyebrow">Local trace analysis</span>
+    <h1>Analyze <em>your trace</em>.</h1>
+    <p class="lede">Drop Claude/Codex session files or a sanitized export. The browser normalizes, sanitizes, and computes the analysis locally — then renders it as an interactive dashboard.</p>
+  </div>
+
+  <div class="privacy-note reveal" style="--d:140ms">
+    <span class="ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path><path d="M9 12l2 2 4-4"></path></svg>
+    </span>
+    <div>
+      <div class="pt">Runs in your browser via Pyodide.</div>
+      <div class="ps">Raw trace rows stay local; analysis runs in a WebAssembly sandbox. Per-round originals never leave the page.</div>
+    </div>
+  </div>
+
+  <!-- Shown only when the local sidecar exposes this machine's ~/.claude + ~/.codex. The user clicks
+       to start; we never auto-read/analyze without an explicit action. -->
+  <div class="local-detected reveal" id="local-detected" style="--d:180ms" hidden>
+    <div class="ld-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"></path><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path></svg>
+    </div>
+    <div class="ld-text">
+      <div class="ld-title">Local Claude/Codex history detected</div>
+      <div class="ld-sub" id="ld-sub">On this machine — analyze it right here. Nothing is uploaded.</div>
+    </div>
+    <button class="btn btn-primary" id="ld-btn">Analyze my trace</button>
+  </div>
+
+  <div class="dropzone reveal" id="dropzone" style="--d:200ms" tabindex="0" role="button" aria-label="Drop your sanitized trace to begin analysis">
+    <div class="dz-ico" aria-hidden="true">
+      <svg id="dz-svg" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg>
+    </div>
+    <div class="dz-title" id="dz-title">Drop trace files or a sanitized .gz</div>
+    <div class="dz-sub" id="dz-sub">Claude/Codex sessions, .zip, .tar.gz, .jsonl, or .gz</div>
+    <div class="progress"><i id="dz-bar"></i></div>
+  </div>
+  <input type="file" id="file-input" accept=".gz,.tgz,.zip,.tar,.jsonl,.json,.ndjson" hidden />
+
+  <!-- "I don't have a file yet" helper: how to bundle the on-disk sessions into one droppable archive,
+       and how to analyze in place when the trace is large or lives on a remote box. Collapsed by default
+       so it never competes with the dropzone; the commands mirror what ingest.py + launch.sh accept. -->
+  <details class="export-help reveal" id="export-help" style="--d:220ms">
+    <summary>
+      <span class="xh-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"></path></svg>
+      </span>
+      <span class="xh-summary-text">
+        <span class="xh-q">Don't have a file to drop?</span>
+        <span class="xh-a">Bundle &amp; compress your Claude / Codex sessions →</span>
+      </span>
+      <span class="xh-chev" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </span>
+    </summary>
+    <div class="xh-body">
+      <div class="xh-step">
+        <div class="xh-step-head"><span class="xh-num">1</span> Pack your local sessions into one archive</div>
+        <p class="xh-desc">Claude Code keeps sessions in <code>~/.claude/projects</code>; Codex keeps them in <code>~/.codex/sessions</code>. This compresses whichever you have into a single <code>trace.tar.gz</code> in your home folder — then drop that file above.</p>
+        <div class="xh-cmd">
+          <code id="xh-cmd-pack">cd ~ &amp;&amp; tar -czf trace.tar.gz $([ -d .claude/projects ] &amp;&amp; echo .claude/projects) $([ -d .codex/sessions ] &amp;&amp; echo .codex/sessions)</code>
+          <button class="xh-copy" type="button" data-copy="xh-cmd-pack" aria-label="Copy command">
+            <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <svg class="ic-done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="xh-step">
+        <div class="xh-step-head"><span class="xh-num">2</span> Trace is huge, or on a remote server?</div>
+        <p class="xh-desc">Skip the download. Clone the toolkit onto that machine and launch it there — it detects this machine's <code>~/.claude</code> + <code>~/.codex</code> and analyzes them in place; nothing is uploaded. Open the URL it prints (forward the port over SSH if the box is remote).</p>
+        <div class="xh-cmd">
+          <code id="xh-cmd-clone">git clone https://github.com/uw-syfi/TraceLab.git &amp;&amp; cd TraceLab &amp;&amp; ./launch.sh</code>
+          <button class="xh-copy" type="button" data-copy="xh-cmd-clone" aria-label="Copy command">
+            <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <svg class="ic-done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Format-aware ingest result: what was detected + conditional normalized/sanitized downloads. -->
+  <div class="ingest-host" id="ingest-result" hidden></div>
+
+  <div class="results-wrap" id="results">
+    <div class="sec-head">
+      <h2>Your results</h2>
+      <span class="sub">Computed locally from the loaded trace — interactive (hover, zoom, export).</span>
+    </div>
+
+    <AnalyticsDashboard />
+
+    <div class="contribute" style="margin-top:30px;">
+      <div class="ctxt">
+        <h3>Contribute to the community pool</h3>
+        <p>Share sanitized, pseudonymous rows with the community pool. Here's exactly what each shared row contains — and what it never does.</p>
+      </div>
+
+      <!-- Safety disclosure: what survives into the sanitized trace vs. what is stripped/never captured.
+           Mirrors the real behaviour of scripts/sanitize_round_trace.py + scripts/trace_privacy.py
+           (raw message text is only ever kept as char counts; tools[].input + sensitive/path keys are
+           dropped; ids/usernames are pseudonymized, not shared verbatim). Keep this copy in lock-step
+           with those rules. -->
+      <div class="safety-grid" aria-label="What the sanitized trace includes and what it removes">
+        <div class="safety-col safety-keep">
+          <div class="safety-head">
+            <span class="safety-badge keep" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+            Included — safe to share
+          </div>
+          <ul>
+            <li><b>Model per step</b> — e.g. claude-opus-4, gpt-5</li>
+            <li><b>Token counts</b> — input, output, cached, per step</li>
+            <li><b>Tool names</b> — which tools ran (Bash, Read, Edit…) and how often</li>
+            <li><b>Timing</b> — when each step ran and how long tools took</li>
+            <li><b>Sizes as counts only</b> — how large a message or tool input was, never its text</li>
+            <li><b>Pseudonymous IDs</b> — random, stable-within-file ids for session / round / project / user</li>
+          </ul>
+        </div>
+        <div class="safety-col safety-strip">
+          <div class="safety-head">
+            <span class="safety-badge strip" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></span>
+            Removed — never leaves your machine
+          </div>
+          <ul>
+            <li><b>Your prompts &amp; the AI's replies</b> — message text is never captured, only counts</li>
+            <li><b>Tool inputs</b> — shell commands, file contents, search queries, diffs</li>
+            <li><b>File paths</b> — working directory, repo URLs, session files</li>
+            <li><b>Your identity</b> — hostnames, real usernames, home directory</li>
+            <li><b>Any path-like field</b> — cwd, workdir, anything ending in <code>_path</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="safety-foot">Re-validated on upload — rejected if anything sensitive slipped through.</p>
+
+      <div class="contribute-action">
+        <label class="toggle-wrap" for="contrib-toggle">
+          <span class="switch"><input type="checkbox" id="contrib-toggle" /><span class="track"></span></span>
+          <span class="toggle-label">Contribute my sanitized trace</span>
+        </label>
+        <button class="btn btn-primary" id="open-modal" disabled>Contribute</button>
+      </div>
+    </div>
+  </div>
+
+  <Footer left="SyFI Trace Atlas · local analysis" right="Nothing leaves your machine" />
+</section>
+
+<script>
+  import { AnalyticsSource, type LocalTraceOpts } from '../../lib/analytics/source';
+  import { RemoteAnalyticsSource } from '../../lib/analytics/remoteSource';
+  import { initDashboard, loadDashboard } from '../../lib/analytics/dashboard';
+  import { warmPrepare, primeDuckdb } from '../../lib/worker/prepare';
+  import { renderIngestSummary } from '../../lib/ingestUi';
+  import { intComma, fmtUsd } from '../../lib/format';
+  import { requestContribution } from '../../lib/contribute-ui';
+  import { setAnalyzedTrace, prewarmAssistant } from '../../lib/ai/traceStore';
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const dz = $('dropzone');
+  const dzTitle = $('dz-title');
+  const dzSub = $('dz-sub');
+  const dzBar = $<HTMLElement>('dz-bar');
+  const fileInput = $<HTMLInputElement>('file-input');
+  const ingestHost = $('ingest-result');
+  const results = $('results');
+  const localBanner = $('local-detected');
+  const ldSub = $('ld-sub');
+  const ldBtn = $<HTMLButtonElement>('ld-btn');
+
+  let running = false;
+  let uploadedFile: File | null = null; // retained after a run so the user can contribute the same .gz
+
+  // Pull a single, useful line out of any failure for the dropzone subtitle. Worker errors already
+  // arrive pre-formatted (analyze.worker's formatErr), but a Pyodide traceback that bubbles up here
+  // needs the same treatment: the real cause is the "Pkg.SomeError: message" line, not line 0 (the
+  // "Traceback (…)" header) or the last line (a DuckDB "Candidate Entries: …" hint). A hard crash can
+  // also carry no message at all — so we never render empty: fall back to a stage-aware hint.
+  const EXC_LINE = /^[\w.]+(Error|Exception|Warning|Interrupt|Exit)\b.*:/;
+  function describeError(err: unknown, stage: string): string {
+    const raw = err instanceof Error ? err.message : String(err);
+    const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+    let pick = '';
+    for (let i = lines.length - 1; i >= 0 && !pick; i--) {
+      if (EXC_LINE.test(lines[i])) pick = lines[i];
+    }
+    if (!pick) {
+      const isTraceback = lines[0]?.startsWith('Traceback (most recent');
+      pick = (isTraceback ? lines[lines.length - 1] : lines[0]) || '';
+    }
+    if (pick && pick !== '[object Object]') return pick;
+    return `Something went wrong while ${stage.toLowerCase()}. Try re-exporting your trace, or run it locally (git clone + ./launch.sh).`;
+  }
+
+  // Wire the dashboard's static controls once (idempotent). The skeleton is server-rendered (the tab
+  // is in the DOM even while hidden), so its ids resolve immediately.
+  initDashboard();
+
+  async function start(file: File, opts: { trusted?: boolean } & LocalTraceOpts = {}) {
+    if (running) return;
+    running = true;
+    // Boot the assistant's full (matplotlib) stack in the background now, so it overlaps the dashboard's
+    // extract+build below and is warm before the user opens "Your trace". The dashboard's own compute
+    // worker is duckdb-only and unaffected; this is the separate assistant executor.
+    prewarmAssistant();
+    localBanner.hidden = true; // a run is starting — retire the detection prompt
+    dz.classList.remove('done');
+    dz.classList.add('busy');
+    dzBar.style.width = '4%';
+    ingestHost.hidden = true;
+    dzTitle.textContent = 'Reading your trace…';
+    dzSub.textContent = 'Everything runs locally in your browser — nothing is uploaded.';
+    let step = 0;
+    let lastStage = 'reading your trace'; // names the failing phase if start() throws (see describeError)
+    try {
+      // One source does it all: prepare (normalize/sanitize/materialize+cache the DuckDB) then load.
+      // `trusted` (set only for the local-sidecar auto-load) raises ingest's size guards for the
+      // user's own on-disk trace; drag/drop stays untrusted (strict caps).
+      const src = new AnalyticsSource();
+      const prepared = await src.load(
+        file,
+        (m) => {
+          // Each conversion stage (loading runtime → detecting → extracting → sanitizing → building
+          // database) reports here, so the long first-boot never looks frozen.
+          lastStage = m.replace(/…$/, '');
+          dzTitle.textContent = lastStage + '…';
+          step += 1;
+          dzBar.style.width = `${Math.min(10 + step * 8, 72)}%`;
+        },
+        opts.trusted ?? false,
+        { localTrace: opts.localTrace, rawFetch: opts.rawFetch },
+      );
+
+      // Ingest summary + Contribute + the assistant's "Your trace" handoff all use the sanitized .gz.
+      renderIngestSummary(ingestHost, prepared);
+      ingestHost.hidden = false;
+      uploadedFile = prepared.sanitizedFile;
+      updateContribState();
+      setAnalyzedTrace(prepared.sanitizedFile);
+
+      dzTitle.textContent = 'Computing analytics…';
+      dzBar.style.width = '88%';
+      const payload = await src.bulk();
+
+      // Reveal the results panel (it's collapsed via max-height:0 until .show), then wait one frame so
+      // the chart containers have real dimensions before ECharts measures them.
+      results.classList.add('show');
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      loadDashboard(payload, src); // disposes any prior source internally
+
+      dz.classList.remove('busy');
+      dz.classList.add('done');
+      dzTitle.textContent = 'Analysis complete';
+      dzSub.textContent = `${intComma(payload.kpis.rounds)} steps · ${intComma(payload.kpis.sessions)} sessions · ${fmtUsd(payload.kpis.totalCostUsd)} — drop another trace to start over.`;
+      dzBar.style.width = '100%';
+      setTimeout(() => results.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+    } catch (err) {
+      dz.classList.remove('busy');
+      dzTitle.textContent = 'Couldn’t read this trace';
+      dzSub.textContent = describeError(err, lastStage);
+    } finally {
+      running = false;
+    }
+  }
+
+  // Warm the prepare worker as soon as the user shows intent (opening the Analyze tab is the earliest
+  // signal) so its Pyodide cold-start overlaps with picking a file. Idempotent.
+  const warmBoot = () => warmPrepare(true);
+  document.addEventListener('surface:show', (e) => {
+    if ((e as CustomEvent<string>).detail === 'analyze') warmBoot();
+  });
+  requestAnimationFrame(() => {
+    if (document.getElementById('analyze')?.classList.contains('live')) warmBoot();
+  });
+  dz.addEventListener('pointerenter', warmBoot, { once: true });
+  dz.addEventListener('focus', warmBoot, { once: true });
+
+  // Local self-deploy detection: only the local sidecar's *frontend* role (web/local_sidecar) exposes
+  // this machine's ~/.claude + ~/.codex. We gate the banner on the purpose-built /api/sidecar-info
+  // signal — a JSON body with role:'frontend' + localTrace:true — and NEVER read or analyze the local
+  // trace without the user clicking the button.
+  //
+  // Why not a HEAD on /api/local-trace? Its 200 can be forged by anything that answers misses with the
+  // HTML app shell (a static-site/SPA 404-fallback, a stale dev bundle, a misconfigured proxy), which
+  // made the banner wrongly appear on the master. Requiring a real JSON sidecar-info body with the
+  // right role defeats all of those: an HTML shell fails the content-type/parse check; the master
+  // (no such endpoint) 404s; the master-server role reports localTrace:false.
+  // Local executor flow (server-computed): the sidecar natively sanitizes this machine's ~/.claude +
+  // ~/.codex, materializes the DuckDB, AND runs the analysis — so the browser fetches a ~60 KB JSON
+  // payload instead of building the DB + computing itself (tens of seconds of WASM work over the
+  // tunnel). In the BACKGROUND it also gets the assistant ready: its Pyodide+matplotlib warm up while
+  // the server computes, and the server-built .duckdb transfers + primes the in-browser query cache, so
+  // opening "Your trace" is instant. Per-round raw + session drill-down are served by the sidecar.
+  async function analyzeLocalTrace() {
+    if (running) return;
+    running = true;
+    ldBtn.disabled = true;
+    localBanner.hidden = true;
+    dz.classList.remove('done');
+    dz.classList.add('busy');
+    dzTitle.textContent = 'Sanitizing on your machine…';
+    dzSub.textContent = 'Runs locally on the server — only the computed result is sent to your browser.';
+    dzBar.style.width = '8%';
+    // Boot the assistant's Pyodide (incl. the matplotlib/font-cache tax) NOW so it overlaps the
+    // server-side sanitize+compute below and is warm before the user ever opens "Your trace".
+    prewarmAssistant();
+    try {
+      // 1. Native sanitize + materialize (cached server-side); STREAM stage progress to the dropzone.
+      const prepRes = await fetch('/api/local-trace/prepare', { method: 'POST' });
+      if (!prepRes.ok || !prepRes.body) {
+        throw new Error('The local-trace executor is not available on this deployment.');
+      }
+      const reader = prepRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let meta: any = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let ev: any;
+          try {
+            ev = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (ev.error) throw new Error(ev.error);
+          if (ev.stage) dzTitle.textContent = String(ev.stage).replace(/…$/, '') + '…';
+          else if (ev.meta) meta = ev.meta;
+        }
+      }
+      if (!meta) throw new Error('The executor did not return trace metadata.');
+
+      // 2. Server computes the dashboard payload (analyze.bulk_json) — fetch the small JSON.
+      dzTitle.textContent = 'Computing analytics…';
+      dzBar.style.width = '70%';
+      const tz = -new Date().getTimezoneOffset();
+      const src = new RemoteAnalyticsSource({
+        rawAvailable: !!meta.rawAvailable,
+        titles: meta.titles ?? {},
+        tzOffsetMin: tz,
+      });
+      const payload = await src.bulk();
+
+      // 3. Render the dashboard straight from the server payload — no in-browser Pyodide compute.
+      results.classList.add('show');
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      loadDashboard(payload, src);
+      const summary = `${intComma(payload.kpis.rounds)} steps · ${intComma(payload.kpis.sessions)} sessions · ${fmtUsd(payload.kpis.totalCostUsd)}`;
+      // The dashboard is interactive NOW, but the assistant's DuckDB is still downloading in the
+      // background — hold the bar shy of 100% with a "preparing the assistant" note so it's clear that
+      // follow-up questions aren't ready yet. The bar completes when the background prime finishes.
+      dzTitle.textContent = 'Dashboard ready';
+      dzSub.textContent = `${summary} — preparing the assistant…`;
+      dzBar.style.width = '90%';
+      setTimeout(() => results.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+
+      // 4. Background (off the dashboard's critical path): fetch the sanitized .gz (needed by Contribute
+      //    + the assistant handoff) and the server-built .duckdb.gz, prime the assistant's in-browser
+      //    DuckDB cache so its first query is instant, THEN complete the bar. Best-effort.
+      void (async () => {
+        try {
+          const sres = await fetch('/api/local-trace/sanitized', { cache: 'no-store' });
+          if (sres.ok) {
+            const sblob = await sres.blob();
+            const sanitizedFile = new File([sblob], 'local-trace.sanitized.jsonl.gz', {
+              type: 'application/gzip',
+            });
+            dzBar.style.width = '95%';
+            // Ingest summary + Contribute can light up immediately — they don't need the DB.
+            renderIngestSummary(ingestHost, { meta, sanitizedFile });
+            ingestHost.hidden = false;
+            uploadedFile = sanitizedFile;
+            updateContribState();
+            // Prime the assistant's DuckDB cache (keyed by sha256(sanitizedGz)) BEFORE unlocking the
+            // assistant — otherwise setAnalyzedTrace can kick off its loadTrace first, miss the
+            // not-yet-primed cache, and materialize the DB itself (the slow path we're avoiding).
+            try {
+              const dres = await fetch('/api/local-trace/duckdb', { cache: 'no-store' });
+              if (dres.ok) {
+                const dbGz = await dres.arrayBuffer();
+                const sgz = await sanitizedFile.arrayBuffer();
+                const ok = await primeDuckdb(sgz, dbGz);
+              }
+            } catch {
+              /* prime failed — the assistant will materialize the DB itself on first use */
+            }
+            setAnalyzedTrace(sanitizedFile); // NOW unlock "Your trace" — the cache is hot
+          }
+        } catch {
+          /* best-effort background warm — failures don't affect the rendered dashboard */
+        } finally {
+          // Everything's ready (or we gave up) — complete the bar and settle the dropzone.
+          dz.classList.remove('busy');
+          dz.classList.add('done');
+          dzTitle.textContent = 'Analysis complete';
+          dzSub.textContent = `${summary} — analyzed on your machine. Drop another trace to start over.`;
+          dzBar.style.width = '100%';
+        }
+      })();
+    } catch (err) {
+      ldBtn.disabled = false;
+      dz.classList.remove('busy');
+      dzTitle.textContent = 'Couldn’t analyze your local trace';
+      dzSub.textContent = describeError(err, 'analyzing your local trace') +
+        ' — or drop a trace file to analyze instead.';
+    } finally {
+      running = false;
+    }
+  }
+
+  async function probeLocalTrace() {
+    // Trust gate: only the sidecar's frontend role serves the local trace. A JSON role signal defeats
+    // app-shell/200 spoofing — HTML won't parse, the master 404s, master-server reports localTrace:false.
+    let info: { role?: string; localTrace?: boolean } | null = null;
+    try {
+      const res = await fetch('/api/sidecar-info', { cache: 'no-store' });
+      if (!res.ok) return; // 404 on the master / dev server → drag-and-drop
+      if (!(res.headers.get('content-type') || '').includes('json')) return; // HTML shell → not a sidecar
+      info = await res.json();
+    } catch {
+      return; // not a sidecar / offline / non-JSON — keep drag-and-drop
+    }
+    if (!info || info.role !== 'frontend' || info.localTrace !== true) return;
+
+    // Data gate: a frontend sidecar serves the endpoint even on a machine with no trace, so confirm
+    // there's actually something to analyze before offering it. /meta is JSON + frontend-only, so it
+    // doubles as a second sidecar check; require a present, non-empty root.
+    let meta: { claude?: { jsonl_files?: number }; codex?: { jsonl_files?: number }; approx_uncompressed_bytes?: number } | null = null;
+    try {
+      const metaRes = await fetch('/api/local-trace/meta', { cache: 'no-store' });
+      if (!metaRes.ok || !(metaRes.headers.get('content-type') || '').includes('json')) return;
+      meta = await metaRes.json();
+    } catch {
+      return; // no meta / non-JSON → nothing trustworthy to offer
+    }
+    const files = (meta?.claude?.jsonl_files || 0) + (meta?.codex?.jsonl_files || 0);
+    if (files <= 0) return; // sidecar present but no sessions on this machine — keep drag-and-drop
+
+    const mb = Math.round((meta?.approx_uncompressed_bytes || 0) / (1024 * 1024));
+    if (mb > 0)
+      ldSub.textContent = `~${intComma(mb)} MB of ~/.claude + ~/.codex on this machine — analyzed locally, nothing uploaded.`;
+    warmBoot(); // warm Pyodide while the banner is up so the click feels instant
+    localBanner.hidden = false;
+  }
+  ldBtn.addEventListener('click', analyzeLocalTrace);
+  probeLocalTrace();
+
+  dz.addEventListener('click', () => fileInput.click());
+  dz.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0];
+    if (f) start(f);
+  });
+  dz.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dz.classList.add('busy');
+  });
+  dz.addEventListener('dragleave', () => {
+    if (!running) dz.classList.remove('busy');
+  });
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer?.files?.[0];
+    if (f) start(f);
+  });
+
+  // ---- contribute: consent toggle gates the button; the shared dialog owns the rest ----
+  const contribToggle = $<HTMLInputElement>('contrib-toggle');
+  const contribBtn = $<HTMLButtonElement>('open-modal');
+
+  // Contribute is live only once a trace has been analyzed AND consent is toggled on.
+  function updateContribState() {
+    contribBtn.disabled = !(uploadedFile && contribToggle.checked);
+  }
+  contribToggle.addEventListener('change', updateContribState);
+  contribBtn.addEventListener('click', () => {
+    if (uploadedFile) requestContribution(uploadedFile);
+  });
+
+  // Seam for the Ask-the-trace assistant's contribute nudge: when a trace has already been analyzed,
+  // open the same contribution dialog directly. (No-trace navigation is handled by the assistant.)
+  window.addEventListener('ask:contribute', () => {
+    if (uploadedFile) requestContribution(uploadedFile);
+  });
+
+  // ---- export-help: copy the bundle / clone commands to the clipboard ----
+  // Delegated so it covers both command rows; falls back to a hidden textarea + execCommand when the
+  // async Clipboard API is unavailable (insecure origin / older browser).
+  const exportHelp = document.getElementById('export-help');
+  exportHelp?.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement)?.closest<HTMLButtonElement>('.xh-copy');
+    if (!btn) return;
+    const src = document.getElementById(btn.dataset.copy || '');
+    const text = src?.textContent ?? '';
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* clipboard unavailable — leave the command visible for manual copy */
+      }
+      ta.remove();
+    }
+    btn.classList.add('copied');
+    setTimeout(() => btn.classList.remove('copied'), 1400);
+  });
+</script>

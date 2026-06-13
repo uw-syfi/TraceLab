@@ -1,0 +1,100 @@
+  /* ============ ATELIER — warm soft-luxury / organic ============ */
+  :root {
+    --canvas: #f3ece1;      /* warm sand */
+    --card: #fbf7f0;        /* cream */
+    --card-2: #f8f1e6;
+    --ink: #2a2622;         /* deep ink */
+    --muted: #6f655a;       /* muted clay — darkened for legible contrast on cream */
+    --line: #e7dccb;        /* hairline */
+    --terra: #c8643c;       /* primary terracotta */
+    --terra-soft: #e8a583;
+    --terra-wash: #f4dcc9;
+    --sage: #6f7d5e;        /* secondary sage */
+    --sage-soft: #a6b193;
+    --sage-wash: #dfe4d2;
+    --gold: #c9a25a;
+    /* text color for chips/pills sitting on a terra/sage wash (kept legible per theme) */
+    --on-terra: #9a4a28;
+    --on-sage: #4f5b3f;
+    /* translucent sticky-topbar fill (over the blurred page) */
+    --topbar-bg: rgba(243, 236, 225, 0.72);
+    /* warm-brown soft shadows */
+    --sh-1: 0 1px 2px rgba(94, 64, 40, 0.05), 0 8px 22px rgba(94, 64, 40, 0.06);
+    --sh-2: 0 2px 6px rgba(94, 64, 40, 0.06), 0 18px 44px rgba(94, 64, 40, 0.10);
+    --sh-3: 0 4px 10px rgba(94, 64, 40, 0.08), 0 30px 70px rgba(94, 64, 40, 0.16);
+    --r-sm: 14px;
+    --r-md: 20px;
+    --r-lg: 28px;
+    --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: "Hanken Grotesk", "Avenir Next", "Segoe UI", Helvetica, sans-serif;
+    --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+    /* Container gutter: total horizontal space reserved at the edges (split both sides). Shared by
+       the shell + topbar so they stay aligned; tightened on mobile in responsive.css. The page
+       caps (1560 index / 1680 detail) sit beside it as `width: min(cap, 100% - var(--edge))`. */
+    --edge: 4rem;
+
+    /* ===== Type scale — the single source of truth for every font-size in the app =====
+       Every `font-size:` references one of these tokens (no scattered px anywhere). To resize the
+       whole UI, edit here. Anchored at body 20px with a 16px legible floor; steps climb ~1.15×.
+       Discrete steps (UI + prose):                         maps roughly to: */
+    --fs-2xs: 16px;    /* floor — fine print: foots, tiny labels, captions, mono error text   */
+    --fs-xs: 17px;     /* small UI — nav, legends, footer, table cells, pills                  */
+    --fs-sm: 18px;     /* secondary — subs, panel labels, lede-in-rail                         */
+    --fs-base: 20px;   /* BODY — default running text + prose paragraphs                       */
+    --fs-md: 23px;     /* large body — section subs, emphasized copy                           */
+    --fs-lg: 26px;     /* h4 / small headings / figure standfirst                              */
+    --fs-xl: 30px;     /* h3 / readme h2                                                       */
+    --fs-2xl: 35px;    /* large h2                                                             */
+    /* Fluid steps (display — scale with viewport, then cap): */
+    --fs-lede: clamp(23px, 2.2vw, 27px);    /* hero deck / lede                                */
+    --fs-title: clamp(33px, 2.6vw, 44px);   /* detail section titles, rail title              */
+    --fs-title-lg: clamp(42px, 7vw, 62px);  /* rail title on narrow screens                   */
+    --fs-section: clamp(35px, 4vw, 47px);   /* index section headings                          */
+    --fs-stat: clamp(42px, 4.4vw, 58px);    /* big KPI / vs-card numerals                      */
+    --fs-display: clamp(56px, 7vw, 96px);   /* hero headline                                   */
+  }
+
+  /* ============ DARK — "Obsidian" ============
+     Clean neutral-graphite ground — no warm/sepia/yellow cast; warmth lives only in the accents.
+     Only the color/elevation tokens change; the type scale, radii, fonts, and easing above are
+     theme-independent, so a single override here flips the whole token-driven UI. Accents are
+     lifted a touch for contrast on the dark ground; washes become translucent tints so they
+     read as glows over dark cards instead of solid pastel blocks. */
+  :root[data-theme="dark"] {
+    --canvas: #0e0f11;      /* deep neutral graphite */
+    --card: #17181b;        /* lifted graphite */
+    --card-2: #1d1f22;
+    --ink: #f0f1f3;         /* cool off-white */
+    --muted: #9a9da3;       /* neutral grey — legible on dark */
+    --line: #2a2c31;        /* neutral hairline */
+    --terra: #ea8159;       /* terracotta, lifted */
+    --terra-soft: #b9633c;
+    --terra-wash: rgba(234, 129, 89, 0.16);
+    --sage: #9bb07f;        /* sage, lifted */
+    --sage-soft: #76845f;
+    --sage-wash: rgba(155, 176, 127, 0.15);
+    --gold: #dcba6c;
+    --on-terra: var(--terra);
+    --on-sage: var(--sage);
+    --topbar-bg: rgba(14, 15, 17, 0.72);
+    /* near-black elevation shadows */
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 26px rgba(0, 0, 0, 0.55);
+    --sh-2: 0 2px 6px rgba(0, 0, 0, 0.50), 0 20px 48px rgba(0, 0, 0, 0.66);
+    --sh-3: 0 4px 10px rgba(0, 0, 0, 0.55), 0 30px 70px rgba(0, 0, 0, 0.74);
+  }
+  /* the toggle should cross-fade, not hard-cut */
+  :root { transition: none; }
+  body { transition: background-color .4s var(--ease), color .4s var(--ease); }
+
+  /* legible characterful display serif — crisp optical size, not wispy */
+  h1, h2, h3, h4, .brand .name, .name, .num,
+  .legend .val, .range-strip .rv, .pid {
+    font-optical-sizing: auto;
+  }
+
+  /* big stat numerals — clean sans, tabular figures, unmistakable at a glance */
+  .num {
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }

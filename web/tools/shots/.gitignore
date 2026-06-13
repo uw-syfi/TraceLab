@@ -1,0 +1,14 @@
+node_modules/
+
+# screenshot output — all scratch, never committed
+out/
+out-*/
+out-*.png
+
+# scratch one-off screenshot scripts — keep only the canonical surface checks
+shoot_*.mjs
+!shoot_lab.mjs
+!shoot_session.mjs
+!shoot_analyze.mjs
+checkfilter.mjs
+firstload.mjs

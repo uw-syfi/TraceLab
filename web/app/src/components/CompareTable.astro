@@ -1,0 +1,64 @@
+---
+import Ticker from './Ticker.astro';
+import type { CompareEntry, CompareGroup, CompareRow } from '../lib/compare';
+
+// Consolidated side-by-side table. Usage rows are descriptive (never ranked); directional
+// performance rows carry an ↑/↓ hint and tint the winning side.
+interface Props {
+  groups: CompareGroup[];
+  soon: string[];
+}
+const { groups, soon } = Astro.props;
+
+const isSubsection = (r: CompareEntry): r is Extract<CompareEntry, { kind: 'subsection' }> =>
+  'kind' in r && r.kind === 'subsection';
+const arrow = (r: CompareRow) => (r.dir === 'up' ? '↑' : r.dir === 'down' ? '↓' : '');
+
+function valClass(r: CompareRow, side: 'claude' | 'codex'): string | undefined {
+  const cls: string[] = [];
+  if (r.profile) cls.push('val');
+  if (r[side].na) cls.push('na');
+  return cls.length ? cls.join(' ') : undefined;
+}
+
+function valueClass(r: CompareRow, side: 'claude' | 'codex'): string {
+  const cls = ['cell-value'];
+  if (r.win === side) cls.push(side === 'claude' ? 'win-terra' : 'win-sage');
+  return cls.join(' ');
+}
+---
+
+<table class="h2h-tbl">
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Claude</th>
+      <th>Codex</th>
+      <th class="soon-col"><Ticker words={soon} label={`Coming soon: ${soon.join(', ')}`} /></th>
+    </tr>
+  </thead>
+  <tbody>
+    {groups.map((g) => (
+      <>
+        <tr class="grp-head">
+          <td colspan="4">
+            <span class="gname">{g.name}</span>
+            <span class="gnote">{g.note}</span>
+          </td>
+        </tr>
+        {g.rows.map((r) => isSubsection(r) ? (
+          <tr class="sub-head">
+            <td colspan="4"><span class="sname">{r.title}</span>{r.note && <span class="snote">{r.note}</span>}</td>
+          </tr>
+        ) : (
+          <tr class={r.profile ? 'profile' : undefined}>
+            <td>{r.metric}{arrow(r) && <span class="dir">{arrow(r)}</span>}</td>
+            <td class={valClass(r, 'claude')} data-h="Claude"><span class={valueClass(r, 'claude')}>{r.claude.text}</span></td>
+            <td class={valClass(r, 'codex')} data-h="Codex"><span class={valueClass(r, 'codex')}>{r.codex.text}</span></td>
+            <td class="soon-col" data-h="Coming soon">—</td>
+          </tr>
+        ))}
+      </>
+    ))}
+  </tbody>
+</table>

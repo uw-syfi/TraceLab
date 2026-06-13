@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SYFI LLM Runtime Tester</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --panel: #fffdf7;
+      --ink: #25231f;
+      --muted: #706b61;
+      --line: #ded8c9;
+      --accent: #9f5134;
+      --accent-ink: #fff9f2;
+      --code: #1f2933;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      padding: 18px;
+      background: #eee8db;
+    }
+    main {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-width: 0;
+      height: 100vh;
+    }
+    h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: 0; }
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      margin: 0 0 18px;
+    }
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin: 14px 0 6px;
+    }
+    input, textarea, select, button { font: inherit; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 10px 11px;
+      outline: none;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(159, 81, 52, 0.14);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .check input { width: auto; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .actions button { flex: 1; }
+    .trace-panel {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 253, 247, 0.55);
+    }
+    .trace-panel[hidden] { display: none; }
+    .trace-panel .actions { margin-top: 8px; }
+    .trace-panel .status {
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    #traceFile {
+      padding: 8px;
+      font-size: 12px;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-weight: 700;
+    }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #chat { overflow: auto; padding: 22px; }
+    .msg {
+      max-width: 980px;
+      margin: 0 auto 14px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .msg.user {
+      border-color: rgba(159, 81, 52, 0.35);
+      background: #fff8f1;
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 16px 22px;
+      background: #eee8db;
+    }
+    .composer-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    #question { min-height: 76px; resize: vertical; }
+    .tool {
+      max-width: 980px;
+      margin: 0 auto 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf6;
+      overflow: hidden;
+    }
+    .tool summary {
+      cursor: pointer;
+      padding: 11px 13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .events {
+      max-width: 980px;
+      margin: 0 auto 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fdfbf5;
+      overflow: hidden;
+    }
+    .events summary {
+      cursor: pointer;
+      padding: 10px 13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .event-list {
+      display: grid;
+      gap: 1px;
+      background: var(--line);
+    }
+	    .event {
+	      background: var(--panel);
+	      padding: 10px 13px;
+	      font-size: 12px;
+	      line-height: 1.45;
+	      white-space: pre-wrap;
+	    }
+    .event b {
+      color: var(--accent);
+      margin-right: 6px;
+    }
+    .pending {
+      opacity: 0.75;
+    }
+    pre {
+      margin: 0;
+      padding: 13px;
+      overflow: auto;
+      color: #f4efe4;
+      background: var(--code);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .images {
+      max-width: 980px;
+      margin: 0 auto 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .image-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px;
+      margin: 0;
+    }
+    .image-card img {
+      display: block;
+      width: 100%;
+      max-height: 680px;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 6px;
+    }
+    .caption {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    @media (max-width: 840px) {
+      .app { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      main { height: auto; min-height: 70vh; }
+      .composer-inner { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <h1>SYFI LLM Tester</h1>
+      <p class="hint">Local browser tester for multi-turn SYFI analysis and plot generation. History is kept in this browser.</p>
+
+      <label for="model">Model</label>
+      <input id="model" value="qwen3.6-35b-a3b-fp8" placeholder="qwen3.6-35b-a3b-fp8 or an OpenRouter model id" />
+
+      <label for="executorMode">Data source</label>
+      <select id="executorMode">
+        <option value="syfi">Public SYFI trace</option>
+        <option value="user">Uploaded trace in browser</option>
+      </select>
+
+      <div id="userTracePanel" class="trace-panel" hidden>
+        <label for="traceFile">Trace JSONL or JSONL.GZ</label>
+        <input id="traceFile" type="file" accept=".jsonl,.jsonl.gz,.gz,application/gzip,application/x-ndjson,text/plain" />
+        <div class="actions">
+          <button id="loadTrace" type="button">Load file</button>
+          <button id="loadSampleTrace" type="button">Load sample</button>
+        </div>
+        <div class="status" id="traceStatus">No uploaded trace loaded.</div>
+      </div>
+
+      <label for="template">E2B template</label>
+      <input id="template" value="syfi-qa-code-interpreter:latest" />
+
+	      <div class="row">
+	        <div>
+	          <label for="maxToolTurns">Tool turns</label>
+	          <input id="maxToolTurns" type="number" min="1" max="8" value="4" />
+        </div>
+        <div>
+	          <label for="maxTokens">Max tokens</label>
+	          <input id="maxTokens" type="number" min="200" max="32768" value="8192" />
+	        </div>
+	      </div>
+	      <label for="sandboxTtk">Sandbox TTK seconds</label>
+	      <input id="sandboxTtk" type="number" min="30" max="1800" value="180" />
+
+	      <label for="openrouterRetries">OpenRouter retries</label>
+	      <input id="openrouterRetries" type="number" min="0" max="5" value="3" />
+
+      <label class="check">
+        <input id="printCode" type="checkbox" checked />
+        show generated code
+      </label>
+	      <label class="check">
+	        <input id="showIntermediate" type="checkbox" checked />
+	        show intermediate model/tool output
+	      </label>
+
+      <div class="actions">
+        <button id="clear" type="button">Clear</button>
+        <button id="seed" type="button">Example</button>
+      </div>
+      <div class="status" id="status">Ready.</div>
+    </aside>
+
+    <main>
+      <section id="chat" aria-live="polite"></section>
+      <form class="composer" id="form">
+        <div class="composer-inner">
+          <textarea id="question" placeholder="Ask a SYFI trace question, for example: make a chart of top tools by provider."></textarea>
+          <button class="primary" id="send" type="submit">Send</button>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'syfi-llm-tester-state-v1';
+
+    const $ = (id) => document.getElementById(id);
+    const chat = $('chat');
+    const form = $('form');
+    const question = $('question');
+    const send = $('send');
+    const status = $('status');
+    const model = $('model');
+    const executorMode = $('executorMode');
+    const userTracePanel = $('userTracePanel');
+    const traceFile = $('traceFile');
+    const loadTrace = $('loadTrace');
+    const loadSampleTrace = $('loadSampleTrace');
+    const traceStatus = $('traceStatus');
+    const template = $('template');
+    const maxToolTurns = $('maxToolTurns');
+    const maxTokens = $('maxTokens');
+    const sandboxTtk = $('sandboxTtk');
+    const openrouterRetries = $('openrouterRetries');
+    const printCode = $('printCode');
+    const showIntermediate = $('showIntermediate');
+
+    let state = loadState();
+    let qaWorker = null;
+    let nextWorkerRequest = 1;
+    const workerRequests = new Map();
+    let traceState = {
+      ready: false,
+      filename: '',
+      tracePath: '/work/input.jsonl',
+      dbPath: '/work/trace.duckdb',
+      traceContext: '',
+    };
+
+	    function loadState() {
+	      try {
+	        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+	        return {
+	          session_id: typeof parsed.session_id === 'string' ? parsed.session_id : newSessionId(),
+	          messages: Array.isArray(parsed.messages) ? parsed.messages : [],
+	          turns: Array.isArray(parsed.turns) ? parsed.turns : [],
+	        };
+	      } catch {
+	        return { session_id: newSessionId(), messages: [], turns: [] };
+	      }
+	    }
+
+	    function newSessionId() {
+	      if (crypto?.randomUUID) return crypto.randomUUID();
+	      return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+	    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[ch]);
+    }
+
+    function artifactSummary(event) {
+      const artifacts = event.result?.artifacts || [];
+      return JSON.stringify(artifacts.map((a) => ({
+        path: a.path,
+        size: a.size,
+        mime: a.mime,
+        display: a.display,
+        inline_error: a.inline_error,
+      })), null, 2);
+    }
+
+	    function eventPreview(event) {
+	      const value = event.value || {};
+	      if (event.label === 'e2b') return `${value.status || 'sandbox'} ${value.template || ''}`.trim();
+	      if (event.label === 'tool_pending') return `${value.executor || 'tool'} waiting for ${value.count || 0} call(s)`;
+	      if (event.label === 'browser_worker') {
+	        return [
+	          `${value.status || 'worker'} ${value.index && value.count ? `${value.index}/${value.count}` : ''}`.trim(),
+	          value.tool_call_id && `tool_call_id: ${value.tool_call_id}`,
+	          Number.isFinite(value.artifacts) && `artifacts: ${value.artifacts}`,
+	          Number.isFinite(value.images) && `images: ${value.images}`,
+	          value.error && `error: ${value.error}`,
+	        ].filter(Boolean).join('\n');
+	      }
+	      if (event.label === 'model_turn') {
+	        const calls = value.tool_calls || [];
+	        const toolNames = calls.map((c) => c.name).filter(Boolean).join(', ') || 'none';
+	        const lines = [`turn ${value.turn}; finish=${value.finish_reason}; tools=${toolNames}`];
+	        if (value.thinking?.trim()) {
+	          lines.push(`thinking:\n${value.thinking.trim()}`);
+	        }
+	        if (value.content?.trim()) {
+	          lines.push(`model text:\n${value.content.trim()}`);
+	        }
+	        if (value.reasoning_redacted) {
+	          lines.push('reasoning: hidden by provider/runtime; showing visible text, tool calls, and tool results instead');
+	        }
+	        if (calls.length) {
+	          const callLines = calls.map((call, idx) => {
+	            const prefix = `${idx + 1}. ${call.name || 'tool'}`;
+	            if (!printCode.checked) return prefix;
+	            return `${prefix}\n${call.args_preview || ''}`.trimEnd();
+	          });
+	          lines.push(`tool calls:\n${callLines.join('\n')}`);
+	        }
+	        return lines.join('\n\n');
+	      }
+      if (event.label === 'tool_code') {
+        return printCode.checked ? value.code || '' : 'code hidden';
+      }
+	      if (event.label === 'tool_result') {
+	        const summary = value.summary || {};
+	        const stdout = summary.stdout?.join('')?.trim();
+	        const images = summary.display_images?.length || 0;
+	        const artifacts = summary.artifacts?.length || 0;
+	        return [stdout && `stdout: ${stdout}`, artifacts && `artifacts: ${artifacts}`, images && `images: ${images}`]
+	          .filter(Boolean)
+	          .join('\n') || 'tool finished';
+	      }
+	      if (event.label === 'openrouter_retry') {
+	        return [
+	          `${value.status || 'retry'} attempt ${value.attempt}`,
+	          value.http_status && `http ${value.http_status}`,
+	          value.ignored_providers?.length && `ignoring: ${value.ignored_providers.join(', ')}`,
+	          value.error_preview && `error: ${value.error_preview}`,
+	        ].filter(Boolean).join('\n');
+	      }
+	      if (event.label === 'generation_retry') {
+	        return [
+	          `${value.status || 'retry'} ${value.retry}/${value.max_retries}`,
+	          value.finish_reason && `finish=${value.finish_reason}`,
+	          value.max_tokens && `max_tokens=${value.max_tokens}`,
+	          value.content_preview && `preview:\n${value.content_preview}`,
+	        ].filter(Boolean).join('\n');
+	      }
+	      if (event.label === 'final') return value.content || 'final answer ready';
+      return JSON.stringify(value, null, 2);
+    }
+
+    function renderEvents(item) {
+      if (!showIntermediate.checked || !item.events?.length) return;
+      const details = document.createElement('details');
+      details.className = 'events';
+      details.open = item.pending;
+      details.innerHTML = `<summary>${item.events.length} intermediate event${item.events.length === 1 ? '' : 's'}</summary>`;
+      const list = document.createElement('div');
+      list.className = 'event-list';
+      for (const event of item.events) {
+        const row = document.createElement('div');
+        row.className = 'event';
+        row.innerHTML = `<b>${escapeHtml(event.label)}</b>${escapeHtml(eventPreview(event))}`;
+        list.appendChild(row);
+      }
+      details.appendChild(list);
+      chat.appendChild(details);
+    }
+
+    function renderToolEvents(item) {
+      if (!item.tool_events?.length) return;
+      const details = document.createElement('details');
+      details.className = 'tool';
+      const count = item.tool_events.length;
+      details.innerHTML = `<summary>${count} tool call${count === 1 ? '' : 's'} for this assistant round</summary>`;
+      for (const event of item.tool_events) {
+        const code = printCode.checked ? event.code || '' : '';
+        const stdout = event.result?.stdout?.join('') || '';
+        const err = event.result?.error ? JSON.stringify(event.result.error, null, 2) : '';
+        details.innerHTML += `<pre>${escapeHtml([
+          code && `# code\n${code}`,
+          stdout && `# stdout\n${stdout}`,
+          err && `# error\n${err}`,
+          `# artifacts\n${artifactSummary(event)}`,
+        ].filter(Boolean).join('\n\n'))}</pre>`;
+      }
+      chat.appendChild(details);
+    }
+
+    function renderImages(item) {
+      if (!item.images?.length) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'images';
+      for (const image of item.images) {
+        if (!image.data_url) continue;
+        const card = document.createElement('figure');
+        card.className = 'image-card';
+        card.innerHTML =
+          `<img src="${image.data_url}" alt="${escapeHtml(image.path || 'generated plot')}" />` +
+          `<figcaption class="caption">${escapeHtml(image.path || image.source || 'generated image')}</figcaption>`;
+        wrap.appendChild(card);
+      }
+      chat.appendChild(wrap);
+    }
+
+    function render() {
+      chat.innerHTML = '';
+      for (const item of state.turns) {
+        if (item.role === 'user' || item.role === 'assistant') {
+          const msg = document.createElement('article');
+          msg.className = `msg ${item.role}${item.pending ? ' pending' : ''}`;
+          const body = item.content || (item.pending ? 'Working...' : '');
+          msg.innerHTML = `<div class="meta"><span>${item.role}</span></div>${escapeHtml(body)}`;
+          chat.appendChild(msg);
+        }
+        if (item.role === 'assistant') {
+          renderEvents(item);
+          renderImages(item);
+          renderToolEvents(item);
+        }
+      }
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function setBusy(busy, text) {
+      send.disabled = busy;
+      status.textContent = text;
+    }
+
+    function setTraceBusy(busy, text) {
+      loadTrace.disabled = busy;
+      loadSampleTrace.disabled = busy;
+      traceFile.disabled = busy;
+      if (text) traceStatus.textContent = text;
+    }
+
+    function buildTraceContext(filename) {
+      const name = filename ? ` named ${filename}` : '';
+      return `You are analyzing the user's uploaded coding trace${name}. Treat all counts and plots as specific to this uploaded trace, not the public SYFI dataset.`;
+    }
+
+    function updateModeUi() {
+      const uploaded = executorMode.value === 'user';
+      userTracePanel.hidden = !uploaded;
+      template.disabled = uploaded;
+      sandboxTtk.disabled = uploaded;
+      question.placeholder = uploaded
+        ? 'Ask about the loaded trace, for example: make a chart of top tools by provider.'
+        : 'Ask a SYFI trace question, for example: make a chart of top tools by provider.';
+      if (uploaded) {
+        status.textContent = traceState.ready
+          ? `Ready with uploaded trace: ${traceState.filename}.`
+          : 'Load a trace before asking uploaded-trace questions.';
+      } else {
+        status.textContent = 'Ready.';
+      }
+    }
+
+    function rejectWorkerRequests(err) {
+      for (const pending of workerRequests.values()) pending.reject(err);
+      workerRequests.clear();
+    }
+
+    function ensureQaWorker() {
+      if (qaWorker) return qaWorker;
+      if (!window.Worker) throw new Error('This browser does not support Web Workers.');
+      qaWorker = new Worker('/pyodide_qa_worker.js');
+      qaWorker.onmessage = (event) => {
+        const msg = event.data || {};
+        if (msg.type === 'boot-progress') {
+          traceStatus.textContent = msg.message || 'Loading browser runtime...';
+          return;
+        }
+        if (msg.type === 'booted') {
+          traceStatus.textContent = traceState.ready
+            ? `Loaded ${traceState.filename}.`
+            : 'Browser Python runtime ready.';
+          return;
+        }
+        if (msg.requestId && workerRequests.has(msg.requestId)) {
+          const pending = workerRequests.get(msg.requestId);
+          workerRequests.delete(msg.requestId);
+          if (msg.type === 'error') {
+            pending.reject(new Error(msg.message || 'worker failed'));
+          } else {
+            pending.resolve(msg);
+          }
+          return;
+        }
+        if (msg.type === 'error') traceStatus.textContent = `Worker error: ${msg.message || 'unknown error'}`;
+      };
+      qaWorker.onerror = (event) => {
+        rejectWorkerRequests(new Error(event.message || 'worker failed'));
+      };
+      return qaWorker;
+    }
+
+    function workerRequest(type, payload, transfer) {
+      const worker = ensureQaWorker();
+      const requestId = `worker-${nextWorkerRequest++}`;
+      return new Promise((resolve, reject) => {
+        workerRequests.set(requestId, { resolve, reject });
+        worker.postMessage({ ...(payload || {}), type, requestId }, transfer || []);
+      });
+    }
+
+    function looksGzipped(filename, bytes) {
+      return /\.gz$/i.test(filename || '') || (bytes[0] === 0x1f && bytes[1] === 0x8b);
+    }
+
+    async function loadTraceBytes(buffer, filename) {
+      const bytes = new Uint8Array(buffer);
+      if (!bytes.length) throw new Error('trace file is empty');
+      setTraceBusy(true, `Loading ${filename || 'trace'} in browser...`);
+      try {
+        const response = await workerRequest(
+          'load-trace',
+          {
+            bytes,
+            gzip: looksGzipped(filename, bytes),
+            filename: filename || 'uploaded trace',
+          },
+          [bytes.buffer],
+        );
+        traceState = {
+          ready: true,
+          filename: response.filename || filename || 'uploaded trace',
+          tracePath: response.tracePath || '/work/input.jsonl',
+          dbPath: response.dbPath || '/work/trace.duckdb',
+          traceContext: buildTraceContext(response.filename || filename),
+        };
+        traceStatus.textContent = `Loaded ${traceState.filename}; database ready.`;
+        status.textContent = `Ready with uploaded trace: ${traceState.filename}.`;
+      } finally {
+        setTraceBusy(false);
+      }
+    }
+
+    async function runBrowserPythonTool(call) {
+      const response = await workerRequest('run-python', { code: call.code || '' });
+      return response.result || {};
+    }
+
+    function requestPayload() {
+	      return {
+	        session_id: state.session_id,
+	        messages: state.messages,
+	        model: model.value.trim(),
+	        template: template.value.trim(),
+	        max_tool_turns: Number(maxToolTurns.value || 4),
+	        max_tokens: Number(maxTokens.value || 8192),
+	        max_generation_retries: 3,
+	        sandbox_ttk_seconds: Number(sandboxTtk.value || 180),
+	        openrouter_max_retries: Number(openrouterRetries.value || 3),
+	        print_code: printCode.checked,
+	      };
+	    }
+
+    function browserTracePayload() {
+      const payload = requestPayload();
+      payload.db_path = traceState.dbPath;
+      payload.out_dir = '/out';
+      payload.trace_context = traceState.traceContext || buildTraceContext(traceState.filename);
+      return payload;
+    }
+
+    function applyAssistantResult(data, assistantTurn) {
+      const assistant = data.assistant_message || { role: 'assistant', content: data.content || '' };
+      assistantTurn.pending = false;
+      assistantTurn.content = assistant.content || data.content || '';
+      assistantTurn.images = data.display_images || assistantTurn.images || [];
+      assistantTurn.tool_events = data.tool_events || assistantTurn.tool_events || [];
+      // Intermediate events were accumulated live from streamed `event` frames; keep them as-is.
+      state.messages.push({ role: 'assistant', content: assistantTurn.content });
+      saveState();
+      render();
+      setBusy(false, `Done. ${assistantTurn.images.length || 0} display image(s).`);
+    }
+
+    // --- WebSocket transport -------------------------------------------------
+    // One socket carries the whole turn for both data sources. The server runs the model -> tool
+    // loop and streams `event` frames; for the uploaded-trace source it also sends `tool_request`
+    // frames, which we answer by running the code in the in-browser Pyodide worker (over the local
+    // trace) and replying with a `tool_result` frame. Only generated code and aggregated results
+    // cross the socket -- never raw trace rows.
+    let ws = null;
+    let wsTurn = null; // { resolve, reject, assistantTurn } for the in-flight turn
+
+    function wsUrl() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${location.host}/api/chat/ws`;
+    }
+
+    function ensureSocket() {
+      return new Promise((resolve, reject) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          resolve(ws);
+          return;
+        }
+        if (ws) {
+          try { ws.close(); } catch { /* ignore */ }
+          ws = null;
+        }
+        const sock = new WebSocket(wsUrl());
+        sock.onopen = () => { ws = sock; resolve(sock); };
+        sock.onerror = () => { if (ws !== sock) reject(new Error('WebSocket connection failed')); };
+        sock.onclose = () => {
+          if (ws === sock) ws = null;
+          if (wsTurn) {
+            const turn = wsTurn;
+            wsTurn = null;
+            turn.reject(new Error('connection closed before the turn finished'));
+          }
+        };
+        sock.onmessage = (event) => {
+          let frame;
+          try { frame = JSON.parse(event.data); } catch { return; }
+          handleFrame(frame);
+        };
+      });
+    }
+
+    async function handleFrame(frame) {
+      const turn = wsTurn;
+      if (!turn) return;
+      const assistantTurn = turn.assistantTurn;
+
+      if (frame.type === 'event') {
+        assistantTurn.events.push({ label: frame.label, value: frame.value });
+        status.textContent = `Working: ${frame.label}`;
+        if (showIntermediate.checked) render();
+        return;
+      }
+
+      if (frame.type === 'tool_request') {
+        assistantTurn.events.push({
+          label: 'browser_worker',
+          value: { status: 'running', tool_call_id: frame.tool_call_id },
+        });
+        status.textContent = 'Running browser Python tool...';
+        if (showIntermediate.checked) render();
+
+        let result;
+        try {
+          result = await runBrowserPythonTool({ code: frame.code || '' });
+        } catch (err) {
+          result = {
+            stdout: [], stderr: [], results: [], artifacts: [], display_images: [],
+            error: { name: 'BrowserToolError', value: String(err?.message || err) },
+          };
+        }
+        assistantTurn.tool_events.push({
+          tool_call_id: frame.tool_call_id,
+          name: 'run_python',
+          code: frame.code || '',
+          result,
+        });
+        assistantTurn.images.push(...(result.display_images || []));
+        assistantTurn.events.push({
+          label: 'browser_worker',
+          value: {
+            status: 'finished',
+            tool_call_id: frame.tool_call_id,
+            artifacts: result.artifacts?.length || 0,
+            images: result.display_images?.length || 0,
+            error: result.error?.name || null,
+          },
+        });
+        if (showIntermediate.checked) render();
+
+        try {
+          ws.send(JSON.stringify({ type: 'tool_result', tool_call_id: frame.tool_call_id, result }));
+        } catch (err) {
+          wsTurn = null;
+          turn.reject(new Error(`failed to send tool result: ${err?.message || err}`));
+        }
+        return;
+      }
+
+      if (frame.type === 'done') {
+        wsTurn = null;
+        applyAssistantResult(frame.result || {}, assistantTurn);
+        turn.resolve();
+        return;
+      }
+
+      if (frame.type === 'error') {
+        wsTurn = null;
+        turn.reject(new Error(frame.error || 'the assistant turn failed'));
+      }
+    }
+
+    async function sendTurn(text) {
+      const userMsg = { role: 'user', content: text };
+      state.messages.push(userMsg);
+      state.turns.push(userMsg);
+      const assistantTurn = {
+        role: 'assistant',
+        content: '',
+        images: [],
+        tool_events: [],
+        events: [],
+        pending: true,
+      };
+      state.turns.push(assistantTurn);
+      saveState();
+      render();
+
+      const uploadedMode = executorMode.value === 'user';
+      if (uploadedMode && !traceState.ready) {
+        throw new Error('Load a trace file or the sample trace first.');
+      }
+      setBusy(true, uploadedMode ? 'Calling model for uploaded trace...' : 'Calling model and sandbox...');
+
+      const payload = uploadedMode ? browserTracePayload() : requestPayload();
+      payload.type = 'chat';
+      payload.source = uploadedMode ? 'user' : 'syfi';
+      if (uploadedMode) {
+        // Warm the Pyodide worker now so the first tool_request doesn't pay cold-boot inline.
+        ensureQaWorker();
+      }
+
+      const sock = await ensureSocket();
+      await new Promise((resolve, reject) => {
+        wsTurn = { resolve, reject, assistantTurn };
+        try {
+          sock.send(JSON.stringify(payload));
+        } catch (err) {
+          wsTurn = null;
+          reject(err);
+        }
+      });
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = question.value.trim();
+      if (!text) return;
+      question.value = '';
+      try {
+        await sendTurn(text);
+      } catch (err) {
+        const last = state.turns[state.turns.length - 1];
+        if (last?.role === 'assistant' && last.pending) {
+          last.pending = false;
+          last.content = `Error: ${err.message || err}`;
+          saveState();
+          render();
+        }
+        setBusy(false, `Error: ${err.message || err}`);
+      }
+    });
+
+    question.addEventListener('keydown', (event) => {
+      if (
+        event.key !== 'Enter' ||
+        event.shiftKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.isComposing
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (!send.disabled) form.requestSubmit();
+    });
+
+    executorMode.addEventListener('change', updateModeUi);
+
+    loadTrace.addEventListener('click', async () => {
+      const file = traceFile.files?.[0];
+      if (!file) {
+        traceStatus.textContent = 'Choose a JSONL trace file first.';
+        return;
+      }
+      try {
+        await loadTraceBytes(await file.arrayBuffer(), file.name);
+      } catch (err) {
+        traceState.ready = false;
+        traceStatus.textContent = `Trace load failed: ${err.message || err}`;
+      }
+    });
+
+    loadSampleTrace.addEventListener('click', async () => {
+      try {
+        setTraceBusy(true, 'Fetching sample trace...');
+        const res = await fetch('/fixtures/example_trace.jsonl');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buffer = await res.arrayBuffer();
+        await loadTraceBytes(buffer, 'sample_round_trace.jsonl');
+      } catch (err) {
+        traceState.ready = false;
+        traceStatus.textContent = `Sample load failed: ${err.message || err}`;
+      } finally {
+        setTraceBusy(false);
+      }
+    });
+
+	    $('clear').addEventListener('click', () => {
+	      state = { session_id: newSessionId(), messages: [], turns: [] };
+	      saveState();
+	      render();
+	      setBusy(false, executorMode.value === 'user' && traceState.ready ? `Cleared. Uploaded trace still loaded: ${traceState.filename}.` : 'Cleared.');
+    });
+
+    $('seed').addEventListener('click', () => {
+      question.value = executorMode.value === 'user'
+        ? 'Create a bar chart of round counts by provider in my uploaded trace. Save it as /out/provider_rounds.png and return the exact counts.'
+        : 'Create a bar chart of SYFI round counts by provider. Save it as /out/provider_rounds.png and return the exact counts.';
+      question.focus();
+    });
+
+    showIntermediate.addEventListener('change', render);
+    printCode.addEventListener('change', render);
+
+    updateModeUi();
+    render();
+  </script>
+</body>
+</html>

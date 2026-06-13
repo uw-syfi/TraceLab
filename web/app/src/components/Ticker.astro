@@ -1,0 +1,13 @@
+---
+// CSS-only crossfade through a list of words (used for the "coming soon" providers).
+// The animation lives in components/compare.css (.ticker / @keyframes ticker-fade).
+interface Props {
+  words: string[];
+  label?: string;
+}
+const { words, label } = Astro.props;
+---
+
+<span class="ticker" aria-label={label}>
+  {words.map((w) => <span>{w}</span>)}
+</span>

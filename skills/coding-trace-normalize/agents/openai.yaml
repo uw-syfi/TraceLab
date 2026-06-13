@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Trace Normalize"
+  short_description: "Explain normalized trace schema"
+  default_prompt: "Use $coding-trace-normalize to explain normalized coding-trace fields and token accounting."

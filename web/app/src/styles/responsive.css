@@ -1,0 +1,42 @@
+  /* ---- responsive ---- */
+  /* Wide monitors: spend the extra shell width on another column of figures rather than wider
+     cards. The galleries (Overview + Analyze results share .gallery) go 3→4; Compare goes 2→3. */
+  @media (min-width: 1400px) {
+    .gallery { grid-template-columns: repeat(4, 1fr); }
+    .cmp-gallery { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (max-width: 980px) {
+    .kpi-grid, .kpi-grid.small { grid-template-columns: repeat(2, 1fr); }
+    .gallery { grid-template-columns: repeat(2, 1fr); }
+    .band { grid-template-columns: 1fr; }
+    .term-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .term-strip .term { min-height: 0; }
+    .kpi.wide { grid-column: span 2; }
+  }
+  @media (max-width: 768px) {
+    :root { --edge: 2rem; }   /* tighter 16px edges on phones (shell + topbar both follow --edge) */
+    .shell { padding-bottom: 60px; }
+    .topbar-inner { padding: 12px 0; }
+    nav.tabs { order: 3; width: 100%; justify-content: center; }
+    .brand { margin-right: 0; gap: 10px; }
+    .brand .mark { width: 66px; height: 32px; }
+    .brand .mark img { width: 66px; }
+    .brand .name { font-size: var(--fs-lg); }
+    .gallery { grid-template-columns: 1fr; }
+    .gallery-section-head { display: block; }
+    .gallery-section-head p { margin-top: 6px; }
+    .hero { padding: 44px 0 20px; }
+    .term-strip { grid-template-columns: 1fr; margin-bottom: 28px; }
+    .contribute { flex-direction: column; align-items: stretch; }
+    .modal-actions { flex-direction: column-reverse; }
+    .modal-actions .btn { width: 100%; }
+    table.contrib { display: block; overflow-x: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+    .reveal { opacity: 1 !important; transform: none !important; }
+    .ticker > span { animation: none !important; opacity: 0 !important; }
+    .ticker > span:first-child { opacity: 1 !important; }
+  }

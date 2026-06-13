@@ -1,0 +1,78 @@
+  /* ---- KPI tiles — "ledger plates" ----
+     Calm cream surface (no muddy gradient); craft comes from a slim accent rail,
+     a ringed label dot, and a soft corner bloom that echoes the floating bg blobs.
+     Accent is tone-driven via --acc / --acc-wash so a card just sets a class. */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .kpi-grid.small { grid-template-columns: repeat(4, 1fr); }
+
+  .kpi {
+    /* per-card accent palette — overridden by tone classes below */
+    --acc: var(--sage);
+    --acc-wash: var(--sage-wash);
+    --acc-line: rgba(111, 125, 94, 0.34);
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 22px 24px 20px 26px;
+    box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease), border-color .45s var(--ease);
+  }
+  /* left accent rail */
+  .kpi::before {
+    content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px;
+    border-radius: 0 3px 3px 0; background: var(--acc); opacity: 0.85; z-index: 0;
+    transition: top .45s var(--ease), bottom .45s var(--ease), opacity .45s var(--ease);
+  }
+  /* soft corner bloom (top-right), tinted in the card accent */
+  .kpi::after {
+    content: ""; position: absolute; right: -46px; top: -46px; width: 150px; height: 150px;
+    background: radial-gradient(circle at 58% 42%, var(--acc-wash), transparent 68%);
+    opacity: 0.55; pointer-events: none; z-index: 0;
+    transition: opacity .5s var(--ease), transform .55s var(--ease);
+  }
+  .kpi:hover { transform: translateY(-4px); box-shadow: var(--sh-2); border-color: var(--acc-line); }
+  .kpi:hover::before { top: 12px; bottom: 12px; opacity: 1; }
+  .kpi:hover::after { opacity: 0.9; transform: scale(1.14) translate(-4px, 4px); }
+
+  /* keep content above the bloom */
+  .kpi .label, .kpi .num, .kpi .foot { position: relative; z-index: 1; }
+
+  .kpi .label {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .kpi .label::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
+    background: var(--acc); box-shadow: 0 0 0 3px var(--acc-wash);
+  }
+  .kpi .num {
+    font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1; font-size: var(--fs-stat); line-height: 1.05;
+    margin: 10px 0 0; letter-spacing: -0.8px; color: var(--ink);
+  }
+  .kpi .num small { font-size: var(--fs-lg); color: var(--muted); font-family: var(--sans); font-weight: 600; letter-spacing: 0; margin-left: 2px; }
+  .kpi .foot { font-size: var(--fs-xs); color: var(--muted); margin-top: 7px; }
+  .kpi.wide { grid-column: span 2; }
+
+  /* ---- accent tones ---- */
+  .kpi.acc-sage,
+  .kpi.sagey { --acc: var(--sage); --acc-wash: var(--sage-wash); --acc-line: rgba(111, 125, 94, 0.34); }
+  .kpi.acc-terra { --acc: var(--terra); --acc-wash: var(--terra-wash); --acc-line: rgba(200, 100, 60, 0.30); }
+  .kpi.acc-gold  { --acc: var(--gold); --acc-wash: #f1e3c4; --acc-line: rgba(201, 162, 90, 0.40); }
+
+  /* ---- featured plate — filled warm hero (e.g. cached-read share) ---- */
+  .kpi.feature {
+    --acc: var(--terra); --acc-wash: var(--terra-soft); --acc-line: rgba(200, 100, 60, 0.36);
+    background: linear-gradient(158deg, var(--terra-wash) 0%, var(--card) 78%);
+    border-color: rgba(200, 100, 60, 0.24);
+  }
+  .kpi.feature::after { opacity: 0.7; }
+  .kpi.feature .foot { color: var(--terra); font-weight: 600; }
+
+  /* dark: gold + feature carry solid washes that read too bright on dark cards — re-tint them */
+  :root[data-theme="dark"] .kpi.acc-gold { --acc-wash: rgba(220, 186, 108, 0.18); }
+  :root[data-theme="dark"] .kpi.feature  { --acc-wash: rgba(234, 129, 89, 0.26); border-color: rgba(234, 129, 89, 0.30); }

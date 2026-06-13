@@ -1,0 +1,48 @@
+---
+import { intComma, compact, pct } from '../lib/format';
+
+interface Props {
+  claude: number;
+  codex: number;
+}
+const { claude, codex } = Astro.props;
+
+// Geometry: r=64 donut. Claude = terracotta, Codex = sage (consistent with the Compare tab).
+const R = 64;
+const C = 2 * Math.PI * R; // ~402.1
+const total = claude + codex || 1;
+const GAP = 4;
+const usable = C - 2 * GAP;
+const claudeLen = (claude / total) * usable;
+const codexLen = (codex / total) * usable;
+const codexOffset = -(claudeLen + GAP); // start codex arc after claude + gap
+const claudePct = pct(claude / total);
+const codexPct = 100 - claudePct;
+const centerLabel = compact(total);
+---
+
+<div style="display:flex; gap:28px; align-items:center; flex-wrap:wrap;">
+  <svg viewBox="0 0 180 180" width="180" height="180" role="img"
+       aria-label={`Provider donut: Claude ${claudePct} percent, Codex ${codexPct} percent`}>
+    <circle cx="90" cy="90" r={R} fill="none" style="stroke:var(--line)" stroke-width="26"></circle>
+    <circle cx="90" cy="90" r={R} fill="none" style="stroke:var(--terra)" stroke-width="26" data-donut="claude-arc"
+            stroke-dasharray={`${claudeLen} ${C}`} stroke-linecap="round" transform="rotate(-90 90 90)"></circle>
+    <circle cx="90" cy="90" r={R} fill="none" style="stroke:var(--sage)" stroke-width="26" data-donut="codex-arc"
+            stroke-dasharray={`${codexLen} ${C}`} stroke-dashoffset={codexOffset}
+            stroke-linecap="round" transform="rotate(-90 90 90)"></circle>
+    <text class="donut-center-text" x="90" y="83" text-anchor="middle" dominant-baseline="central" font-family="Hanken Grotesk, sans-serif"
+          data-donut="center" font-weight="700" style="fill:var(--ink)" letter-spacing="-0.5">{centerLabel}</text>
+    <text class="donut-caption-text" x="90" y="106" text-anchor="middle" dominant-baseline="central" font-family="Hanken Grotesk, sans-serif"
+          font-weight="600" style="fill:var(--muted)" letter-spacing="1.5">STEPS</text>
+  </svg>
+  <div class="legend" style="flex:1; min-width:180px;">
+    <div class="row">
+      <span class="dot" style="background:var(--terra)"></span><span class="nm">Claude</span>
+      <span class="val"><span data-donut="claude-val">{intComma(claude)}</span><span class="pct" data-donut="claude-pct">{claudePct}%</span></span>
+    </div>
+    <div class="row">
+      <span class="dot" style="background:var(--sage)"></span><span class="nm">Codex</span>
+      <span class="val"><span data-donut="codex-val">{intComma(codex)}</span><span class="pct" data-donut="codex-pct">{codexPct}%</span></span>
+    </div>
+  </div>
+</div>

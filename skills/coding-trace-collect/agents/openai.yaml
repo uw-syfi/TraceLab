@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Trace Collect"
+  short_description: "Collect traces and timing CSVs"
+  default_prompt: "Use $coding-trace-collect to extract normalized Claude and Codex traces and build timing inputs."

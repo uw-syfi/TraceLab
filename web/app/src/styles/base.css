@@ -1,0 +1,43 @@
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--canvas);
+    font-weight: 400;
+    font-size: var(--fs-base);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  /* ---- floating organic background blobs ---- */
+  .blobs { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.55;
+    will-change: transform;
+  }
+  .blob.b1 { width: 46vw; height: 46vw; left: -12vw; top: -10vw;
+    background: radial-gradient(circle at 35% 35%, #f4dcc9, rgba(244,220,201,0)); animation: float1 26s var(--ease) infinite; }
+  .blob.b2 { width: 40vw; height: 40vw; right: -10vw; top: 18vh;
+    background: radial-gradient(circle at 60% 40%, #dfe4d2, rgba(223,228,210,0)); animation: float2 32s var(--ease) infinite; }
+  .blob.b3 { width: 38vw; height: 38vw; left: 30vw; bottom: -16vw;
+    background: radial-gradient(circle at 50% 50%, #f1d6b8, rgba(241,214,184,0)); animation: float3 38s var(--ease) infinite; opacity: 0.4; }
+
+  /* Dark mode: the pale light-mode blobs glare on a dark ground. Drop to a single, barely-there
+     warm vignette so the background stays calm and flat instead of busy. */
+  :root[data-theme="dark"] .blob.b1 {
+    background: radial-gradient(circle at 35% 30%, rgba(234, 129, 89, 0.06), rgba(234, 129, 89, 0)); opacity: 1; }
+  :root[data-theme="dark"] .blob.b2,
+  :root[data-theme="dark"] .blob.b3 { display: none; }
+
+  @keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(4vw,3vh) scale(1.08); } }
+  @keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-3vw,4vh) scale(1.1); } }
+  @keyframes float3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(2vw,-3vh) scale(0.94); } }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Trace Analyze"
+  short_description: "Run trace experiments and validators"
+  default_prompt: "Use $coding-trace-analyze to run coding-trace artifact experiments or validator audits."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "TraceLab Public Release"
+  short_description: "Publish TraceLab public snapshots and release assets"
+  default_prompt: "Use $tracelab-public-release to push a curated TraceLab snapshot to the public repo and create the GitHub release assets."

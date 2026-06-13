@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Trace Raw"
+  short_description: "Read raw Claude and Codex trace logs"
+  default_prompt: "Use $coding-trace-raw to inspect a raw Claude or Codex session segment."

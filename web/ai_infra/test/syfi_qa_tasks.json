@@ -1,0 +1,370 @@
+{
+  "suite": "syfi_qa_model_performance",
+  "version": 1,
+  "source_db": "trace/syfi_coding_trace.duckdb",
+  "generated_from": "local DuckDB queries against the current baked SYFI DB",
+  "notes": [
+    "Only send the question field to the model.",
+    "Expected values are for evaluator scoring and should not be included in the model prompt.",
+    "Exact integer checks should match exactly. Decimal checks can use the per-task tolerance."
+  ],
+  "tasks": [
+    {
+      "id": "easy_01_provider_round_counts",
+      "difficulty": "easy",
+      "tests": ["basic_group_by", "exact_counts"],
+      "question": "Count SYFI rounds by provider. Return provider names and exact round counts.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "rounds"],
+        "rows": [["codex", 216823], ["claude", 140338]]
+      },
+      "grading": {"must_call_tool": true, "exact": true}
+    },
+    {
+      "id": "easy_02_table_row_counts",
+      "difficulty": "easy",
+      "tests": ["schema_awareness", "exact_counts"],
+      "question": "How many rows are in each main SYFI DuckDB table: rounds, tool_calls, and timing_events?",
+      "expected": {
+        "type": "table",
+        "columns": ["table_name", "rows"],
+        "rows": [["rounds", 357161], ["tool_calls", 432510], ["timing_events", 1496416]]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "order_insensitive": true}
+    },
+    {
+      "id": "easy_03_top_tools_overall",
+      "difficulty": "easy",
+      "tests": ["top_k", "group_by"],
+      "question": "List the top 5 tools by total call count across the whole SYFI trace.",
+      "expected": {
+        "type": "table",
+        "columns": ["tool_name", "calls"],
+        "rows": [
+          ["exec_command", 187481],
+          ["Bash", 66983],
+          ["write_stdin", 62848],
+          ["Read", 32402],
+          ["apply_patch", 24134]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered": true}
+    },
+    {
+      "id": "easy_04_top_models_overall",
+      "difficulty": "easy",
+      "tests": ["top_k", "multi_column_group_by"],
+      "question": "Which 5 provider/model pairs have the most rounds? Return provider, model, and round count.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "model", "rounds"],
+        "rows": [
+          ["codex", "gpt-5.5", 103088],
+          ["claude", "claude-opus-4-7", 88575],
+          ["codex", "gpt-5.4", 56480],
+          ["codex", "gpt-5.3-codex", 29715],
+          ["claude", "claude-opus-4-6", 16852]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered": true}
+    },
+    {
+      "id": "easy_05_timing_event_types",
+      "difficulty": "easy",
+      "tests": ["group_by", "event_schema"],
+      "question": "Count timing_events by event_type. Return all event types sorted by count descending.",
+      "expected": {
+        "type": "table",
+        "columns": ["event_type", "events"],
+        "rows": [
+          ["tool_call", 432510],
+          ["tool_result", 431818],
+          ["usage_report", 216823],
+          ["reasoning", 207307],
+          ["text", 159662],
+          ["user_message", 48296]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered": true}
+    },
+    {
+      "id": "easy_06_token_sums_by_provider",
+      "difficulty": "easy",
+      "tests": ["sum", "null_handling"],
+      "question": "For each provider, compute total input_tokens_total, prefix_tokens, newly_append_tokens, output_tokens, and reasoning_output_tokens.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "input_tokens", "prefix_tokens", "newly_append_tokens", "output_tokens", "reasoning_output_tokens"],
+        "rows": [
+          ["claude", 28466201684, 27276213126, 1189988558, 96890838, null],
+          ["codex", 26432158935, 25286634240, 1145524695, 90053158, 36813157]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true}
+    },
+    {
+      "id": "medium_07_tool_calls_by_provider",
+      "difficulty": "medium",
+      "tests": ["join", "round_pk_join"],
+      "question": "Count tool calls by provider. Join tool_calls to rounds correctly and return exact counts.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "tool_calls"],
+        "rows": [["codex", 290122], ["claude", 142388]]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "requires_join_on_round_pk": true}
+    },
+    {
+      "id": "medium_08_rounds_with_tools_share",
+      "difficulty": "medium",
+      "tests": ["distinct", "left_join", "rate"],
+      "question": "For each provider, compute total rounds, rounds with at least one tool call, and the share of rounds with tools rounded to 6 decimals.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "rounds", "rounds_with_tools", "share"],
+        "rows": [
+          ["claude", 140338, 121145, 0.863237],
+          ["codex", 216823, 198650, 0.916185]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.000001}
+    },
+    {
+      "id": "medium_09_top_tools_by_provider",
+      "difficulty": "medium",
+      "tests": ["join", "window_function", "partitioned_top_k"],
+      "question": "For each provider, list its top 5 tools by call count. Return provider, tool_name, and calls.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "tool_name", "calls"],
+        "rows": [
+          ["claude", "Bash", 66983],
+          ["claude", "Read", 32402],
+          ["claude", "Edit", 18458],
+          ["claude", "TaskUpdate", 4801],
+          ["claude", "Write", 3847],
+          ["codex", "exec_command", 187481],
+          ["codex", "write_stdin", 62848],
+          ["codex", "apply_patch", 24134],
+          ["codex", "shell_command", 7624],
+          ["codex", "shell", 5416]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered_within_provider": true}
+    },
+    {
+      "id": "medium_10_tool_error_rate_by_provider",
+      "difficulty": "medium",
+      "tests": ["boolean_aggregation", "rate"],
+      "question": "For each provider, compute total tool calls, error tool calls, and error rate rounded to 6 decimals.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "tool_calls", "error_calls", "error_rate"],
+        "rows": [
+          ["claude", 142388, 6876, 0.048291],
+          ["codex", 290122, 15308, 0.052764]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.000001}
+    },
+    {
+      "id": "medium_11_effective_latency_by_provider",
+      "difficulty": "medium",
+      "tests": ["case_expression", "quantile", "latency_definition"],
+      "question": "Using effective tool latency as internal latency when present else wall latency, compute calls_with_latency, p50, p90, and p99 latency in ms by provider. Round percentiles to 3 decimals.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "calls_with_latency", "p50_ms", "p90_ms", "p99_ms"],
+        "rows": [
+          ["claude", 141746, 125.0, 14468.0, 307769.55],
+          ["codex", 183864, 626.0, 12326.3, 141442.42]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.001}
+    },
+    {
+      "id": "medium_12_prefix_hit_ratio",
+      "difficulty": "medium",
+      "tests": ["ratio", "token_metrics"],
+      "question": "Compute prefix hit ratio by provider as sum(prefix_tokens) / sum(prefix_tokens + newly_append_tokens), rounded to 6 decimals.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "prefix_tokens", "newly_append_tokens", "prefix_hit_ratio"],
+        "rows": [
+          ["claude", 27276213126, 1189988558, 0.958196],
+          ["codex", 25286634240, 1145524695, 0.956662]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.000001}
+    },
+    {
+      "id": "medium_13_first_input_event_type",
+      "difficulty": "medium",
+      "tests": ["null_handling", "group_by"],
+      "question": "Count rounds by provider and first_input_event_type, including null first_input_event_type values.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "first_input_event_type", "rounds"],
+        "rows": [
+          ["claude", "tool_result", 120743],
+          ["claude", "user_message", 19524],
+          ["claude", null, 71],
+          ["codex", "tool_result", 193189],
+          ["codex", "user_message", 18620],
+          ["codex", null, 5014]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true}
+    },
+    {
+      "id": "medium_14_top_claude_projects",
+      "difficulty": "medium",
+      "tests": ["filter", "top_k"],
+      "question": "Among Claude rounds only, list the top 8 projects by round count.",
+      "expected": {
+        "type": "table",
+        "columns": ["project", "rounds"],
+        "rows": [
+          ["project_6783b1ee", 23943],
+          ["project_e82be58a", 16055],
+          ["project_0407a58e", 14187],
+          ["project_793b0e1a", 5806],
+          ["project_56eac353", 4741],
+          ["project_706df82c", 4043],
+          ["project_a24efcc5", 3650],
+          ["project_4318d674", 3216]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered": true}
+    },
+    {
+      "id": "medium_15_model_tool_intensity",
+      "difficulty": "medium",
+      "tests": ["left_join", "distinct_count", "rate", "filter"],
+      "question": "For provider/model pairs with at least 1000 rounds, compute rounds, tool_calls, and tools_per_round. Return the top 10 by tools_per_round rounded to 4 decimals.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "model", "rounds", "tool_calls", "tools_per_round"],
+        "rows": [
+          ["codex", "gpt-5.4", 56480, 84087, 1.4888],
+          ["claude", "claude-haiku-4-5-20251001", 11040, 16177, 1.4653],
+          ["codex", "gpt-5.5", 103088, 146951, 1.4255],
+          ["claude", "claude-sonnet-4-5-20250929", 1186, 1518, 1.2799],
+          ["codex", "gpt-5.3-codex", 29715, 37267, 1.2541],
+          ["codex", "gpt-5.3-codex-spark", 3683, 4029, 1.0939],
+          ["claude", "claude-opus-4-6", 16852, 17785, 1.0554],
+          ["claude", "claude-opus-4-8", 10869, 11464, 1.0547],
+          ["claude", "claude-sonnet-4-6", 10961, 10815, 0.9867],
+          ["claude", "claude-opus-4-7", 88575, 83852, 0.9467]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.0001}
+    },
+    {
+      "id": "hard_16_longest_session_proxies",
+      "difficulty": "hard",
+      "tests": ["deterministic_order", "session_grouping", "null_handling"],
+      "question": "Using provider, project, and session_id as a session proxy, list the 10 longest sessions by number of rounds. Include min and max round_index. Represent null project as <null>.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "project_key", "session_id", "rounds", "min_round_index", "max_round_index"],
+        "rows": [
+          ["codex", "<null>", "codex:2e3d5ad0-16ca-d95d-dc4e-6b9b7b9ea13d", 7610, 0, 7609],
+          ["codex", "<null>", "codex:e9d13754-c81a-6b5e-bc9b-bdfca3474b34", 6295, 0, 6294],
+          ["codex", "<null>", "codex:c2f937ac-957b-0bb4-22c3-9ee8a8ef9dc2", 5655, 0, 5654],
+          ["codex", "<null>", "codex:d4a9977e-92ab-9220-d02c-0af5b4eceb4a", 4803, 0, 4802],
+          ["codex", "<null>", "codex:3edf2ad0-e996-de54-004e-e44848e8c5c0", 4552, 0, 4551],
+          ["codex", "<null>", "codex:77ef98b7-bfd1-4c4a-f6e1-4f359833b056", 3900, 0, 3899],
+          ["codex", "<null>", "codex:69c87205-64c0-5dd5-7160-457cf3a82e01", 3860, 0, 3859],
+          ["codex", "<null>", "codex:888c058b-bbd4-eba7-a527-6f02ae69f974", 3311, 0, 3310],
+          ["codex", "<null>", "codex:f1f22baa-e6f0-70b5-d695-768a982be4ad", 2909, 0, 2908],
+          ["claude", "project_8f998460", "claude:697e4956-f9cb-54f6-05cf-e00e45de48eb", 2756, 0, 2755]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered": true}
+    },
+    {
+      "id": "hard_17_peak_round_days_overall",
+      "difficulty": "hard",
+      "tests": ["timestamp_bucketing", "cte", "distinct_rounds"],
+      "question": "Using the earliest non-null timing event timestamp per round, find the top 5 calendar days by total round count across all providers.",
+      "expected": {
+        "type": "table",
+        "columns": ["day", "rounds"],
+        "rows": [
+          ["2026-05-05 00:00:00", 13413],
+          ["2026-05-04 00:00:00", 11878],
+          ["2026-05-02 00:00:00", 10536],
+          ["2026-04-19 00:00:00", 10118],
+          ["2026-05-06 00:00:00", 9309]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "ordered": true}
+    },
+    {
+      "id": "hard_18_peak_round_day_by_provider",
+      "difficulty": "hard",
+      "tests": ["timestamp_bucketing", "window_function", "partitioned_top_k"],
+      "question": "Using the earliest non-null timing event timestamp per round, find each provider's single peak calendar day by round count.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "day", "rounds"],
+        "rows": [
+          ["claude", "2026-05-15 00:00:00", 7416],
+          ["codex", "2026-05-05 00:00:00", 10240]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact": true}
+    },
+    {
+      "id": "hard_19_latency_for_top_tools",
+      "difficulty": "hard",
+      "tests": ["nested_cte", "effective_latency", "quantile", "top_k"],
+      "question": "For the 8 tools with the most positive effective latency samples, compute sample count, p50, and p90 effective latency in ms. Use internal latency when present else wall latency.",
+      "expected": {
+        "type": "table",
+        "columns": ["tool_name", "calls", "p50_ms", "p90_ms"],
+        "rows": [
+          ["exec_command", 110497, 323.0, 1002.0],
+          ["Bash", 66835, 409.0, 30330.8],
+          ["write_stdin", 45437, 5002.0, 60001.0],
+          ["Read", 32209, 36.0, 427.0],
+          ["apply_patch", 20960, 59.0, 1217.2],
+          ["Edit", 18279, 95.0, 2236.8],
+          ["TaskUpdate", 4772, 82.0, 1247.2],
+          ["Write", 3827, 98.0, 4465.4]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.001}
+    },
+    {
+      "id": "hard_20_reasoning_output_share",
+      "difficulty": "hard",
+      "tests": ["null_handling", "ratio", "provider_comparison"],
+      "question": "For each provider, compute total rounds, output_tokens, reasoning_output_tokens with nulls treated as zero, and reasoning_output_tokens / output_tokens rounded to 6 decimals.",
+      "expected": {
+        "type": "table",
+        "columns": ["provider", "rounds", "output_tokens", "reasoning_output_tokens", "reasoning_share_of_output"],
+        "rows": [
+          ["claude", 140338, 96890838, 0, 0.0],
+          ["codex", 216823, 90053158, 36813157, 0.408794]
+        ]
+      },
+      "grading": {"must_call_tool": true, "exact_integers": true, "decimal_tolerance": 0.000001}
+    },
+    {
+      "id": "hard_21_plot_provider_rounds",
+      "difficulty": "hard",
+      "tests": ["plotting", "artifact_generation", "exact_counts"],
+      "question": "Create a bar chart of SYFI round counts by provider. Save it as /out/provider_rounds.png and also return the exact counts used for the plot.",
+      "expected": {
+        "type": "artifact_plus_table",
+        "required_artifact": "/out/provider_rounds.png",
+        "columns": ["provider", "rounds"],
+        "rows": [["codex", 216823], ["claude", 140338]]
+      },
+      "grading": {"must_call_tool": true, "exact": true, "requires_artifact": true}
+    }
+  ]
+}

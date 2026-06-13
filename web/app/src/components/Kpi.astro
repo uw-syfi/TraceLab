@@ -1,0 +1,18 @@
+---
+interface Props {
+  label: string;
+  value: string;
+  unit?: string;
+  foot?: string;
+  accent?: 'terra' | 'sage' | 'gold';
+  feature?: boolean;
+}
+const { label, value, unit, foot, accent, feature } = Astro.props;
+const cls = ['kpi', feature ? 'feature' : accent ? `acc-${accent}` : null].filter(Boolean).join(' ');
+---
+
+<div class={cls}>
+  <div class="label">{label}</div>
+  <div class="num">{value}{unit && <small>{unit}</small>}</div>
+  {foot && <div class="foot">{foot}</div>}
+</div>

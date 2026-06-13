@@ -1,0 +1,86 @@
+---
+// Top navigation: brand + tab strip. Owns the surface-switching script. On the index the
+// tabs toggle the live surface (and sync the URL hash); on a detail page they navigate home.
+---
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <span class="mark" aria-hidden="true">
+        <img src="/syfi-mark.svg" alt="" />
+      </span>
+      <span class="name">SyFI <em>Trace Atlas</em></span>
+    </a>
+    <nav class="tabs" role="tablist" aria-label="Surfaces">
+      <button role="tab" class="active" data-surface="overview" aria-selected="true">Overview</button>
+      <button role="tab" data-surface="compare" aria-selected="false">Provider Comparison</button>
+      <button role="tab" data-surface="analyze" aria-selected="false">Analyze your trace</button>
+      <button role="tab" data-surface="pool" aria-selected="false">Contributed pool</button>
+    </nav>
+    <button class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"></circle><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M19.4 4.6l-1.7 1.7M6.3 17.7l-1.7 1.7"></path>
+      </svg>
+      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5z"></path>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<script>
+  const NAMES = ['overview', 'compare', 'analyze', 'pool'];
+  const tabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>('nav.tabs button'));
+  const surfaces = () => Array.from(document.querySelectorAll<HTMLElement>('.surface'));
+  const hasIndexSurfaces = () => NAMES.every((name) => document.getElementById(name)?.classList.contains('surface'));
+
+  function show(name: string): void {
+    surfaces().forEach((s) => s.classList.toggle('live', s.id === name));
+    tabs().forEach((t) => {
+      const on = t.dataset.surface === name;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const live = document.getElementById(name);
+    if (live) void live.offsetWidth; // re-trigger reveal animation
+    history.replaceState(null, '', name === 'overview' ? location.pathname : `#${name}`);
+    // Let surfaces react to becoming active (e.g. Analyze warms Pyodide on entry).
+    document.dispatchEvent(new CustomEvent('surface:show', { detail: name }));
+  }
+
+  tabs().forEach((t) =>
+    t.addEventListener('click', () => {
+      const name = t.dataset.surface!;
+      // The index has all real tab surfaces (#overview, #compare, #analyze, #pool). Detail pages
+      // also have in-page anchors such as #overview, so check for the full surface set at click time.
+      if (hasIndexSurfaces()) {
+        show(name);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        location.href = `/#${name}`;
+      }
+    }),
+  );
+
+  if (hasIndexSurfaces()) {
+    // Index page: deep-link via the URL hash.
+    const initial = location.hash.replace('#', '');
+    if (NAMES.includes(initial) && initial !== 'overview') show(initial);
+    document.documentElement.removeAttribute('data-initial-surface');
+  }
+
+  // ---- theme toggle ----
+  // The pre-paint init in Base.astro already applied the initial theme. Here we just flip + persist.
+  const root = document.documentElement;
+  const toggle = document.querySelector<HTMLButtonElement>('.theme-toggle');
+  toggle?.addEventListener('click', () => {
+    const dark = root.dataset.theme !== 'dark';
+    root.dataset.theme = dark ? 'dark' : '';
+    if (!dark) root.removeAttribute('data-theme');
+    try {
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+    } catch (_) {}
+  });
+  // The app defaults to dark (Base.astro pre-paint init) and ignores the OS preference; the toggle is
+  // the only way to switch, and the choice persists. So we deliberately do not follow OS theme changes.
+</script>

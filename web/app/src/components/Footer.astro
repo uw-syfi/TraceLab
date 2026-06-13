@@ -1,0 +1,18 @@
+---
+interface Props {
+  left?: string;
+  right?: string;
+}
+const { left = 'SyFI Trace Atlas', right = '' } = Astro.props;
+---
+
+<footer class="foot">
+  <span class="dotmark" aria-hidden="true"></span>
+  <span>{left}</span>
+  {right && (
+    <>
+      <span class="spacer"></span>
+      <span>{right}</span>
+    </>
+  )}
+</footer>

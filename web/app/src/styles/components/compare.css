@@ -1,0 +1,216 @@
+  /* ---- provider comparison surface ---- */
+  .vs-head { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .vs-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 26px 28px; box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+  }
+  .vs-card:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+  .vs-card.terra { background: linear-gradient(155deg, var(--terra-wash), var(--card)); }
+  .vs-card.sage  { background: linear-gradient(155deg, var(--sage-wash), var(--card)); }
+  .vs-card .pv { display: flex; align-items: center; gap: 10px; }
+  .vs-card .pv .dot { width: 13px; height: 13px; border-radius: 5px; flex: none; }
+  .vs-card .pv .pnm { font-family: var(--serif); font-weight: 540; font-size: var(--fs-xl); line-height: 1; }
+  .vs-card .pv .pshare { margin-left: auto; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
+  .vs-card .pbig { font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: var(--fs-stat); line-height: 1.05; margin: 14px 0 2px; letter-spacing: -0.8px; }
+  .vs-card.terra .pbig { color: var(--terra); }
+  .vs-card.sage  .pbig { color: var(--sage); }
+  .vs-card .psub { font-size: var(--fs-xs); color: var(--muted); }
+
+  /* ghosted "coming soon" provider slot */
+  .vs-card.ghost {
+    background: var(--card-2);
+    border: 1px dashed color-mix(in srgb, var(--ink) 28%, transparent);
+    box-shadow: none;
+    color: var(--muted);
+  }
+  .vs-card.ghost:hover { transform: translateY(-4px); box-shadow: var(--sh-1); }
+  .vs-card.ghost .pv .dot { background: color-mix(in srgb, var(--ink) 22%, transparent); }
+  .vs-card.ghost .pv .pnm { color: var(--muted); }
+  .vs-card.ghost .pbig { color: var(--muted); opacity: 0.65; }
+  .vs-card.ghost .psub { color: var(--muted); }
+
+  /* "coming soon" crossfade */
+  .ticker {
+    position: relative; display: inline-grid; vertical-align: bottom;
+    height: 1.25em; text-align: center;
+  }
+  .ticker > span {
+    grid-area: 1 / 1; white-space: nowrap; line-height: 1.25;
+    opacity: 0; animation: ticker-fade 8s ease-in-out infinite;
+  }
+  .ticker > span:nth-child(1) { animation-delay: 0s; }
+  .ticker > span:nth-child(2) { animation-delay: 2s; }
+  .ticker > span:nth-child(3) { animation-delay: 4s; }
+  .ticker > span:nth-child(4) { animation-delay: 6s; }
+  @keyframes ticker-fade {
+    0%   { opacity: 0; }
+    3%   { opacity: 1; }
+    22%  { opacity: 1; }
+    28%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
+  .soon-cap {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .soon-cap .gdot {
+    width: 6px; height: 6px; border-radius: 50%; flex: none;
+    border: 1px dashed color-mix(in srgb, var(--ink) 40%, transparent);
+  }
+
+  /* ghost split segment */
+  .split-bar i.ghost {
+    background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--ink) 6%, transparent), color-mix(in srgb, var(--ink) 6%, transparent) 4px, transparent 4px, transparent 8px);
+    border-left: 1px dashed color-mix(in srgb, var(--ink) 32%, transparent);
+  }
+
+  /* ghosted comparison-table column */
+  table.h2h-tbl thead th.soon-col, table.h2h-tbl tbody td.soon-col { color: var(--muted); }
+  table.h2h-tbl tbody td.soon-col { opacity: 0.55; font-weight: 500; }
+  table.h2h-tbl thead th.soon-col .ticker { color: var(--muted); font-weight: 600; }
+
+  /* slim split bar */
+  .split-bar { display: flex; height: 16px; border-radius: 999px; overflow: hidden; border: 1px solid var(--line); margin-top: 8px; }
+  .split-bar i { display: block; height: 100%; }
+  .split-cap { display: flex; justify-content: space-between; margin-top: 8px; font-size: var(--fs-xs); color: var(--muted); font-weight: 600; }
+
+  /* head-to-head KPI rows */
+  .h2h { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1); overflow: hidden; }
+  .h2h .h2h-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--line); }
+  .h2h .h2h-row:last-child { border-bottom: none; }
+  .h2h .h2h-row.head { background: var(--card-2); }
+  .h2h .cell { padding: 14px 22px; display: flex; flex-direction: column; gap: 2px; }
+  .h2h .cell + .cell { border-left: 1px solid var(--line); }
+  .h2h .mlabel { font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .h2h .mval { font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: var(--fs-lg); letter-spacing: -0.4px; }
+  .h2h .head .ph { display: flex; align-items: center; gap: 9px; font-family: var(--serif); font-weight: 540; font-size: var(--fs-md); }
+  .h2h .head .ph .dot { width: 11px; height: 11px; border-radius: 4px; flex: none; }
+  .h2h .cell.win-terra .mval { color: var(--terra); }
+  .h2h .cell.win-sage  .mval { color: var(--sage); }
+
+  /* comparison figure gallery — two-up */
+  .cmp-gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+
+  /* svg legend chip row */
+  .svg-legend { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; flex-wrap: wrap; }
+  .svg-legend .lg { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-xs); font-weight: 600; color: var(--ink); }
+  .svg-legend .lg .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+
+  /* paired gauges */
+  .gauge-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* head-to-head table */
+  table.h2h-tbl {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    overflow: hidden; box-shadow: var(--sh-1);
+  }
+  table.h2h-tbl thead th {
+    text-align: right; font-size: var(--fs-sm); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 17px 22px; background: var(--card-2);
+    border-bottom: 1px solid var(--line);
+  }
+  table.h2h-tbl thead th:first-child { text-align: left; }
+  table.h2h-tbl tbody td { padding: 18px 22px; border-bottom: 1px solid var(--line); font-size: var(--fs-lg); text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; line-height: 1.25; }
+  table.h2h-tbl tbody td:first-child { text-align: left; font-weight: 600; }
+  table.h2h-tbl tbody tr:last-child td { border-bottom: none; }
+  table.h2h-tbl tbody tr { transition: background .25s var(--ease); }
+  table.h2h-tbl tbody tr:hover { background: var(--card-2); }
+  table.h2h-tbl .cell-value { display: inline-block; border-radius: var(--r-sm); padding: 2px 8px; margin: -2px -8px; font-weight: 700; }
+  table.h2h-tbl .cell-value.win-terra { color: var(--terra); font-weight: 700; background: var(--terra-wash); }
+  table.h2h-tbl .cell-value.win-sage  { color: var(--sage); font-weight: 700; background: var(--sage-wash); }
+  table.h2h-tbl td.delta { color: var(--muted); font-weight: 600; }
+
+  /* consolidated comparison table — group headers ride a warm peach band (terra-wash deepened a touch
+     with terra so it sits clearly above the page, slimmed, framed top+bottom with hairlines so it reads
+     as a section shelf, not a saturated slab) with a serif title + terracotta tick + inline muted note.
+     Subsection captions sit lighter beneath, so hierarchy reads group → subgroup. The band is opaque
+     enough that the row:hover tint won't bleed onto it. */
+  table.h2h-tbl tr.grp-head td {
+    text-align: left; padding: 16px 22px 13px;
+    background: color-mix(in srgb, var(--terra-wash) 88%, var(--terra));
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  table.h2h-tbl tr.grp-head td .gname {
+    display: inline-flex; align-items: center; gap: 11px; vertical-align: middle;
+    font-family: var(--serif); font-weight: 600; font-size: var(--fs-xl); color: var(--ink);
+    letter-spacing: -0.2px; line-height: 1.1;
+  }
+  table.h2h-tbl tr.grp-head td .gname::before {
+    content: ""; width: 9px; height: 9px; border-radius: 3px; background: var(--terra); flex: none;
+  }
+  table.h2h-tbl tr.grp-head td .gnote {
+    display: inline; vertical-align: middle; margin-left: 12px;
+    font-size: var(--fs-sm); color: var(--muted); font-weight: 500;
+  }
+  table.h2h-tbl tr.sub-head td {
+    text-align: left; padding: 18px 22px 6px;
+    background: var(--card);
+  }
+  table.h2h-tbl tr.sub-head .sname {
+    font-size: var(--fs-sm); color: var(--sage); font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  table.h2h-tbl tr.sub-head .snote {
+    font-size: var(--fs-xs); color: var(--muted); margin-left: 10px; font-weight: 500;
+  }
+  /* directional arrow chip on the metric label */
+  .dir { font-size: var(--fs-xs); font-weight: 700; color: var(--muted); margin-left: 7px; font-variant-numeric: normal; }
+  /* profile rows — descriptive only, never judged */
+  table.h2h-tbl tr.profile td.val { color: var(--ink); font-weight: 600; }
+  table.h2h-tbl tr.profile td.val.na { color: var(--muted); font-weight: 500; }
+  /* winning side — tint only the value, not the full cell */
+  table.h2h-tbl td.delta b.who-terra { color: var(--terra); }
+  table.h2h-tbl td.delta b.who-sage  { color: var(--sage); }
+  table.h2h-tbl td.delta b { font-weight: 700; }
+  /* deferred / not-yet-reported cell (e.g. timing percentiles, reasoning tokens) */
+  table.h2h-tbl tbody td.na { color: var(--muted); font-weight: 500; }
+  /* legend for the consolidated table */
+  .tbl-legend { display: flex; align-items: center; gap: 18px; margin: 14px 2px 12px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--muted); }
+  .tbl-legend .lg { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--ink); }
+  .tbl-legend .lg .ar { font-weight: 700; color: var(--muted); }
+
+  /* live model-mix card — segmented bar + legend, sits inside a .fig .canvas */
+  .canvas .modelmix { padding: 22px 20px; }
+  .modelmix .mm-bar {
+    display: flex; height: 34px; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .modelmix .mm-bar i {
+    display: flex; align-items: center; justify-content: center; min-width: 0;
+    transition: filter .25s var(--ease);
+  }
+  .modelmix .mm-bar i:hover { filter: brightness(1.05); }
+  .modelmix .mm-bar i span {
+    font-size: var(--fs-2xs); font-weight: 700; color: #fff;
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+  }
+  /* pale segments carry a fixed data-viz fill, so their label stays fixed-dark in both themes
+     (var(--ink) would flip to near-white on dark and vanish on the pale fill). */
+  .modelmix .mm-bar i.light span { color: #2a2622; }
+  .modelmix .mm-legend { display: flex; flex-wrap: wrap; gap: 9px 16px; margin-top: 14px; }
+  .modelmix .mm-lg {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: var(--fs-xs); font-weight: 600; color: var(--ink);
+  }
+  .modelmix .mm-lg i { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+  .modelmix .mm-lg .c { color: var(--muted); font-weight: 600; margin-left: 2px; }
+
+  @media (max-width: 768px) {
+    .vs-head { grid-template-columns: 1fr; }
+    .cmp-gallery { grid-template-columns: 1fr; }
+    table.h2h-tbl { display: block; overflow-x: auto; }
+    table.h2h-tbl thead, table.h2h-tbl tbody, table.h2h-tbl tr { display: block; }
+    table.h2h-tbl thead { display: none; }
+    table.h2h-tbl tbody tr.grp-head td { padding: 16px 18px 8px; }
+    table.h2h-tbl tbody tr.sub-head td { padding: 12px 18px 7px; }
+    table.h2h-tbl tbody tr:not(.grp-head):not(.sub-head) { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+    table.h2h-tbl tbody tr.sub-head { display: block; }
+    table.h2h-tbl tbody tr:not(.grp-head):not(.sub-head) td { border-bottom: none; padding: 12px 18px; }
+    table.h2h-tbl tbody tr:not(.grp-head):not(.sub-head) td:first-child { grid-column: 1 / -1; padding-bottom: 2px; }
+    table.h2h-tbl tbody tr:not(.grp-head):not(.sub-head) td.delta { grid-column: 1 / -1; padding-top: 2px; text-align: left; }
+    table.h2h-tbl tbody td[data-h]::before { content: attr(data-h); display: block; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+  }

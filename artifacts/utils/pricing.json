@@ -1,0 +1,20 @@
+{
+  "_comment": "Single source of truth for model prices. USD per 1,000,000 tokens. Read by both the Python analytics aggregator (cost computed there; payload carries dollars) and the web mock. 'exact' keys are 'provider:model'; 'family' entries match by lowercase substring on the model string when no exact entry exists; unknown -> unpriced. cachedInputPerM is the cache-READ rate (Anthropic & OpenAI ~0.1x input); cache-write surcharge is not modeled (the trace's prefix_tokens are reads). Edit prices here only.",
+  "as_of": "2026-06",
+  "exact": {
+    "claude:claude-opus-4-8":   { "inputPerM": 5,    "cachedInputPerM": 0.5,   "outputPerM": 25 },
+    "claude:claude-opus-4-7":   { "inputPerM": 5,    "cachedInputPerM": 0.5,   "outputPerM": 25 },
+    "claude:claude-opus-4-6":   { "inputPerM": 5,    "cachedInputPerM": 0.5,   "outputPerM": 25 },
+    "claude:claude-sonnet-4-6": { "inputPerM": 3,    "cachedInputPerM": 0.3,   "outputPerM": 15 },
+    "claude:claude-haiku-4-5":  { "inputPerM": 1,    "cachedInputPerM": 0.1,   "outputPerM": 5  },
+    "codex:gpt-5.5":            { "inputPerM": 5,    "cachedInputPerM": 0.5,   "outputPerM": 30 },
+    "codex:gpt-5.4":            { "inputPerM": 2.5,  "cachedInputPerM": 0.25,  "outputPerM": 15 },
+    "codex:gpt-5":              { "inputPerM": 1.25, "cachedInputPerM": 0.125, "outputPerM": 10 }
+  },
+  "family": [
+    { "match": "opus",   "inputPerM": 5,    "cachedInputPerM": 0.5,   "outputPerM": 25 },
+    { "match": "sonnet", "inputPerM": 3,    "cachedInputPerM": 0.3,   "outputPerM": 15 },
+    { "match": "haiku",  "inputPerM": 1,    "cachedInputPerM": 0.1,   "outputPerM": 5  },
+    { "match": "gpt-5",  "inputPerM": 5,    "cachedInputPerM": 0.5,   "outputPerM": 30 }
+  ]
+}

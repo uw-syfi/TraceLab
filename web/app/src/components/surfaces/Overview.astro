@@ -1,0 +1,133 @@
+---
+import { loadSummary } from '../../lib/summary';
+import { intComma, magnitude, pct, pct1, fmtRange, fmtSeconds } from '../../lib/format';
+import { overviewFigureSections, type StatKey } from '../../lib/figures';
+import KpiGrid from '../KpiGrid.astro';
+import Kpi from '../Kpi.astro';
+import Band from '../Band.astro';
+import Panel from '../Panel.astro';
+import ProviderDonut from '../ProviderDonut.astro';
+import GalleryCard from '../GalleryCard.astro';
+import Footer from '../Footer.astro';
+
+const s = loadSummary();
+const m = s.merged;
+const inp = m.tokens.input;
+
+const rounds = m.scope.llm_rounds_total;
+const totalInput = magnitude(inp.total_input_tokens);
+const cached = magnitude(inp.cached_read_input_tokens);
+const newIn = magnitude(inp.new_input_tokens);
+const totalOutput = magnitude(m.tokens.output.total_output_tokens_including_reasoning);
+const cachedShare = pct(inp.cached_read_input_tokens / inp.total_input_tokens);
+
+const rbp = m.rounds_by_provider;
+const claude = rbp.claude ?? 0;
+const codex = rbp.codex ?? 0;
+
+const gt = m.generation_timing;
+const g = inp.total_input_growth_when_started_with_tool_result;
+const statMap: Record<StatKey, { label: string; value: string }[]> = {
+  human_wait: [
+    { label: 'Median wait', value: fmtSeconds(gt.median_waiting_for_human_input_seconds) },
+    { label: 'p90 wait', value: fmtSeconds(gt.p90_waiting_for_human_input_seconds) },
+    { label: 'Average wait', value: fmtSeconds(gt.average_waiting_for_human_input_seconds) },
+  ],
+  input_growth: [
+    { label: 'Tool-triggered steps that grew', value: pct1(g.positive_growth_share) },
+    { label: 'Tool-triggered steps that shrank', value: pct1(g.negative_growth_share) },
+    { label: 'Avg growth', value: `${intComma(g.average_positive_growth_tokens)} tok` },
+  ],
+};
+
+const range = fmtRange(m.scope.earliest_observed_timestamp, m.scope.latest_observed_timestamp);
+let galleryCardIndex = 0;
+const nextGalleryDelay = () => 420 + galleryCardIndex++ * 40;
+---
+
+<section class="surface live" id="overview" role="tabpanel" aria-label="Overview">
+  <div class="hero reveal" style="--d:60ms">
+    <span class="eyebrow">Coding-agent workloads in the wild</span>
+    <h1>SyFI <em>Trace Atlas</em></h1>
+    <p class="lede">
+      Real Claude&nbsp;Code and Codex sessions, organized by requests, agent steps, tokens,
+      tool calls, cache behavior, and where time is spent.
+    </p>
+  </div>
+
+  <div class="sec-head reveal" style="--d:190ms">
+    <h2>Dataset snapshot</h2>
+  </div>
+
+  <KpiGrid delay={240}>
+    <Kpi label="Distinct users" value={intComma(m.scope.distinct_users)} accent="sage" />
+    <Kpi label="Sessions" value={intComma(m.scope.total_sessions)} accent="sage" />
+    <Kpi label="Agent steps" value={intComma(rounds)} foot="model calls inside requests" accent="gold" />
+    <Kpi label="Tool calls" value={intComma(m.tools.total_tool_calls)} accent="sage" />
+  </KpiGrid>
+
+  <KpiGrid delay={300} mt>
+    <Kpi label="Total input tokens" value={totalInput.num} unit={totalInput.unit} feature />
+    <Kpi label="Cached-read tokens" value={cached.num} unit={cached.unit} foot={`${cachedShare}% served from cache`} accent="terra" />
+    <Kpi label="Append input tokens" value={newIn.num} unit={newIn.unit} accent="terra" />
+    <Kpi label="Total output tokens" value={totalOutput.num} unit={totalOutput.unit} accent="terra" />
+  </KpiGrid>
+
+  <Band delay={360}>
+    <Panel title="Provider split" desc={`Agent-step counts across ${intComma(rounds)} model calls.`}>
+      <ProviderDonut claude={claude} codex={codex} />
+    </Panel>
+    <Panel title="Collection window" desc="First and latest observed rows in the public pool.">
+      <div class="range-strip" style="margin-top:6px;">
+        <span class="ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" style="stroke:var(--sage)" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+        </span>
+        <div>
+          <div class="rt">Date range</div>
+          <div class="rv">{range}</div>
+        </div>
+      </div>
+      <div style="margin-top:18px;">
+        <svg viewBox="0 0 360 70" width="100%" height="70" preserveAspectRatio="none" role="img" aria-label="Collection volume over time">
+          <defs><linearGradient id="tlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--terra)" stop-opacity="0.28"></stop><stop offset="1" style="stop-color:var(--terra)" stop-opacity="0"></stop></linearGradient></defs>
+          <path d="M0,58 C40,52 60,44 90,40 C130,34 150,24 190,26 C230,28 250,16 290,14 C320,12 340,18 360,12 L360,70 L0,70 Z" fill="url(#tlg)"></path>
+          <path d="M0,58 C40,52 60,44 90,40 C130,34 150,24 190,26 C230,28 250,16 290,14 C320,12 340,18 360,12" fill="none" style="stroke:var(--terra)" stroke-width="2.4" stroke-linecap="round"></path>
+        </svg>
+      </div>
+    </Panel>
+  </Band>
+
+  <div class="sec-head reveal" style="--d:420ms">
+    <h2>Analysis figures</h2>
+  </div>
+
+  <div class="gallery-sections" aria-label="Figure gallery sections">
+    {overviewFigureSections.map((section, sectionIndex) => (
+      <section class="gallery-section reveal" style={`--d:${450 + sectionIndex * 60}ms`} aria-labelledby={`gallery-section-${section.key}`}>
+        <div class="gallery-section-head">
+          <div>
+            <span class="gallery-section-type">Type</span>
+            <h3 id={`gallery-section-${section.key}`}>{section.title}</h3>
+          </div>
+          <p>{section.description}</p>
+        </div>
+        <div class="gallery">
+          {section.figures.map((f) => (
+            <GalleryCard
+              category={f.category}
+              title={f.title}
+              blurb={f.blurb}
+              variant={f.variant}
+              src={f.src}
+              slug={f.slug}
+              statLines={f.stat ? statMap[f.stat] : []}
+              delay={nextGalleryDelay()}
+            />
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+
+  <Footer left="SyFI Trace Atlas · public trace pool" />
+</section>

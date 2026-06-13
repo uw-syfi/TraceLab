@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SyFI Trace Atlas · Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================== TOKENS ============================== */
+  :root{
+    --bg-0:#0b0f1c;
+    --bg-1:#0e1426;
+    --panel:rgba(255,255,255,0.035);
+    --panel-2:rgba(255,255,255,0.055);
+    --border:rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.14);
+    --text:#e7ecf6;
+    --muted:#8b93a8;
+    --muted-2:#5d6480;
+    /* Restrained, harmonious palette — primary calm blue, secondary muted teal,
+       one quiet amber for a single warning/secondary series. */
+    --blue:#5b9dff;
+    --blue-2:#7eb3ff;      /* lighter tint of primary */
+    --blue-3:#3f6bb0;      /* deeper tint of primary */
+    --teal:#4fb8a6;        /* secondary, muted */
+    --amber:#d6a85c;       /* quiet tertiary, sparing use only */
+    --slate:#7f8aa6;       /* neutral series color */
+    /* Back-compat aliases so any lingering refs resolve to the calm set */
+    --cyan:var(--blue);
+    --magenta:var(--teal);
+    --lime:var(--teal);
+    --violet:var(--slate);
+    --radius:18px;
+    --radius-sm:12px;
+    --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+    --display:"Bricolage Grotesque","Hanken Grotesk",Georgia,serif;
+    --body:"Hanken Grotesk","Helvetica Neue",sans-serif;
+    --shadow:0 24px 60px -34px rgba(0,0,0,0.8);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--body);
+    color:var(--text);
+    background:var(--bg-0);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* ===== Background mesh + grain ===== */
+  .bg-mesh{
+    position:fixed; inset:0; z-index:-2;
+    background:
+      radial-gradient(900px 600px at 8% -6%, rgba(91,157,255,0.07), transparent 62%),
+      radial-gradient(820px 560px at 100% 4%, rgba(79,184,166,0.05), transparent 60%),
+      radial-gradient(1000px 760px at 50% 124%, rgba(91,157,255,0.045), transparent 62%),
+      linear-gradient(160deg,var(--bg-0) 0%, var(--bg-1) 62%, #0a0d18 100%);
+  }
+  .bg-grid{
+    position:fixed; inset:0; z-index:-2; opacity:0.28;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size:46px 46px;
+    -webkit-mask-image:radial-gradient(1100px 700px at 50% 0%, #000 30%, transparent 88%);
+            mask-image:radial-gradient(1100px 700px at 50% 0%, #000 30%, transparent 88%);
+  }
+  .bg-grain{
+    position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:0.04;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  /* ============================== SHELL ============================== */
+  .topbar{
+    position:sticky; top:0; z-index:60;
+    display:flex; align-items:center; gap:20px;
+    padding:14px clamp(16px,4vw,40px);
+    background:linear-gradient(180deg, rgba(11,15,31,0.92), rgba(11,15,31,0.62));
+    backdrop-filter:blur(16px) saturate(140%);
+    -webkit-backdrop-filter:blur(16px) saturate(140%);
+    border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex; align-items:center; gap:13px; min-width:0;}
+  .brand .glyph{
+    width:38px; height:38px; flex:none; border-radius:11px;
+    background:radial-gradient(circle at 32% 26%, rgba(91,157,255,0.9), rgba(79,184,166,0.55) 70%);
+    box-shadow:0 0 0 1px rgba(255,255,255,0.12), 0 6px 16px -8px rgba(91,157,255,0.5);
+    position:relative; overflow:hidden;
+  }
+  .brand .glyph::after{
+    content:""; position:absolute; inset:0;
+    background:
+      linear-gradient(90deg, transparent 46%, rgba(11,15,28,0.85) 47%, rgba(11,15,28,0.85) 53%, transparent 54%),
+      linear-gradient(0deg, transparent 46%, rgba(11,15,28,0.85) 47%, rgba(11,15,28,0.85) 53%, transparent 54%);
+  }
+  .brand .names{display:flex; flex-direction:column; line-height:1.05; min-width:0;}
+  .brand .title{font-family:var(--display); font-weight:700; font-size:17px; letter-spacing:0.2px; white-space:nowrap;}
+  .brand .sub{font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:1.4px; text-transform:uppercase;}
+
+  .nav{display:flex; gap:6px; margin-left:auto; background:rgba(255,255,255,0.03); padding:5px; border-radius:14px; border:1px solid var(--border);}
+  .nav button{
+    font-family:var(--body); font-weight:600; font-size:13.5px;
+    color:var(--muted); background:transparent; border:0; cursor:pointer;
+    padding:9px 16px; border-radius:10px; display:flex; align-items:center; gap:8px;
+    transition:color .2s, background .2s, box-shadow .2s; white-space:nowrap;
+  }
+  .nav button .ix{font-family:var(--mono); font-size:10px; opacity:0.6;}
+  .nav button:hover{color:var(--text);}
+  .nav button[aria-selected="true"]{
+    color:#0a1426; background:linear-gradient(180deg, var(--blue-2), var(--blue));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.28);
+  }
+  .nav button[aria-selected="true"] .ix{opacity:0.7;}
+
+  .topbar-meta{display:flex; align-items:center; gap:14px; margin-left:4px;}
+  .live-pill{
+    display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11px; color:var(--muted);
+    padding:7px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.025);
+  }
+  .live-dot{width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 2px rgba(79,184,166,0.18); animation:pulse 2.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+
+  /* ============================== LAYOUT ============================== */
+  main{max-width:1340px; margin:0 auto; padding:clamp(20px,3vw,40px) clamp(16px,4vw,40px) 60px;}
+  .surface{display:none; animation:surfacefade .5s ease both;}
+  .surface.active{display:block;}
+  @keyframes surfacefade{from{opacity:0; transform:translateY(8px);}to{opacity:1; transform:none;}}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    backdrop-filter:blur(14px) saturate(130%);
+    -webkit-backdrop-filter:blur(14px) saturate(130%);
+    box-shadow:var(--shadow);
+    position:relative;
+  }
+  .panel::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent 28%);
+  }
+  .panel-pad{padding:clamp(16px,2.4vw,26px);}
+
+  .reveal{opacity:0; transform:translateY(16px) scale(0.992); animation:reveal .7s cubic-bezier(.2,.7,.2,1) both;}
+  @keyframes reveal{to{opacity:1; transform:none;}}
+
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:2.2px; text-transform:uppercase; color:var(--cyan); display:flex; align-items:center; gap:9px;}
+  .eyebrow::before{content:""; width:22px; height:1px; background:linear-gradient(90deg,var(--cyan),transparent);}
+  .panel-title{font-family:var(--display); font-weight:700; font-size:clamp(18px,2.2vw,23px); margin:8px 0 2px; letter-spacing:0.2px;}
+  .panel-desc{color:var(--muted); font-size:13.5px; max-width:62ch; line-height:1.5;}
+
+  /* ============================== HERO ============================== */
+  .hero{
+    display:grid; grid-template-columns:1.4fr 1fr; gap:24px; align-items:stretch;
+    margin-bottom:24px;
+  }
+  .hero-main{overflow:hidden;}
+  .hero-glowline{position:absolute; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none;}
+  .hero h1{
+    font-family:var(--display); font-weight:800; line-height:1.0;
+    font-size:clamp(32px,5.4vw,58px); margin:14px 0 12px; letter-spacing:-0.5px;
+    background:linear-gradient(96deg, #ffffff 10%, #b9c6ff 55%, var(--cyan) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero .tagline{font-size:clamp(15px,1.8vw,18px); color:var(--muted); max-width:46ch; line-height:1.5;}
+  .hero-chips{display:flex; flex-wrap:wrap; gap:9px; margin-top:20px;}
+  .chip{
+    font-family:var(--mono); font-size:11.5px; color:var(--text);
+    padding:7px 12px; border-radius:999px; border:1px solid var(--border-strong);
+    background:rgba(255,255,255,0.03); display:flex; align-items:center; gap:7px;
+  }
+  .chip .d{width:7px; height:7px; border-radius:50%;}
+
+  /* Provider donut panel */
+  .hero-side{display:flex; flex-direction:column; gap:14px;}
+  .donut-wrap{display:flex; align-items:center; gap:18px;}
+  .donut-legend{display:flex; flex-direction:column; gap:12px; flex:1;}
+  .leg-row{display:flex; flex-direction:column; gap:3px;}
+  .leg-top{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted);}
+  .leg-top .sw{width:10px; height:10px; border-radius:3px;}
+  .leg-val{font-family:var(--mono); font-weight:700; font-size:20px; display:flex; align-items:baseline; gap:8px;}
+  .leg-val .pct{font-size:12px; color:var(--muted); font-weight:500;}
+  .leg-bar{height:5px; border-radius:99px; background:rgba(255,255,255,0.07); overflow:hidden;}
+  .leg-bar > span{display:block; height:100%; border-radius:99px; width:0; transition:width 1.3s cubic-bezier(.2,.7,.2,1);}
+
+  /* ============================== KPI TILES ============================== */
+  .kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
+  .kpi{
+    padding:16px 16px 15px; border-radius:var(--radius-sm);
+    background:var(--panel); border:1px solid var(--border);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    position:relative; overflow:hidden;
+  }
+  .kpi::after{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:3px; background:var(--acc, var(--blue));}
+  .kpi .label{font-size:11.5px; color:var(--muted); letter-spacing:0.3px; display:flex; align-items:center; gap:7px; margin-bottom:9px;}
+  .kpi .label .gi{width:6px; height:6px; border-radius:50%; background:var(--acc, var(--blue));}
+  .kpi .num{font-family:var(--mono); font-weight:700; font-size:clamp(20px,2.4vw,27px); letter-spacing:-0.5px; line-height:1; color:#fff; font-variant-numeric:tabular-nums;}
+  .kpi .unit{font-size:13px; color:var(--muted); font-weight:600; margin-left:3px;}
+  .kpi .foot{font-family:var(--mono); font-size:10.5px; color:var(--muted-2); margin-top:8px;}
+  .kpi.small .num{font-size:clamp(18px,2vw,22px);}
+
+  /* spark in kpi */
+  .kpi-spark{position:absolute; right:10px; bottom:8px; opacity:0.5;}
+
+  /* ============================== GALLERY ============================== */
+  .section-head{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin:30px 0 16px; flex-wrap:wrap;}
+  .gallery{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  .fig{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:15px 15px 16px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    position:relative; transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    overflow:hidden;
+  }
+  .fig:hover{transform:translateY(-4px); border-color:var(--border-strong); box-shadow:0 24px 50px -28px rgba(0,0,0,0.9);}
+  .fig-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;}
+  .fig-cat{font-family:var(--mono); font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:4px 9px; border-radius:7px; border:1px solid var(--border); color:var(--cat,var(--blue)); background:color-mix(in srgb, var(--cat,var(--blue)) 9%, transparent);}
+  .fig-badge{font-family:var(--mono); font-size:9.5px; color:var(--muted); display:flex; align-items:center; gap:5px; letter-spacing:0.4px;}
+  .fig-badge .dot{width:5px; height:5px; border-radius:50%; background:var(--teal);}
+  .fig-chart{margin:2px 0 11px; border-radius:10px; overflow:hidden; background:rgba(255,255,255,0.015); border:1px solid rgba(255,255,255,0.05);}
+  .fig-chart svg{display:block; width:100%; height:auto;}
+  .fig h4{font-family:var(--display); font-weight:600; font-size:15px; margin:0 0 4px; letter-spacing:0.1px;}
+  .fig p{margin:0; color:var(--muted); font-size:12.5px; line-height:1.45;}
+
+  /* ============================== ANALYZE ============================== */
+  .analyze-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;}
+  .privacy-badge{
+    display:inline-flex; align-items:center; gap:10px; font-size:13px; font-weight:600;
+    padding:10px 14px; border-radius:12px; margin-bottom:18px;
+    background:linear-gradient(90deg, rgba(79,184,166,0.10), rgba(91,157,255,0.05));
+    border:1px solid rgba(79,184,166,0.24); color:#cfe9e2;
+  }
+  .privacy-badge svg{flex:none;}
+  .dropzone{
+    border:1.5px dashed var(--border-strong); border-radius:16px; padding:36px 22px; text-align:center;
+    background:rgba(255,255,255,0.02); cursor:pointer; transition:border-color .25s, background .25s, box-shadow .25s;
+    position:relative; overflow:hidden;
+  }
+  .dropzone:hover{border-color:var(--blue); background:rgba(91,157,255,0.04); box-shadow:inset 0 0 36px -22px rgba(91,157,255,0.4);}
+  .dropzone.busy{border-color:var(--amber); box-shadow:inset 0 0 40px -22px rgba(214,168,92,0.35);}
+  .dropzone.done{border-color:var(--teal); border-style:solid; box-shadow:inset 0 0 40px -22px rgba(79,184,166,0.35);}
+  .dz-icon{width:54px; height:54px; margin:0 auto 14px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+    background:rgba(91,157,255,0.09); border:1px solid rgba(91,157,255,0.26); color:var(--blue);}
+  .dz-title{font-family:var(--display); font-weight:700; font-size:18px; margin-bottom:5px;}
+  .dz-state{font-family:var(--mono); font-size:13px; color:var(--blue); min-height:18px; letter-spacing:0.3px;}
+  .dz-hint{font-size:12px; color:var(--muted); margin-top:8px;}
+  .dz-progress{height:5px; border-radius:99px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:18px; opacity:0; transition:opacity .3s;}
+  .dz-progress.show{opacity:1;}
+  .dz-progress > span{display:block; height:100%; width:0; border-radius:99px; background:linear-gradient(90deg,var(--blue),var(--teal)); transition:width .4s ease;}
+
+  .your-kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0 0;}
+
+  /* Contribute */
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); margin-bottom:14px;}
+  .toggle-row .t-txt strong{display:block; font-size:14px; margin-bottom:3px;}
+  .toggle-row .t-txt span{font-size:12px; color:var(--muted);}
+  .switch{position:relative; width:52px; height:28px; flex:none;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider{position:absolute; inset:0; border-radius:99px; background:rgba(255,255,255,0.1); border:1px solid var(--border); cursor:pointer; transition:.3s;}
+  .slider::before{content:""; position:absolute; height:20px; width:20px; left:3px; top:3px; border-radius:50%; background:#cdd6f4; transition:.3s; box-shadow:0 1px 4px rgba(0,0,0,0.4);}
+  .switch input:checked + .slider{background:linear-gradient(90deg,var(--blue),var(--teal));}
+  .switch input:checked + .slider::before{transform:translateX(24px); background:#0a1426;}
+  .switch input:focus-visible + .slider{outline:2px solid var(--blue); outline-offset:2px;}
+
+  .btn{
+    font-family:var(--body); font-weight:700; font-size:14px; cursor:pointer;
+    padding:12px 22px; border-radius:12px; border:1px solid transparent; transition:transform .15s, box-shadow .2s, opacity .2s;
+    display:inline-flex; align-items:center; gap:9px;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{color:#0a1426; background:linear-gradient(180deg,var(--blue-2),var(--blue)); box-shadow:inset 0 1px 0 rgba(255,255,255,0.28);}
+  .btn-primary:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 20px -12px rgba(91,157,255,0.6);}
+  .btn-primary:disabled{opacity:0.45; cursor:not-allowed; box-shadow:none;}
+  .btn-ghost{color:var(--text); background:rgba(255,255,255,0.05); border-color:var(--border-strong);}
+  .btn-ghost:hover{background:rgba(255,255,255,0.09);}
+
+  /* ============================== MODAL ============================== */
+  .modal-backdrop{
+    position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:20px;
+    background:rgba(6,9,20,0.7); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  .modal-backdrop.open{display:flex; animation:surfacefade .25s ease both;}
+  .modal{
+    max-width:480px; width:100%; border-radius:20px; padding:26px;
+    background:linear-gradient(180deg, rgba(20,26,44,0.96), rgba(13,18,34,0.96));
+    border:1px solid var(--border-strong); box-shadow:0 40px 100px -34px #000;
+    animation:popin .35s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes popin{from{opacity:0; transform:translateY(14px) scale(0.96);}to{opacity:1; transform:none;}}
+  .modal .m-icon{width:46px; height:46px; border-radius:13px; display:flex; align-items:center; justify-content:center; margin-bottom:14px;
+    background:rgba(214,168,92,0.12); border:1px solid rgba(214,168,92,0.32); color:var(--amber);}
+  .modal h3{font-family:var(--display); font-weight:700; font-size:21px; margin:0 0 10px;}
+  .modal p{color:var(--muted); font-size:13.5px; line-height:1.55; margin:0 0 12px;}
+  .modal ul{margin:0 0 18px; padding-left:18px; color:var(--muted); font-size:13px; line-height:1.7;}
+  .modal ul b{color:var(--text);}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end;}
+
+  /* ============================== CONTRIBUTED ============================== */
+  .banner{
+    display:flex; align-items:center; gap:14px; padding:15px 18px; border-radius:14px; margin-bottom:20px;
+    background:linear-gradient(90deg, rgba(214,168,92,0.09), rgba(91,157,255,0.04));
+    border:1px solid rgba(214,168,92,0.22); font-size:13.5px; color:#ecdcc2;
+  }
+  .banner svg{flex:none;}
+  .counters{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:14px;}
+  .counter{padding:16px; border-radius:14px; background:var(--panel); border:1px solid var(--border); position:relative; overflow:hidden;}
+  .counter .lbl{font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:7px; margin-bottom:9px;}
+  .counter .lbl .lv{width:6px; height:6px; border-radius:50%; background:var(--acc, var(--blue)); animation:pulse 2.6s infinite;}
+  .counter .v{font-family:var(--mono); font-weight:700; font-size:clamp(19px,2.3vw,25px); color:#fff; font-variant-numeric:tabular-nums;}
+  .counter .v .u{font-size:13px; color:var(--muted); font-weight:600;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{font-family:var(--mono); font-size:10.5px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); text-align:left; padding:10px 14px; border-bottom:1px solid var(--border);}
+  tbody td{padding:13px 14px; border-bottom:1px solid rgba(255,255,255,0.05);}
+  tbody tr{transition:background .2s;}
+  tbody tr:hover{background:rgba(255,255,255,0.025);}
+  td.id{font-family:var(--mono); color:var(--blue);}
+  td.num{font-family:var(--mono); color:var(--text); font-variant-numeric:tabular-nums;}
+  .prov-tags{display:flex; gap:5px;}
+  .ptag{font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:6px; border:1px solid var(--border);}
+  .ptag.cl{color:var(--blue); background:rgba(91,157,255,0.08);}
+  .ptag.cx{color:var(--teal); background:rgba(79,184,166,0.08);}
+  .status{font-family:var(--mono); font-size:11px; display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px;}
+  .status.ok{color:var(--teal); background:rgba(79,184,166,0.08); border:1px solid rgba(79,184,166,0.22);}
+  .status.pend{color:var(--amber); background:rgba(214,168,92,0.08); border:1px solid rgba(214,168,92,0.24);}
+  .status .sd{width:6px; height:6px; border-radius:50%; background:currentColor;}
+
+  /* ============================== FOOTER ============================== */
+  footer{
+    text-align:center; padding:26px 20px 40px; color:var(--muted-2);
+    font-family:var(--mono); font-size:11.5px; letter-spacing:1.2px;
+  }
+  footer .dotsep{opacity:0.5; margin:0 8px;}
+
+  /* draw-in for svg lines */
+  .draw{stroke-dasharray:var(--len,1400); stroke-dashoffset:var(--len,1400); animation:drawline 1.8s ease forwards .35s;}
+  @keyframes drawline{to{stroke-dashoffset:0;}}
+  .grow-bar{transform-box:fill-box; transform-origin:bottom; transform:scaleY(0); animation:growb 1s cubic-bezier(.2,.8,.2,1) forwards .3s;}
+  @keyframes growb{to{transform:scaleY(1);}}
+  .grow-barh{transform-box:fill-box; transform-origin:left; transform:scaleX(0); animation:growbh .9s cubic-bezier(.2,.8,.2,1) forwards .3s;}
+  @keyframes growbh{to{transform:scaleX(1);}}
+  .fade-area{opacity:0; animation:fadein 1.2s ease forwards .7s;}
+  @keyframes fadein{to{opacity:1;}}
+
+  /* ============================== RESPONSIVE ============================== */
+  @media (max-width:1080px){
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .gallery{grid-template-columns:repeat(2,1fr);}
+    .counters{grid-template-columns:repeat(2,1fr);}
+    .hero{grid-template-columns:1fr;}
+  }
+  @media (max-width:860px){
+    .analyze-grid{grid-template-columns:1fr;}
+    .your-kpis{grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width:768px){
+    .topbar{flex-wrap:wrap; gap:12px;}
+    .nav{order:3; width:100%; margin-left:0; justify-content:space-between;}
+    .nav button{flex:1; justify-content:center; padding:9px 8px;}
+    .topbar-meta{margin-left:auto;}
+    .gallery{grid-template-columns:1fr;}
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .table-scroll{overflow-x:auto;}
+    table{min-width:560px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important; transition:none !important;}
+    .reveal{opacity:1; transform:none;}
+    .draw{stroke-dashoffset:0;}
+    .grow-bar,.grow-barh{transform:none;}
+    .fade-area{opacity:1;}
+    .leg-bar > span{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div class="bg-mesh" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-grain" aria-hidden="true"></div>
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="topbar">
+  <div class="brand">
+    <div class="glyph" aria-hidden="true"></div>
+    <div class="names">
+      <span class="title">SyFI Trace Atlas</span>
+      <span class="sub">Control Room</span>
+    </div>
+  </div>
+
+  <nav class="nav" role="tablist" aria-label="Surfaces">
+    <button role="tab" aria-selected="true" data-surface="overview"><span class="ix">01</span> Overview</button>
+    <button role="tab" aria-selected="false" data-surface="analyze"><span class="ix">02</span> Analyze</button>
+    <button role="tab" aria-selected="false" data-surface="contributed"><span class="ix">03</span> Contributed</button>
+  </nav>
+
+  <div class="topbar-meta">
+    <div class="live-pill"><span class="live-dot"></span> LIVE · public pool</div>
+  </div>
+</header>
+
+<main>
+  <!-- ====================================================================== -->
+  <!-- SURFACE A — OVERVIEW                                                    -->
+  <!-- ====================================================================== -->
+  <section class="surface active" id="overview" role="tabpanel">
+
+    <div class="hero">
+      <div class="panel panel-pad hero-main reveal" style="animation-delay:.05s">
+        <div class="eyebrow">Curated public pool</div>
+        <h1>Inside the LLM<br>rounds of coding agents.</h1>
+        <p class="tagline">A toolkit-grade view over hundreds of thousands of round-traces from Claude Code &amp; Codex. One round = one LLM invocation. Explore the aggregate, then analyze your own.</p>
+        <div class="hero-chips">
+          <span class="chip"><span class="d" style="background:var(--blue)"></span> 357,161 rounds</span>
+          <span class="chip"><span class="d" style="background:var(--teal)"></span> 432,510 tool calls</span>
+          <span class="chip"><span class="d" style="background:var(--amber)"></span> 55.2B input tokens</span>
+          <span class="chip"><span class="d" style="background:var(--slate)"></span> Sep 23 2025 – Jun 2 2026</span>
+        </div>
+      </div>
+
+      <div class="panel panel-pad hero-side reveal" style="animation-delay:.14s">
+        <div>
+          <div class="eyebrow" style="color:var(--teal)"><span style="--cyan:var(--teal)"></span>Provider split</div>
+          <div class="panel-title" style="font-size:18px; margin-top:6px;">Claude vs Codex</div>
+        </div>
+        <div class="donut-wrap">
+          <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Provider split donut: Codex 61 percent, Claude 39 percent">
+            <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="14"/>
+            <!-- Codex 61% -->
+            <circle cx="60" cy="60" r="46" fill="none" stroke="#4fb8a6" stroke-width="14" stroke-linecap="round"
+              stroke-dasharray="176.3 289" stroke-dashoffset="0" transform="rotate(-90 60 60)" class="draw" style="--len:289"/>
+            <!-- Claude 39% -->
+            <circle cx="60" cy="60" r="46" fill="none" stroke="#5b9dff" stroke-width="14" stroke-linecap="round"
+              stroke-dasharray="112.7 289" stroke-dashoffset="-176.3" transform="rotate(-90 60 60)" class="draw" style="--len:289; animation-delay:.6s"/>
+            <text x="60" y="56" text-anchor="middle" fill="#fff" font-family="JetBrains Mono, monospace" font-size="15" font-weight="700">357k</text>
+            <text x="60" y="70" text-anchor="middle" fill="#8b93a8" font-family="JetBrains Mono, monospace" font-size="7.5" letter-spacing="1">ROUNDS</text>
+          </svg>
+          <div class="donut-legend">
+            <div class="leg-row">
+              <div class="leg-top"><span class="sw" style="background:var(--teal)"></span> Codex</div>
+              <div class="leg-val" data-count="216823">0 <span class="pct">61%</span></div>
+              <div class="leg-bar"><span style="background:var(--teal)" data-w="61"></span></div>
+            </div>
+            <div class="leg-row">
+              <div class="leg-top"><span class="sw" style="background:var(--blue)"></span> Claude</div>
+              <div class="leg-val" data-count="140338">0 <span class="pct">39%</span></div>
+              <div class="leg-bar"><span style="background:var(--blue)" data-w="39"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI TILES -->
+    <div class="kpi-grid">
+      <div class="kpi reveal" style="--acc:var(--blue); animation-delay:.06s"><div class="label"><span class="gi"></span>Distinct users</div><div class="num" data-count="43">0</div><div class="foot">unique agents</div></div>
+      <div class="kpi reveal" style="--acc:var(--teal); animation-delay:.1s"><div class="label"><span class="gi"></span>Sessions</div><div class="num" data-count="4156">0</div><div class="foot">conversations</div></div>
+      <div class="kpi reveal" style="--acc:var(--blue); animation-delay:.14s"><div class="label"><span class="gi"></span>LLM rounds</div><div class="num" data-count="357161">0</div><div class="foot">invocations</div></div>
+      <div class="kpi reveal" style="--acc:var(--blue); animation-delay:.18s"><div class="label"><span class="gi"></span>Tool calls</div><div class="num" data-count="432510">0</div><div class="foot">across sessions</div></div>
+
+      <div class="kpi reveal" style="--acc:var(--blue); animation-delay:.22s"><div class="label"><span class="gi"></span>Total input tokens</div><div class="num" data-count="55.2" data-suffix="B" data-dec="1">0</div><div class="foot">prompt + cache reads</div></div>
+      <div class="kpi reveal" style="--acc:var(--teal); animation-delay:.26s"><div class="label"><span class="gi"></span>Cached-read tokens</div><div class="num" data-count="52.99" data-suffix="B" data-dec="2">0</div><div class="foot">96% of input</div></div>
+      <div class="kpi reveal" style="--acc:var(--amber); animation-delay:.3s"><div class="label"><span class="gi"></span>New input tokens</div><div class="num" data-count="2.26" data-suffix="B" data-dec="2">0</div><div class="foot">uncached prompt</div></div>
+      <div class="kpi reveal" style="--acc:var(--slate); animation-delay:.34s"><div class="label"><span class="gi"></span>Date range</div><div class="num" style="font-size:15px; line-height:1.3;">Sep 23 ’25<br>Jun 2 ’26</div><div class="foot">253 days observed</div></div>
+    </div>
+
+    <!-- FIGURE GALLERY -->
+    <div class="section-head">
+      <div class="reveal" style="animation-delay:.1s">
+        <div class="eyebrow">Experiment gallery</div>
+        <div class="panel-title">11 self-contained figures</div>
+        <div class="panel-desc">Each card embeds its own README, source CSV, and rendering code — drop one anywhere and it reproduces standalone.</div>
+      </div>
+      <span class="chip reveal" style="animation-delay:.18s"><span class="d" style="background:var(--teal)"></span> 11 / 11 reproducible</span>
+    </div>
+
+    <div class="gallery" id="gallery"><!-- injected by JS --></div>
+  </section>
+
+  <!-- ====================================================================== -->
+  <!-- SURFACE B — ANALYZE                                                     -->
+  <!-- ====================================================================== -->
+  <section class="surface" id="analyze" role="tabpanel">
+    <div class="reveal" style="margin-bottom:18px;">
+      <div class="eyebrow">In-browser analysis</div>
+      <div class="panel-title" style="font-size:clamp(22px,3vw,30px)">Analyze your trace</div>
+    </div>
+
+    <div class="privacy-badge reveal">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2l7 3v6c0 4.5-3 8-7 11-4-3-7-6.5-7-11V5l7-3z" stroke="#4fb8a6" stroke-width="1.6"/><path d="M9 12l2 2 4-4" stroke="#4fb8a6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Runs entirely in your browser via Pyodide — your trace never leaves your machine.
+    </div>
+
+    <div class="analyze-grid">
+      <!-- LEFT: dropzone + your kpis -->
+      <div class="panel panel-pad reveal" style="animation-delay:.08s">
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Drop or click to analyze your sanitized trace">
+          <div class="dz-icon" id="dzIcon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <div class="dz-title">Drop your sanitized .gz trace</div>
+          <div class="dz-state" id="dzState">Click to simulate analysis</div>
+          <div class="dz-hint">Accepts <code>rounds.jsonl.gz</code> · processed locally with Pyodide</div>
+          <div class="dz-progress" id="dzProgress"><span id="dzBar"></span></div>
+        </div>
+
+        <div class="your-kpis" id="yourKpis" aria-live="polite">
+          <div class="kpi small" style="--acc:var(--blue)"><div class="label"><span class="gi"></span>Your users</div><div class="num" data-your="3">—</div></div>
+          <div class="kpi small" style="--acc:var(--teal)"><div class="label"><span class="gi"></span>Sessions</div><div class="num" data-your="120">—</div></div>
+          <div class="kpi small" style="--acc:var(--blue)"><div class="label"><span class="gi"></span>Rounds</div><div class="num" data-your="8214">—</div></div>
+          <div class="kpi small" style="--acc:var(--teal)"><div class="label"><span class="gi"></span>Tokens</div><div class="num" data-your="1.1" data-suffix="B" data-dec="1">—</div></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: personal figures -->
+      <div class="panel panel-pad reveal" style="animation-delay:.16s">
+        <div class="eyebrow" style="color:var(--blue)">Your results</div>
+        <div class="panel-title" style="font-size:18px; margin-bottom:14px;">Personal figures</div>
+        <div id="personalFigs" style="display:grid; gap:14px; opacity:.4; transition:opacity .5s;">
+          <div class="fig" style="margin:0;">
+            <div class="fig-top"><span class="fig-cat" style="--cat:var(--blue)">llm_generation</span><span class="fig-badge"><span class="dot"></span>your data</span></div>
+            <h4 style="margin-bottom:8px;">Your output token distribution</h4>
+            <div class="fig-chart" id="pfig1"></div>
+          </div>
+          <div class="fig" style="margin:0;">
+            <div class="fig-top"><span class="fig-cat" style="--cat:var(--teal)">session</span><span class="fig-badge"><span class="dot"></span>your data</span></div>
+            <h4 style="margin-bottom:8px;">Your session token growth</h4>
+            <div class="fig-chart" id="pfig2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTRIBUTE -->
+    <div class="panel panel-pad reveal" style="margin-top:20px; animation-delay:.2s">
+      <div class="eyebrow" style="color:var(--teal)">Give back</div>
+      <div class="panel-title" style="font-size:18px;">Contribute to the public pool</div>
+      <div class="panel-desc" style="margin-bottom:16px;">Only already-sanitized, pseudonymous rows are shared. Your contribution is staged separately and reviewed before it counts.</div>
+      <div class="toggle-row">
+        <div class="t-txt">
+          <strong>Contribute my sanitized trace to the public pool</strong>
+          <span>Pseudonymous rows only · stays off the curated overview</span>
+        </div>
+        <label class="switch"><input type="checkbox" id="contribToggle" /><span class="slider"></span></label>
+      </div>
+      <button class="btn btn-primary" id="contribBtn" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Contribute
+      </button>
+    </div>
+  </section>
+
+  <!-- ====================================================================== -->
+  <!-- SURFACE C — CONTRIBUTED                                                 -->
+  <!-- ====================================================================== -->
+  <section class="surface" id="contributed" role="tabpanel">
+    <div class="reveal" style="margin-bottom:16px;">
+      <div class="eyebrow" style="color:var(--teal)">Community staging</div>
+      <div class="panel-title" style="font-size:clamp(22px,3vw,30px)">Contributed pool dashboard</div>
+    </div>
+
+    <div class="banner reveal">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="#d6a85c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Community contributions — staged separately from the curated head pool. <b style="color:#fff">Not merged automatically.</b>
+    </div>
+
+    <div class="counters">
+      <div class="counter reveal" style="--acc:var(--blue); animation-delay:.06s"><div class="lbl"><span class="lv"></span>Contributors</div><div class="v"><span data-count="17">0</span></div></div>
+      <div class="counter reveal" style="--acc:var(--teal); animation-delay:.1s"><div class="lbl"><span class="lv"></span>Rounds</div><div class="v"><span data-count="612940">0</span></div></div>
+      <div class="counter reveal" style="--acc:var(--blue); animation-delay:.14s"><div class="lbl"><span class="lv"></span>Tokens</div><div class="v"><span data-count="91.4" data-dec="1">0</span><span class="u">B</span></div></div>
+      <div class="counter reveal" style="--acc:var(--teal); animation-delay:.18s"><div class="lbl"><span class="lv"></span>Last contribution</div><div class="v" id="lastContrib">2h <span class="u">ago</span></div></div>
+    </div>
+
+    <div class="panel panel-pad reveal" style="margin-bottom:18px; animation-delay:.2s">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <div>
+          <div class="eyebrow" style="color:var(--teal)">Provider split · staged</div>
+          <div class="panel-title" style="font-size:17px;">Codex 58% · Claude 42%</div>
+        </div>
+        <div class="live-pill"><span class="live-dot"></span> streaming · 17 contributors</div>
+      </div>
+      <div style="display:flex; gap:14px; margin-top:14px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:180px;">
+          <div class="leg-top" style="margin-bottom:6px;"><span class="sw" style="background:var(--teal)"></span> Codex <span style="margin-left:auto; font-family:var(--mono); color:var(--text)">355,505</span></div>
+          <div class="leg-bar"><span style="background:var(--teal)" data-w="58"></span></div>
+        </div>
+        <div style="flex:1; min-width:180px;">
+          <div class="leg-top" style="margin-bottom:6px;"><span class="sw" style="background:var(--blue)"></span> Claude <span style="margin-left:auto; font-family:var(--mono); color:var(--text)">257,435</span></div>
+          <div class="leg-bar"><span style="background:var(--blue)" data-w="42"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel panel-pad reveal" style="animation-delay:.24s">
+      <div class="eyebrow" style="color:var(--cyan)">Audit log</div>
+      <div class="panel-title" style="font-size:17px; margin-bottom:14px;">Recent contributions</div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Pseudonym</th><th>When</th><th>Rows</th><th>Providers</th><th>Status</th></tr></thead>
+          <tbody id="contribTable"><!-- injected --></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>Mockup <span class="dotsep">·</span> fake data <span class="dotsep">·</span> scheme preview</footer>
+</main>
+
+<!-- ============================== MODAL ============================== -->
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" stroke="#d6a85c" stroke-width="1.5"/><path d="M12 8v5m0 3h.01" stroke="#d6a85c" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+    <h3 id="modalTitle">Contribute this trace?</h3>
+    <p>You're about to stage your sanitized trace into the community pool. Before it's shared:</p>
+    <ul>
+      <li>Only <b>already-sanitized, pseudonymous rows</b> are uploaded — no raw prompts or identifiers.</li>
+      <li>It will <b>not</b> appear on the head / Overview page.</li>
+      <li>It surfaces <b>only on the Contributed dashboard</b>, with status <i>Pending</i> until validated.</li>
+    </ul>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary" id="modalConfirm">Confirm contribution</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ============================ TAB NAVIGATION ============================ */
+  const tabs = document.querySelectorAll(".nav button");
+  const surfaces = document.querySelectorAll(".surface");
+  const livePill = document.querySelector(".topbar-meta .live-pill");
+  const livePillLabels = {overview:"LIVE · public pool", analyze:"LOCAL · in-browser", contributed:"STREAMING · staged"};
+
+  function show(name){
+    surfaces.forEach(s => s.classList.toggle("active", s.id === name));
+    tabs.forEach(t => t.setAttribute("aria-selected", String(t.dataset.surface === name)));
+    livePill.lastChild.textContent = " " + livePillLabels[name];
+    // re-run reveals + counters for the surface we just showed
+    const active = document.getElementById(name);
+    runCounters(active);
+    runBars(active);
+    if(name === "overview") buildGalleryOnce();
+  }
+  tabs.forEach(t => t.addEventListener("click", () => show(t.dataset.surface)));
+
+  /* ============================ NUMBER COUNT-UP ============================ */
+  function fmt(n, dec){
+    if(dec && dec > 0) return n.toFixed(dec);
+    return Math.round(n).toLocaleString("en-US");
+  }
+  function runCounters(scope){
+    const els = scope.querySelectorAll("[data-count]:not([data-done])");
+    els.forEach(el => {
+      el.setAttribute("data-done","1");
+      const target = parseFloat(el.getAttribute("data-count"));
+      const dec = parseInt(el.getAttribute("data-dec") || "0", 10);
+      const suffix = el.getAttribute("data-suffix") || "";
+      // preserve any trailing markup (like <span class="pct">) by writing into first text node
+      const hasChildSpan = el.querySelector("span");
+      if(reduceMotion){ setText(el, fmt(target,dec)+suffix, hasChildSpan); return; }
+      const dur = 1400, t0 = performance.now();
+      function step(now){
+        const p = Math.min(1, (now - t0)/dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        setText(el, fmt(target*eased, dec)+suffix, hasChildSpan);
+        if(p < 1) requestAnimationFrame(step);
+        else setText(el, fmt(target,dec)+suffix, hasChildSpan);
+      }
+      requestAnimationFrame(step);
+    });
+  }
+  function setText(el, text, keepSpan){
+    if(keepSpan){
+      // write into the first text node only
+      if(el.firstChild && el.firstChild.nodeType === 3) el.firstChild.nodeValue = text + " ";
+      else el.insertBefore(document.createTextNode(text+" "), el.firstChild);
+    } else {
+      el.textContent = text;
+    }
+  }
+
+  /* ============================ BAR FILLS ============================ */
+  function runBars(scope){
+    scope.querySelectorAll("[data-w]:not([data-wdone])").forEach(b => {
+      b.setAttribute("data-wdone","1");
+      requestAnimationFrame(() => { b.style.width = b.getAttribute("data-w") + "%"; });
+    });
+  }
+
+  /* ============================ SVG CHART BUILDERS ============================ */
+  const W = 300, H = 130, PADL = 8, PADR = 8, PADT = 10, PADB = 16;
+  function svgWrap(inner, label){
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${label}">
+      ${grid()}${inner}</svg>`;
+  }
+  function grid(){
+    let g = "";
+    for(let i=1;i<5;i++){ const y = PADT + (H-PADT-PADB)*i/5; g += `<line x1="${PADL}" y1="${y}" x2="${W-PADR}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`; }
+    for(let i=1;i<6;i++){ const x = PADL + (W-PADL-PADR)*i/6; g += `<line x1="${x}" y1="${PADT}" x2="${x}" y2="${H-PADB}" stroke="rgba(255,255,255,0.035)" stroke-width="1"/>`; }
+    return g;
+  }
+  const sx = i => PADL + (W-PADL-PADR)*i;          // i in 0..1
+  const sy = v => PADT + (H-PADT-PADB)*(1-v);       // v in 0..1
+  function smoothPath(pts){
+    if(pts.length < 2) return "";
+    let d = `M ${pts[0][0]} ${pts[0][1]}`;
+    for(let i=0;i<pts.length-1;i++){
+      const [x0,y0]=pts[i], [x1,y1]=pts[i+1];
+      const cx=(x0+x1)/2;
+      d += ` C ${cx} ${y0} ${cx} ${y1} ${x1} ${y1}`;
+    }
+    return d;
+  }
+  function lineChart(values, color, area){
+    const pts = values.map((v,i)=>[sx(i/(values.length-1)), sy(v)]);
+    const path = smoothPath(pts);
+    let inner = "";
+    if(area){
+      const ap = path + ` L ${pts[pts.length-1][0]} ${sy(0)} L ${pts[0][0]} ${sy(0)} Z`;
+      inner += `<defs><linearGradient id="ag${color.slice(2)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.4"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`;
+      inner += `<path d="${ap}" fill="url(#ag${color.slice(2)})" class="fade-area"/>`;
+    }
+    inner += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" class="draw" style="--len:600"/>`;
+    // endpoint dots
+    inner += `<circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="3" fill="${color}"/>`;
+    return svgWrap(inner, "line chart");
+  }
+  function multiLine(series){ // [{values,color}]
+    let inner = "";
+    series.forEach((s,k)=>{
+      const pts = s.values.map((v,i)=>[sx(i/(s.values.length-1)), sy(v)]);
+      inner += `<path d="${smoothPath(pts)}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" class="draw" style="--len:600; animation-delay:${0.35+k*0.25}s"/>`;
+      inner += `<circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="2.6" fill="${s.color}"/>`;
+    });
+    return svgWrap(inner, "multi-line chart");
+  }
+  function stepLine(values, color){
+    let d = `M ${sx(0)} ${sy(values[0])}`;
+    for(let i=1;i<values.length;i++){
+      d += ` L ${sx(i/(values.length-1))} ${sy(values[i-1])} L ${sx(i/(values.length-1))} ${sy(values[i])}`;
+    }
+    let inner = `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.2" class="draw" style="--len:900"/>`;
+    return svgWrap(inner, "step line chart");
+  }
+  function histogram(values, color){
+    const n = values.length, gap = 3;
+    const bw = (W-PADL-PADR)/n;
+    let inner = "";
+    values.forEach((v,i)=>{
+      const x = PADL + bw*i + gap/2;
+      const h = (H-PADT-PADB)*v;
+      const y = sy(v);
+      inner += `<rect x="${x}" y="${y}" width="${bw-gap}" height="${h}" rx="2" fill="${color}" opacity="0.85" class="grow-bar" style="animation-delay:${0.3+i*0.04}s"/>`;
+    });
+    inner += `<rect x="${PADL}" y="${PADT}" width="0" height="0"/>`;
+    return svgWrap(inner, "histogram");
+  }
+  function stackedBars(stacks){ // [{a,b}] a=cached prefix (blue) b=appended (slate) fraction summing approx
+    const n = stacks.length, gap = 4;
+    const bw = (W-PADL-PADR)/n;
+    let inner = "";
+    stacks.forEach((s,i)=>{
+      const x = PADL + bw*i + gap/2;
+      const ha = (H-PADT-PADB)*s.a;
+      const hb = (H-PADT-PADB)*s.b;
+      const w = bw-gap;
+      inner += `<rect x="${x}" y="${sy(s.a)}" width="${w}" height="${ha}" rx="2" fill="#5b9dff" opacity="0.9" class="grow-bar" style="animation-delay:${0.3+i*0.05}s"/>`;
+      inner += `<rect x="${x}" y="${sy(s.a+s.b)}" width="${w}" height="${hb}" rx="2" fill="#7f8aa6" opacity="0.85" class="grow-bar" style="animation-delay:${0.35+i*0.05}s"/>`;
+    });
+    return svgWrap(inner, "stacked bars");
+  }
+  function hBars(items){ // [{label,v,color}]
+    const n = items.length;
+    const rowH = (H-PADT-PADB)/n;
+    let inner = "";
+    items.forEach((it,i)=>{
+      const y = PADT + rowH*i + 3;
+      const w = (W-PADL-PADR-40)*it.v;
+      inner += `<rect x="${PADL+40}" y="${y}" width="${w}" height="${rowH-6}" rx="3" fill="${it.color}" opacity="0.85" class="grow-barh" style="animation-delay:${0.3+i*0.06}s"/>`;
+      inner += `<text x="${PADL}" y="${y+(rowH-6)/2+3}" fill="#8b93a8" font-family="JetBrains Mono" font-size="8">${it.label}</text>`;
+    });
+    return svgWrap(inner, "horizontal bars");
+  }
+  function gauge(frac, color){
+    // semicircle gauge area
+    const r=44, cx=W/2, cy=H-22;
+    const a0=Math.PI, a1=Math.PI*(1-frac);
+    const x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0);
+    const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+    const xe=cx+r*Math.cos(0), ye=cy+r*Math.sin(0);
+    let inner = `<path d="M ${x0} ${y0} A ${r} ${r} 0 0 1 ${xe} ${ye}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="11" stroke-linecap="round"/>`;
+    inner += `<path d="M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round" class="draw" style="--len:160"/>`;
+    inner += `<text x="${cx}" y="${cy-8}" text-anchor="middle" fill="#fff" font-family="JetBrains Mono" font-size="20" font-weight="700">${Math.round(frac*100)}%</text>`;
+    inner += `<text x="${cx}" y="${cy+6}" text-anchor="middle" fill="#8b93a8" font-family="JetBrains Mono" font-size="7" letter-spacing="1">CACHE HIT</text>`;
+    return svgWrap(inner, "gauge");
+  }
+
+  /* ============================ GALLERY DATA ============================ */
+  const cdf = n => Array.from({length:n},(_,i)=>{const x=i/(n-1); return 1-Math.exp(-3.2*x);});
+  const figures = [
+    {t:"Tool latency distribution", cat:"tool_calls", c:"var(--blue)", d:"CDF of per-tool wall-clock latency across 432k calls.", chart:()=>lineChart(cdf(40),"#5b9dff",false)},
+    {t:"Tool call counts by tool", cat:"tool_calls", c:"var(--blue)", d:"Which tools the agents use the most.", chart:()=>hBars([
+      {label:"Read",v:0.95,color:"#5b9dff"},{label:"Edit",v:0.72,color:"#7eb3ff"},{label:"Bash",v:0.61,color:"#4fb8a6"},{label:"Grep",v:0.44,color:"#7f8aa6"},{label:"Write",v:0.28,color:"#3f6bb0"}])},
+    {t:"Prefix vs append token composition", cat:"llm_generation", c:"var(--teal)", d:"Cached prefix vs freshly appended tokens per round.", chart:()=>stackedBars([{a:0.6,b:0.15},{a:0.68,b:0.18},{a:0.74,b:0.12},{a:0.7,b:0.2},{a:0.82,b:0.1},{a:0.77,b:0.16},{a:0.85,b:0.09},{a:0.8,b:0.14}])},
+    {t:"Output token distribution", cat:"llm_generation", c:"var(--teal)", d:"Histogram of completion lengths per LLM round.", chart:()=>histogram([0.18,0.42,0.78,0.95,0.74,0.5,0.33,0.22,0.14,0.09,0.05,0.03],"#4fb8a6")},
+    {t:"Generation-time CDF", cat:"llm_generation", c:"var(--teal)", d:"Cumulative distribution of round generation latency.", chart:()=>lineChart(cdf(40),"#4fb8a6",false)},
+    {t:"Cache hit ratio", cat:"prefix_cache", c:"var(--amber)", d:"Share of input served from the prefix cache.", chart:()=>gauge(0.96,"#d6a85c")},
+    {t:"KV cache active ratio", cat:"prefix_cache", c:"var(--amber)", d:"Fraction of KV blocks actively reused over time.", chart:()=>lineChart([0.4,0.55,0.62,0.7,0.68,0.76,0.82,0.79,0.86,0.9,0.88,0.92],"#d6a85c",true)},
+    {t:"Human input wait", cat:"human_in_the_loop", c:"var(--slate)", d:"Histogram of time spent waiting on the human.", chart:()=>histogram([0.55,0.9,0.7,0.48,0.34,0.26,0.2,0.15,0.11,0.08,0.05,0.03],"#7f8aa6")},
+    {t:"User-turn response time", cat:"human_in_the_loop", c:"var(--slate)", d:"CDF of how fast users respond between turns.", chart:()=>lineChart(cdf(40),"#7f8aa6",false)},
+    {t:"Session token steps", cat:"session", c:"var(--blue)", d:"Step view of cumulative tokens within a session.", chart:()=>stepLine([0.05,0.12,0.12,0.3,0.3,0.44,0.6,0.6,0.72,0.85,0.85,0.95],"#7eb3ff")},
+    {t:"Total input growth", cat:"session", c:"var(--blue)", d:"Area chart of input-token accumulation per session.", chart:()=>lineChart([0.04,0.08,0.16,0.22,0.34,0.42,0.55,0.63,0.72,0.81,0.9,0.97],"#5b9dff",true)},
+  ];
+  const catColor = {tool_calls:"var(--blue)", llm_generation:"var(--teal)", prefix_cache:"var(--amber)", human_in_the_loop:"var(--slate)", session:"var(--blue)"};
+
+  let galleryBuilt = false;
+  function buildGalleryOnce(){
+    if(galleryBuilt) return; galleryBuilt = true;
+    const g = document.getElementById("gallery");
+    figures.forEach((f,i)=>{
+      const card = document.createElement("div");
+      card.className = "fig reveal";
+      card.style.animationDelay = (0.08 + i*0.05) + "s";
+      card.innerHTML = `
+        <div class="fig-top">
+          <span class="fig-cat" style="--cat:${catColor[f.cat]}">${f.cat}</span>
+          <span class="fig-badge"><span class="dot"></span>self-contained</span>
+        </div>
+        <div class="fig-chart">${f.chart()}</div>
+        <h4>${f.t}</h4>
+        <p>${f.d}</p>`;
+      g.appendChild(card);
+    });
+  }
+
+  /* ============================ ANALYZE: DROPZONE ============================ */
+  const dz = document.getElementById("dropzone");
+  const dzState = document.getElementById("dzState");
+  const dzIcon = document.getElementById("dzIcon");
+  const dzProgress = document.getElementById("dzProgress");
+  const dzBar = document.getElementById("dzBar");
+  const yourKpis = document.getElementById("yourKpis");
+  const personalFigs = document.getElementById("personalFigs");
+  let analyzing = false, analyzed = false;
+
+  function buildPersonalFigs(){
+    document.getElementById("pfig1").innerHTML = histogram([0.2,0.5,0.85,0.95,0.7,0.45,0.3,0.2,0.12,0.07,0.04,0.02],"#5b9dff");
+    document.getElementById("pfig2").innerHTML = lineChart([0.05,0.1,0.18,0.27,0.36,0.48,0.58,0.68,0.78,0.86,0.93,0.98],"#4fb8a6",true);
+  }
+
+  function runAnalysis(){
+    if(analyzing || analyzed) return;
+    analyzing = true;
+    dz.classList.add("busy"); dz.classList.remove("done");
+    dzIcon.style.color = "var(--amber)";
+    dzProgress.classList.add("show");
+    const stages = [
+      {t:"Booting analysis engine…", p:18, d:700},
+      {t:"Loading Pyodide runtime…", p:42, d:800},
+      {t:"Analyzing 8,214 rounds…", p:78, d:1100},
+      {t:"Rendering figures…", p:94, d:600},
+    ];
+    let acc = 200;
+    stages.forEach(s=>{
+      setTimeout(()=>{ dzState.textContent = s.t; dzBar.style.width = s.p + "%"; }, acc);
+      acc += s.d;
+    });
+    setTimeout(()=>{
+      analyzing = false; analyzed = true;
+      dz.classList.remove("busy"); dz.classList.add("done");
+      dzIcon.style.color = "var(--teal)";
+      dzBar.style.width = "100%";
+      dzState.innerHTML = "✓ Done — 8,214 rounds analyzed locally";
+      dzState.style.color = "var(--teal)";
+      // reveal your KPIs (count up) + personal figs
+      yourKpis.querySelectorAll("[data-your]").forEach(el=>{
+        const v = parseFloat(el.getAttribute("data-your"));
+        const dec = parseInt(el.getAttribute("data-dec")||"0",10);
+        const suffix = el.getAttribute("data-suffix")||"";
+        if(reduceMotion){ el.textContent = fmt(v,dec)+suffix; return; }
+        const t0 = performance.now();
+        (function step(now){ const p=Math.min(1,(now-t0)/1200); const e=1-Math.pow(1-p,3); el.textContent=fmt(v*e,dec)+suffix; if(p<1) requestAnimationFrame(step); else el.textContent=fmt(v,dec)+suffix; })(performance.now());
+      });
+      buildPersonalFigs();
+      personalFigs.style.opacity = "1";
+    }, acc + 200);
+  }
+  dz.addEventListener("click", runAnalysis);
+  dz.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); runAnalysis(); } });
+  ["dragover","dragenter"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault(); dz.classList.add("busy");}));
+  ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault(); if(!analyzing&&!analyzed) dz.classList.remove("busy"); if(ev==="drop") runAnalysis();}));
+
+  /* ============================ CONTRIBUTE TOGGLE + MODAL ============================ */
+  const toggle = document.getElementById("contribToggle");
+  const contribBtn = document.getElementById("contribBtn");
+  const backdrop = document.getElementById("modalBackdrop");
+  toggle.addEventListener("change", ()=>{ contribBtn.disabled = !toggle.checked; });
+  contribBtn.addEventListener("click", ()=>{ if(!contribBtn.disabled){ backdrop.classList.add("open"); document.getElementById("modalCancel").focus(); } });
+  function closeModal(){ backdrop.classList.remove("open"); contribBtn.focus(); }
+  document.getElementById("modalCancel").addEventListener("click", closeModal);
+  backdrop.addEventListener("click", e=>{ if(e.target === backdrop) closeModal(); });
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape" && backdrop.classList.contains("open")) closeModal(); });
+  document.getElementById("modalConfirm").addEventListener("click", ()=>{
+    closeModal();
+    contribBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Staged for review';
+    contribBtn.style.background = "linear-gradient(180deg,#5fc7b5,var(--teal))";
+    toggle.checked = false; contribBtn.disabled = true;
+  });
+
+  /* ============================ CONTRIBUTED TABLE + LIVE FEEL ============================ */
+  const contribRows = [
+    {id:"agent-7f3a", when:"2h ago", rows:"38,204", prov:["cx"], status:"ok"},
+    {id:"agent-b91c", when:"5h ago", rows:"12,880", prov:["cl","cx"], status:"ok"},
+    {id:"agent-2de8", when:"9h ago", rows:"51,330", prov:["cl"], status:"pend"},
+    {id:"agent-4a07", when:"14h ago", rows:"7,512", prov:["cx"], status:"ok"},
+    {id:"agent-e5b2", when:"1d ago", rows:"29,944", prov:["cl","cx"], status:"ok"},
+    {id:"agent-9c10", when:"1d ago", rows:"4,108", prov:["cl"], status:"pend"},
+    {id:"agent-1f6d", when:"2d ago", rows:"63,217", prov:["cx"], status:"ok"},
+    {id:"agent-c882", when:"3d ago", rows:"18,640", prov:["cl"], status:"ok"},
+  ];
+  function buildTable(){
+    const tb = document.getElementById("contribTable");
+    tb.innerHTML = contribRows.map(r=>{
+      const tags = r.prov.map(p=>`<span class="ptag ${p}">${p==="cl"?"Claude":"Codex"}</span>`).join("");
+      const st = r.status==="ok" ? `<span class="status ok"><span class="sd"></span>Validated</span>` : `<span class="status pend"><span class="sd"></span>Pending</span>`;
+      return `<tr><td class="id">${r.id}</td><td>${r.when}</td><td class="num">${r.rows}</td><td><div class="prov-tags">${tags}</div></td><td>${st}</td></tr>`;
+    }).join("");
+  }
+  buildTable();
+
+  // "live" last-contribution timer (cosmetic minutes ticking)
+  const lastContrib = document.getElementById("lastContrib");
+  let mins = 0;
+  if(!reduceMotion){
+    setInterval(()=>{
+      mins = (mins+1)%60;
+      lastContrib.innerHTML = (mins===0 ? "2h" : "2h "+mins+"m") + ' <span class="u">ago</span>';
+    }, 4000);
+  }
+
+  /* ============================ INITIAL ORCHESTRATION ============================ */
+  function init(){
+    buildGalleryOnce();
+    const overview = document.getElementById("overview");
+    runCounters(overview);
+    runBars(overview);
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</body>
+</html>

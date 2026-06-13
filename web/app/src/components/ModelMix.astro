@@ -1,0 +1,63 @@
+---
+import type { ModelSeg } from '../lib/compare';
+
+// Live model-mix card: a segmented bar of each provider's rounds-by-model, shaded with that
+// provider's palette. Sits in the comparison gallery beside the by-provider PNGs.
+interface Props {
+  provider: 'claude' | 'codex';
+  title: string;
+  blurb: string;
+  segments: ModelSeg[];
+  delay?: number;
+}
+const { provider, title, blurb, segments, delay = 0 } = Astro.props;
+
+const PALETTE: Record<'claude' | 'codex', { bg: string; light: boolean }[]> = {
+  claude: [
+    { bg: '#e8a583', light: true },
+    { bg: '#c8643c', light: false },
+    { bg: '#a94f2d', light: false },
+  ],
+  codex: [
+    { bg: '#a6b193', light: true },
+    { bg: '#6f7d5e', light: false },
+    { bg: '#5b6a4c', light: false },
+  ],
+};
+const OTHER = { bg: '#d8cdbd', light: true };
+const tagCls = provider === 'codex' ? 'tag sage' : 'tag';
+
+const shaded = segments.map((seg, i) => ({
+  ...seg,
+  pctLabel: `${Math.round(seg.pct)}%`,
+  color: seg.label === 'other' ? OTHER : (PALETTE[provider][i] ?? OTHER),
+}));
+---
+
+<article class="fig reveal" style={`--d:${delay}ms`}>
+  <div class="canvas">
+    <div class="modelmix">
+      <div class="mm-bar">
+        {shaded.map((seg) => (
+          <i
+            class={seg.color.light ? 'light' : undefined}
+            style={`width:${seg.pct}%; background:${seg.color.bg}`}
+            title={`${seg.label} · ${seg.pctLabel}`}
+          >
+            {seg.pct >= 8 && <span>{seg.pctLabel}</span>}
+          </i>
+        ))}
+      </div>
+      <div class="mm-legend">
+        {shaded.map((seg) => (
+          <span class="mm-lg">
+            <i style={`background:${seg.color.bg}`}></i>{seg.label}<span class="c">· {seg.pctLabel}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  </div>
+  <div class="tagrow"><span class={tagCls}>model_mix</span></div>
+  <h4>{title}</h4>
+  <p>{blurb}</p>
+</article>

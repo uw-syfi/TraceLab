@@ -1,0 +1,31 @@
+  /* ---- two-column band ---- */
+  .band { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; margin-top: 20px; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: 28px; box-shadow: var(--sh-1);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease);
+  }
+  .panel:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+  .panel h3 { font-family: var(--serif); font-weight: 540; font-size: var(--fs-xl); margin: 0 0 4px; }
+  .panel .desc { color: var(--muted); font-size: var(--fs-sm); margin: 0 0 18px; }
+
+  /* provider split legend */
+  .legend { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+  .legend .row { display: flex; align-items: center; gap: 12px; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+  .legend .nm { font-weight: 600; font-size: var(--fs-sm); }
+  .legend .val { margin-left: auto; font-family: var(--sans); font-weight: 700; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: var(--fs-lg); letter-spacing: -0.3px; color: var(--ink); }
+  .legend .pct { color: var(--muted); font-size: var(--fs-xs); margin-left: 8px; font-weight: 500; }
+  .donut-center-text { font-size: var(--fs-xl); }
+  .donut-caption-text { font-size: var(--fs-2xs); }
+
+  /* date range strip */
+  .range-strip {
+    display: flex; align-items: center; gap: 16px; margin-top: 22px;
+    background: var(--card-2); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 18px 24px;
+  }
+  .range-strip .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--sage-wash); display: grid; place-items: center; flex: none; }
+  .range-strip .ico svg { width: 22px; height: 22px; }
+  .range-strip .rt { font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .range-strip .rv { font-family: var(--serif); font-weight: 540; font-size: var(--fs-lg); }

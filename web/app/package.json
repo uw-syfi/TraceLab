@@ -1,0 +1,21 @@
+{
+  "name": "syfi-trace-atlas",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "predev": "npm run build:payload",
+    "dev": "astro dev",
+    "prebuild": "npm run build:payload",
+    "build": "astro build",
+    "preview": "astro preview",
+    "build:payload": "node ../scripts/build-payload.mjs",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^6.4.4",
+    "dompurify": "^3.4.8",
+    "echarts": "^6.1.0",
+    "marked": "^18.0.5"
+  }
+}

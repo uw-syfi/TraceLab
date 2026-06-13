@@ -1,0 +1,31 @@
+---
+import Ticker from './Ticker.astro';
+import type { ProviderHead } from '../lib/compare';
+
+// A provider headline card. `tone` drives the wash + accent; the ghost tone is the
+// "coming soon" slot and crossfades through `soon` instead of showing a number.
+interface Props {
+  tone: 'terra' | 'sage' | 'ghost';
+  head?: ProviderHead;
+  sub: string;
+  soon?: string[];
+}
+const { tone, head, sub, soon = [] } = Astro.props;
+const accent = tone === 'terra' ? 'var(--terra)' : tone === 'sage' ? 'var(--sage)' : undefined;
+---
+
+<div class={`vs-card ${tone}`}>
+  <div class="pv">
+    <span class="dot" style={accent ? `background:${accent}` : undefined}></span>
+    <span class="pnm">
+      {tone === 'ghost' ? <Ticker words={soon} label={`Upcoming providers: ${soon.join(', ')}`} /> : head?.name}
+    </span>
+    {tone === 'ghost' ? (
+      <span class="soon-cap"><span class="gdot"></span>Soon</span>
+    ) : (
+      <span class="pshare">{head?.sharePct}% of steps</span>
+    )}
+  </div>
+  <div class="pbig">{tone === 'ghost' ? '—' : head?.steps}</div>
+  <div class="psub">{sub}</div>
+</div>

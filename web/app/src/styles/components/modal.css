@@ -1,0 +1,58 @@
+  /* ---- modal ---- */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    background: rgba(42, 38, 34, 0.42); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal-overlay.open { display: flex; animation: fadeIn .3s var(--ease); }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--card); border-radius: var(--r-lg); max-width: 480px; width: 100%;
+    padding: 34px; box-shadow: var(--sh-3); border: 1px solid var(--line);
+    animation: popUp .4s var(--ease);
+  }
+  @keyframes popUp { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+  .modal .m-ico { width: 54px; height: 54px; border-radius: 16px; background: var(--terra-wash); display: grid; place-items: center; margin-bottom: 18px; }
+  .modal .m-ico svg { width: 30px; height: 30px; }
+  .modal h3 { font-family: var(--serif); font-weight: 540; font-size: var(--fs-2xl); margin: 0 0 12px; }
+  .modal p { color: var(--muted); font-size: var(--fs-sm); margin: 0 0 14px; line-height: 1.55; }
+  .modal ul { margin: 0 0 22px; padding-left: 18px; color: var(--muted); font-size: var(--fs-sm); line-height: 1.55; }
+  .modal ul li { margin-bottom: 7px; }
+  .modal ul li b { color: var(--ink); font-weight: 600; }
+  .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+  /* result dialog states (processing → accepted / rejected) */
+  .modal .m-ico.ok { background: var(--sage-wash, #e7ede0); }
+  .modal .m-ico.err { background: var(--terra-wash); }
+  .modal .m-ico.ok svg { stroke: var(--sage, #6f7d5e); }
+  .modal .m-ico.err svg { stroke: var(--terra); }
+  .modal .m-ico .spinner {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 3px solid var(--line); border-top-color: var(--terra);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* upload progress (determinate, with speed/ETA) */
+  .result-progress { margin: 2px 0 20px; }
+  .result-progress .rp-bar { height: 9px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .result-progress .rp-bar i {
+    display: block; height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, var(--terra), var(--terra-2, #d98a5f));
+    /* Chunks confirm in small waves; a longer ease-out glides the bar between steps so it reads as
+       continuous motion rather than visible jumps. */
+    transition: width .45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .result-progress .rp-meta {
+    display: flex; justify-content: space-between; margin-top: 9px;
+    font-size: var(--fs-2xs); color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: var(--card); padding: 14px 24px; border-radius: 999px;
+    box-shadow: var(--sh-3); font-size: var(--fs-xs); font-weight: 500; z-index: 70;
+    opacity: 0; pointer-events: none; transition: opacity .4s var(--ease), transform .4s var(--ease);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

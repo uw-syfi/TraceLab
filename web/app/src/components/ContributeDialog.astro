@@ -1,0 +1,45 @@
+---
+// Shared contribute dialog: a consent modal followed by a result dialog (upload progress →
+// accepted / rejected). Rendered ONCE on the page; both the Analyze surface and the Contributed
+// pool entry point drive it via `requestContribution(file)` in src/lib/contribute-ui.ts.
+---
+
+<div class="modal-overlay" id="cc-overlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cc-title">
+    <div class="m-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path><path d="M9 12l2 2 4-4"></path></svg>
+    </div>
+    <h3 id="cc-title">Contribute your trace?</h3>
+    <p>Only rows you have already sanitized will be shared. Everything stays pseudonymous.</p>
+    <ul>
+      <li>We share <b>only already-sanitized, pseudonymous rows</b> from your trace.</li>
+      <li>It is <b>validated on upload</b> and rejected if anything sensitive remains.</li>
+      <li>Accepted uploads help <b>broaden the public workload map</b>.</li>
+      <li>Each contribution is credited with a pseudonymous contributor ID.</li>
+    </ul>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cc-cancel">Cancel</button>
+      <button class="btn btn-primary" id="cc-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cr-overlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cr-title">
+    <div class="m-ico" id="cr-ico" aria-hidden="true"><span class="spinner"></span></div>
+    <h3 id="cr-title">Uploading your trace…</h3>
+    <p id="cr-body">Sending your already-sanitized rows.</p>
+    <div class="result-progress" id="cr-progress" hidden>
+      <div class="rp-bar"><i id="cr-fill"></i></div>
+      <div class="rp-meta"><span id="cr-pct">0%</span><span id="cr-speed"></span></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="cr-ok" hidden>Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { initContributeDialog } from '../lib/contribute-ui';
+  initContributeDialog();
+</script>

@@ -1,0 +1,1483 @@
+# Derived normalized round trace example.
+# Each block is one normalized LLM invocation derived from public examples.
+
+===== round 0001 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 0,
+  "round_id": "msg_0117946cbb6c5350c59edee3",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 32272,
+  "prefix_tokens": 27217,
+  "newly_append_tokens": 5055,
+  "claude_uncached_input_tokens": 2892,
+  "claude_cache_creation_input_tokens": 2163,
+  "claude_cache_read_input_tokens": 27217,
+  "output_tokens": 931,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "user_message",
+      "timestamp": "2026-06-01T05:40:20.151Z",
+      "source": "user.message",
+      "content_chars": 146
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:40:29.420Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:40:29.887Z",
+      "source": "assistant.content.text",
+      "content_chars": 116
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:40:30.836Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_0145386ed7f7655c07b7d6",
+      "tool_name": "Bash",
+      "tool_index": 0
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:40:31.647Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_01ac19e6b4fc4f55ecba47",
+      "tool_name": "WebSearch",
+      "tool_index": 1
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "Bash",
+      "tool_call_id": "toolu_0145386ed7f7655c07b7d6",
+      "emitted_at": "2026-06-01T05:40:30.836Z",
+      "input": {
+        "command": "ls -la /workspace/project 2>/dev/null && echo \"---python---\" && which python3 python 2>/dev/null",
+        "description": "List working directory and check Python"
+      },
+      "input_chars": 168,
+      "result_chars": 231,
+      "tool_wall_latency_ms": 860,
+      "tool_internal_latency_ms": null,
+      "is_error": false,
+      "result_at": "2026-06-01T05:40:31.696Z"
+    },
+    {
+      "tool_index": 1,
+      "tool_name": "WebSearch",
+      "tool_call_id": "toolu_01ac19e6b4fc4f55ecba47",
+      "emitted_at": "2026-06-01T05:40:31.647Z",
+      "input": {
+        "query": "NVIDIA datacenter GPU VRAM memory capacity H100 A100 H200 B200 L40S A10 V100 GB"
+      },
+      "input_chars": 91,
+      "result_chars": 4893,
+      "tool_wall_latency_ms": 19291,
+      "tool_internal_latency_ms": 19287,
+      "is_error": false,
+      "result_at": "2026-06-01T05:40:50.938Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 1,
+  "current_tool_result_count": 0,
+  "current_user_message_chars": 146,
+  "current_tool_result_chars": 0,
+  "current_input_chars": 146,
+  "first_input_event_type": "user_message",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_0117946cbb6c5350c59edee3"
+}
+
+===== round 0002 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 1,
+  "round_id": "msg_012a1e2b21602a5fbfa7397b",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 35740,
+  "prefix_tokens": 29380,
+  "newly_append_tokens": 6360,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 6358,
+  "claude_cache_read_input_tokens": 29380,
+  "output_tokens": 1016,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:40:31.696Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_0145386ed7f7655c07b7d6",
+      "result_chars": 231,
+      "is_error": false
+    },
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:40:50.938Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_01ac19e6b4fc4f55ecba47",
+      "result_chars": 4893,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:41:03.669Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:41:04.609Z",
+      "source": "assistant.content.text",
+      "content_chars": 98
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:41:04.862Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_01b77a8c6008505d75a9b5",
+      "tool_name": "WebSearch",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "WebSearch",
+      "tool_call_id": "toolu_01b77a8c6008505d75a9b5",
+      "emitted_at": "2026-06-01T05:41:04.862Z",
+      "input": {
+        "query": "Llama 3 8B config.json num_hidden_layers num_key_value_heads head_dim hidden_size num_attention_heads"
+      },
+      "input_chars": 113,
+      "result_chars": 4157,
+      "tool_wall_latency_ms": 12688,
+      "tool_internal_latency_ms": 12684,
+      "is_error": false,
+      "result_at": "2026-06-01T05:41:17.550Z"
+    }
+  ],
+  "current_input_event_count": 2,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 2,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 5124,
+  "current_input_chars": 5124,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_012a1e2b21602a5fbfa7397b"
+}
+
+===== round 0003 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 2,
+  "round_id": "msg_01aab3d849970e554b86dcec",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 38592,
+  "prefix_tokens": 35738,
+  "newly_append_tokens": 2854,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 2852,
+  "claude_cache_read_input_tokens": 35738,
+  "output_tokens": 2475,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:41:17.550Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_01b77a8c6008505d75a9b5",
+      "result_chars": 4157,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:41:25.747Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:41:27.159Z",
+      "source": "assistant.content.text",
+      "content_chars": 300
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:41:44.015Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_01c92fe89b7bc657dbb749",
+      "tool_name": "Write",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "Write",
+      "tool_call_id": "toolu_01c92fe89b7bc657dbb749",
+      "emitted_at": "2026-06-01T05:41:44.015Z",
+      "input": {
+        "file_path": "/workspace/project/gpu_token_capacity.py",
+        "content": "#!/usr/bin/env python3\n\"\"\"Estimate how many Llama3-8B tokens (KV-cache) fit on each GPU type.\n\nFor each GPU we compute:\n\n    usable_mem   = vram * utilization          # leave headroom for CUDA ctx / fragmentation\n    kv_budget    = usable_mem - weight_mem      # memory left after loading model weights\n    max_tokens   = kv_budget / kv_bytes_per_token\n\n\"max tokens\" is the total number of tokens that can live in the KV cache at\nonce -- i.e. summed across all concurrent sequences (batch * seq_len).\n\nAll assumptions are explicit constants below so you can tweak them.\n\"\"\"\n\nfrom dataclasses import dataclass\n\n# --------------------------------------------------------------------------- #\n# Llama3-8B architecture (same for Llama-3 and Llama-3.1 8B)\n# --------------------------------------------------------------------------- #\nNUM_LAYERS = 32\nNUM_KV_HEADS = 8          # GQA: 8 KV heads (vs 32 query heads)\nHEAD_DIM = 128\nNUM_PARAMS = 8.03e9       # ~8.03 B parameters\n\n# Bytes per element for a given dtype name.\nDTYPE_BYTES = {\"fp32\": 4, \"fp16\": 2, \"bf16\": 2, \"fp8\": 1, \"int8\": 1, \"int4\": 0.5}\n\n# --------------------------------------------------------------------------- #\n# Tunable assumptions\n# --------------------------------------------------------------------------- #\nWEIGHT_DTYPE = \"fp16\"     # precision the weights are loaded in\nKV_DTYPE = \"fp16\"         # precision of the KV cache\nUTILIZATION = 0.90        # fraction of VRAM usable (vLLM-style gpu_memory_utilization)\nGIB = 1024 ** 3           # treat quoted VRAM as binary GiB\n\n# --------------------------------------------------------------------------- #\n# GPU catalog: (name, VRAM in GB)\n# --------------------------------------------------------------------------- #\n@dataclass\nclass GPU:\n    name: str\n    vram_gb: int\n\nGPUS = [\n    GPU(\"V100-16GB\", 16),\n    GPU(\"V100-32GB\", 32),\n    GPU(\"A10-24GB\", 24),\n    GPU(\"L40S-48GB\", 48),\n    GPU(\"A100-40GB\", 40),\n    GPU(\"A100-80GB\", 80),\n    GPU(\"H100-80GB\", 80),\n    GPU(\"H200-141GB\", 141),\n    GPU(\"B200-192GB\", 192),\n    GPU(\"B300-288GB\", 288),\n]\n\n\ndef kv_bytes_per_token(kv_dtype: str) -> int:\n    \"\"\"KV-cache bytes for a single token across all layers (K and V).\"\"\"\n    return 2 * NUM_LAYERS * NUM_KV_HEADS * HEAD_DIM * DTYPE_BYTES[kv_dtype]\n\n\ndef weight_bytes(weight_dtype: str) -> float:\n    return NUM_PARAMS * DTYPE_BYTES[weight_dtype]\n\n\ndef main() -> None:\n    kv_per_tok = kv_bytes_per_token(KV_DTYPE)\n    w_bytes = weight_bytes(WEIGHT_DTYPE)\n\n    print(f\"Model: Llama3-8B  |  weights={WEIGHT_DTYPE} ({w_bytes / GIB:.1f} GiB)  \"\n          f\"|  KV={KV_DTYPE} ({kv_per_tok / 1024:.0f} KiB/token)  \"\n          f\"|  utilization={UTILIZATION:.0%}\\n\")\n\n    header = f\"{'GPU':<14}{'VRAM':>7}{'KV budget':>12}{'Max tokens':>14}{'~ @8k ctx':>11}\"\n    print(header)\n    print(\"-\" * len(header))\n\n    for gpu in GPUS:\n        usable = gpu.vram_gb * GIB * UTILIZATION\n        kv_budget = usable - w_bytes\n        if kv_budget <= 0:\n            print(f\"{gpu.name:<14}{gpu.vram_gb:>5}GB{'--':>12}{'OOM (weights do not fit)':>25}\")\n            continue\n        max_tokens = kv_budget / kv_per_tok\n        seqs_8k = max_tokens / 8192\n        print(f\"{gpu.name:<14}{gpu.vram_gb:>5}GB{kv_budget / GIB:>10.1f}GiB\"\n              f\"{max_tokens:>14,.0f}{seqs_8k:>11.1f}\")\n\n\nif __name__ == \"__main__\":\n    main()\n"
+      },
+      "input_chars": 3557,
+      "result_chars": 136,
+      "tool_wall_latency_ms": 21467,
+      "tool_internal_latency_ms": null,
+      "is_error": false,
+      "result_at": "2026-06-01T05:42:05.482Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 4157,
+  "current_input_chars": 4157,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_01aab3d849970e554b86dcec"
+}
+
+===== round 0004 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 3,
+  "round_id": "msg_01b7f4c8afeb0851d888553a",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 41131,
+  "prefix_tokens": 38590,
+  "newly_append_tokens": 2541,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 2539,
+  "claude_cache_read_input_tokens": 38590,
+  "output_tokens": 117,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:42:05.482Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_01c92fe89b7bc657dbb749",
+      "result_chars": 136,
+      "is_error": false
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:42:08.163Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_015fc14e0d9487549d90a9",
+      "tool_name": "Bash",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "Bash",
+      "tool_call_id": "toolu_015fc14e0d9487549d90a9",
+      "emitted_at": "2026-06-01T05:42:08.163Z",
+      "input": {
+        "command": "python3 gpu_token_capacity.py",
+        "description": "Run the GPU token capacity script"
+      },
+      "input_chars": 93,
+      "result_chars": 810,
+      "tool_wall_latency_ms": 145,
+      "tool_internal_latency_ms": null,
+      "is_error": false,
+      "result_at": "2026-06-01T05:42:08.308Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 136,
+  "current_input_chars": 136,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_01b7f4c8afeb0851d888553a"
+}
+
+===== round 0005 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 4,
+  "round_id": "msg_01613f0a5140335bc4b0c8d7",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 41589,
+  "prefix_tokens": 41129,
+  "newly_append_tokens": 460,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 458,
+  "claude_cache_read_input_tokens": 41129,
+  "output_tokens": 1275,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:42:08.308Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_015fc14e0d9487549d90a9",
+      "result_chars": 810,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:42:11.544Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:42:23.420Z",
+      "source": "assistant.content.text",
+      "content_chars": 2506
+    }
+  ],
+  "tools": [],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 810,
+  "current_input_chars": 810,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_01613f0a5140335bc4b0c8d7"
+}
+
+===== round 0006 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 5,
+  "round_id": "msg_019ad925875b585a0aa4ed6e",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 42876,
+  "prefix_tokens": 41587,
+  "newly_append_tokens": 1289,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 1287,
+  "claude_cache_read_input_tokens": 41587,
+  "output_tokens": 273,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "user_message",
+      "timestamp": "2026-06-01T05:42:43.333Z",
+      "source": "user.message",
+      "content_chars": 27
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:42:46.334Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:42:46.335Z",
+      "source": "assistant.content.text",
+      "content_chars": 57
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:42:46.822Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_019baccdc85b4e5fe68864",
+      "tool_name": "WebSearch",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "WebSearch",
+      "tool_call_id": "toolu_019baccdc85b4e5fe68864",
+      "emitted_at": "2026-06-01T05:42:46.822Z",
+      "input": {
+        "query": "Qwen3-32B config.json num_hidden_layers num_key_value_heads head_dim hidden_size num_attention_heads"
+      },
+      "input_chars": 112,
+      "result_chars": 3861,
+      "tool_wall_latency_ms": 16113,
+      "tool_internal_latency_ms": 16109,
+      "is_error": false,
+      "result_at": "2026-06-01T05:43:02.935Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 1,
+  "current_tool_result_count": 0,
+  "current_user_message_chars": 27,
+  "current_tool_result_chars": 0,
+  "current_input_chars": 27,
+  "first_input_event_type": "user_message",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_019ad925875b585a0aa4ed6e"
+}
+
+===== round 0007 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 6,
+  "round_id": "msg_012dc7f09af39a51e8a0b2a8",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 44901,
+  "prefix_tokens": 42874,
+  "newly_append_tokens": 2027,
+  "claude_uncached_input_tokens": 131,
+  "claude_cache_creation_input_tokens": 1896,
+  "claude_cache_read_input_tokens": 42874,
+  "output_tokens": 232,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:43:02.935Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_019baccdc85b4e5fe68864",
+      "result_chars": 3861,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:43:04.677Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:43:05.131Z",
+      "source": "assistant.content.text",
+      "content_chars": 118
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:43:06.250Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_016c6b9c17fa0257709c2d",
+      "tool_name": "WebFetch",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "WebFetch",
+      "tool_call_id": "toolu_016c6b9c17fa0257709c2d",
+      "emitted_at": "2026-06-01T05:43:06.250Z",
+      "input": {
+        "url": "https://huggingface.co/Qwen/Qwen3-32B/raw/main/config.json",
+        "prompt": "Report the exact values of: num_hidden_layers, num_attention_heads, num_key_value_heads, hidden_size, head_dim, vocab_size, intermediate_size."
+      },
+      "input_chars": 222,
+      "result_chars": 288,
+      "tool_wall_latency_ms": 2521,
+      "tool_internal_latency_ms": 2517,
+      "is_error": false,
+      "result_at": "2026-06-01T05:43:08.771Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 3861,
+  "current_input_chars": 3861,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_012dc7f09af39a51e8a0b2a8"
+}
+
+===== round 0008 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 7,
+  "round_id": "msg_0111327c5d3cf25f8f9ad79e",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 45279,
+  "prefix_tokens": 44770,
+  "newly_append_tokens": 509,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 507,
+  "claude_cache_read_input_tokens": 44770,
+  "output_tokens": 2162,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:43:08.771Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_016c6b9c17fa0257709c2d",
+      "result_chars": 288,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:43:13.772Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:43:14.242Z",
+      "source": "assistant.content.text",
+      "content_chars": 147
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:43:29.070Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_01866917f24b085f3ca781",
+      "tool_name": "Write",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "Write",
+      "tool_call_id": "toolu_01866917f24b085f3ca781",
+      "emitted_at": "2026-06-01T05:43:29.070Z",
+      "input": {
+        "file_path": "/workspace/project/gpu_token_capacity.py",
+        "content": "#!/usr/bin/env python3\n\"\"\"Estimate how many tokens (KV-cache) fit on each GPU type, per model.\n\nFor each (model, GPU) we compute:\n\n    usable_mem   = vram * utilization          # leave headroom for CUDA ctx / fragmentation\n    kv_budget    = usable_mem - weight_mem      # memory left after loading model weights\n    max_tokens   = kv_budget / kv_bytes_per_token\n\n\"max tokens\" is the total number of tokens that can live in the KV cache at\nonce -- i.e. summed across all concurrent sequences (batch * seq_len).\n\nAll assumptions are explicit constants below so you can tweak them.\n\"\"\"\n\nfrom dataclasses import dataclass\n\n# Bytes per element for a given dtype name.\nDTYPE_BYTES = {\"fp32\": 4, \"fp16\": 2, \"bf16\": 2, \"fp8\": 1, \"int8\": 1, \"int4\": 0.5}\n\n# --------------------------------------------------------------------------- #\n# Tunable assumptions\n# --------------------------------------------------------------------------- #\nWEIGHT_DTYPE = \"fp16\"     # precision the weights are loaded in\nKV_DTYPE = \"fp16\"         # precision of the KV cache\nUTILIZATION = 0.90        # fraction of VRAM usable (vLLM-style gpu_memory_utilization)\nGIB = 1024 ** 3           # treat quoted VRAM as binary GiB\n\n\n# --------------------------------------------------------------------------- #\n# Model catalog\n# --------------------------------------------------------------------------- #\n@dataclass\nclass Model:\n    name: str\n    num_layers: int\n    num_kv_heads: int     # KV heads (GQA): drives KV-cache size\n    head_dim: int\n    num_params: float     # total parameter count\n\n    def kv_bytes_per_token(self, kv_dtype: str) -> float:\n        \"\"\"KV-cache bytes for a single token across all layers (K and V).\"\"\"\n        return 2 * self.num_layers * self.num_kv_heads * self.head_dim * DTYPE_BYTES[kv_dtype]\n\n    def weight_bytes(self, weight_dtype: str) -> float:\n        return self.num_params * DTYPE_BYTES[weight_dtype]\n\n\nMODELS = [\n    # name           layers  kv_heads  head_dim  params\n    Model(\"Llama3-8B\",   32,        8,      128,  8.03e9),\n    Model(\"Qwen3-32B\",   64,        8,      128, 32.8e9),\n]\n\n\n# --------------------------------------------------------------------------- #\n# GPU catalog: (name, VRAM in GB)\n# --------------------------------------------------------------------------- #\n@dataclass\nclass GPU:\n    name: str\n    vram_gb: int\n\nGPUS = [\n    GPU(\"V100-16GB\", 16),\n    GPU(\"V100-32GB\", 32),\n    GPU(\"A10-24GB\", 24),\n    GPU(\"L40S-48GB\", 48),\n    GPU(\"A100-40GB\", 40),\n    GPU(\"A100-80GB\", 80),\n    GPU(\"H100-80GB\", 80),\n    GPU(\"H200-141GB\", 141),\n    GPU(\"B200-192GB\", 192),\n    GPU(\"B300-288GB\", 288),\n]\n\n\ndef report(model: Model) -> None:\n    kv_per_tok = model.kv_bytes_per_token(KV_DTYPE)\n    w_bytes = model.weight_bytes(WEIGHT_DTYPE)\n\n    print(f\"== {model.name} ==  weights={WEIGHT_DTYPE} ({w_bytes / GIB:.1f} GiB)  \"\n          f\"|  KV={KV_DTYPE} ({kv_per_tok / 1024:.0f} KiB/token)  \"\n          f\"|  utilization={UTILIZATION:.0%}\")\n\n    header = f\"{'GPU':<14}{'VRAM':>7}{'KV budget':>12}{'Max tokens':>14}{'~ @8k ctx':>11}\"\n    print(header)\n    print(\"-\" * len(header))\n\n    for gpu in GPUS:\n        usable = gpu.vram_gb * GIB * UTILIZATION\n        kv_budget = usable - w_bytes\n        if kv_budget <= 0:\n            print(f\"{gpu.name:<14}{gpu.vram_gb:>5}GB{'OOM (weights do not fit)':>37}\")\n            continue\n        max_tokens = kv_budget / kv_per_tok\n        seqs_8k = max_tokens / 8192\n        print(f\"{gpu.name:<14}{gpu.vram_gb:>5}GB{kv_budget / GIB:>10.1f}GiB\"\n              f\"{max_tokens:>14,.0f}{seqs_8k:>11.1f}\")\n    print()\n\n\ndef main() -> None:\n    for model in MODELS:\n        report(model)\n\n\nif __name__ == \"__main__\":\n    main()\n"
+      },
+      "input_chars": 3926,
+      "result_chars": 146,
+      "tool_wall_latency_ms": 130,
+      "tool_internal_latency_ms": null,
+      "is_error": false,
+      "result_at": "2026-06-01T05:43:29.200Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 288,
+  "current_input_chars": 288,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_0111327c5d3cf25f8f9ad79e"
+}
+
+===== round 0009 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 8,
+  "round_id": "msg_01aea12684b2f35fa29016a0",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 47508,
+  "prefix_tokens": 45277,
+  "newly_append_tokens": 2231,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 2229,
+  "claude_cache_read_input_tokens": 45277,
+  "output_tokens": 90,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:43:29.200Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_01866917f24b085f3ca781",
+      "result_chars": 146,
+      "is_error": false
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-06-01T05:43:30.819Z",
+      "source": "assistant.content.tool_use",
+      "tool_call_id": "toolu_018986665cca8b58e3817a",
+      "tool_name": "Bash",
+      "tool_index": 0
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "Bash",
+      "tool_call_id": "toolu_018986665cca8b58e3817a",
+      "emitted_at": "2026-06-01T05:43:30.819Z",
+      "input": {
+        "command": "python3 gpu_token_capacity.py",
+        "description": "Run the updated multi-model script"
+      },
+      "input_chars": 94,
+      "result_chars": 1608,
+      "tool_wall_latency_ms": 187,
+      "tool_internal_latency_ms": null,
+      "is_error": false,
+      "result_at": "2026-06-01T05:43:31.006Z"
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 146,
+  "current_input_chars": 146,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_01aea12684b2f35fa29016a0"
+}
+
+===== round 0010 | provider claude =====
+{
+  "provider": "claude",
+  "project": "example-claude-session",
+  "session_id": "claude:claude-public-example",
+  "session_file": "example_sessions/claude/trace.json",
+  "round_index": 9,
+  "round_id": "msg_01127c9d1829fa5ad6902545",
+  "model": "claude-opus-4-8",
+  "input_tokens_total": 48305,
+  "prefix_tokens": 47506,
+  "newly_append_tokens": 799,
+  "claude_uncached_input_tokens": 2,
+  "claude_cache_creation_input_tokens": 797,
+  "claude_cache_read_input_tokens": 47506,
+  "output_tokens": 852,
+  "reasoning_output_tokens": null,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-06-01T05:43:31.006Z",
+      "source": "user.content.tool_result",
+      "tool_call_id": "toolu_018986665cca8b58e3817a",
+      "result_chars": 1608,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-06-01T05:43:34.749Z",
+      "source": "assistant.content.thinking",
+      "content_chars": 0
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-06-01T05:43:41.835Z",
+      "source": "assistant.content.text",
+      "content_chars": 1612
+    }
+  ],
+  "tools": [],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 1608,
+  "current_input_chars": 1608,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".claude",
+  "trace_key": "claude:claude:claude-public-example:msg_01127c9d1829fa5ad6902545"
+}
+
+===== round 0011 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 0,
+  "round_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:0",
+  "turn_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 9324,
+  "prefix_tokens": 6912,
+  "newly_append_tokens": 2412,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 444,
+  "reasoning_output_tokens": 199,
+  "timing_events": [
+    {
+      "event_type": "user_message",
+      "timestamp": "2026-03-21T10:05:59.328Z",
+      "source": "event_msg.user_message",
+      "content_chars": 92
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:02.939Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:05.480Z",
+      "source": "response_item.message",
+      "content_chars": 203
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:05.480Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_A7mQx4Tn9RbV2sLe8HpKcY1D",
+      "tool_name": "exec_command",
+      "tool_index": 0
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:05.527Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_Kp3DzT8wQnL6vRcM2xSaF9Gy",
+      "tool_name": "exec_command",
+      "tool_index": 1
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:05.528Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_vN5rPqY7mJc2HtBdX4zLe8Ux",
+      "tool_name": "exec_command",
+      "tool_index": 2
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:05.542Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_A7mQx4Tn9RbV2sLe8HpKcY1D",
+      "emitted_at": "2026-03-21T10:06:05.480Z",
+      "result_at": "2026-03-21T10:06:05.547Z",
+      "input": "{\"cmd\":\"pwd\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":1200,\"yield_time_ms\":1000}",
+      "input_chars": 90,
+      "result_chars": 122,
+      "tool_wall_latency_ms": 67,
+      "tool_internal_latency_ms": 0,
+      "is_error": false
+    },
+    {
+      "tool_index": 1,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_Kp3DzT8wQnL6vRcM2xSaF9Gy",
+      "emitted_at": "2026-03-21T10:06:05.527Z",
+      "result_at": "2026-03-21T10:06:05.606Z",
+      "input": "{\"cmd\":\"rg --files -g 'AGENTS.md' -g 'agents.md' -g 'Agents.md'\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":1200,\"yield_time_ms\":1000}",
+      "input_chars": 142,
+      "result_chars": 102,
+      "tool_wall_latency_ms": 79,
+      "tool_internal_latency_ms": 0,
+      "is_error": true
+    },
+    {
+      "tool_index": 2,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_vN5rPqY7mJc2HtBdX4zLe8Ux",
+      "emitted_at": "2026-03-21T10:06:05.528Z",
+      "result_at": "2026-03-21T10:06:06.704Z",
+      "input": "{\"cmd\":\"find .. -name AGENTS.md -o -name agents.md -o -name Agents.md\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":2000,\"yield_time_ms\":1000}",
+      "input_chars": 148,
+      "result_chars": 113,
+      "tool_wall_latency_ms": 1176,
+      "tool_internal_latency_ms": 1002,
+      "is_error": null
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 1,
+  "current_tool_result_count": 0,
+  "current_user_message_chars": 92,
+  "current_tool_result_chars": 0,
+  "current_input_chars": 92,
+  "first_input_event_type": "user_message",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:0"
+}
+
+===== round 0012 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 1,
+  "round_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:1",
+  "turn_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 9917,
+  "prefix_tokens": 9600,
+  "newly_append_tokens": 317,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 94,
+  "reasoning_output_tokens": 11,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:05.547Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_A7mQx4Tn9RbV2sLe8HpKcY1D",
+      "result_chars": 122,
+      "is_error": false
+    },
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:05.606Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_Kp3DzT8wQnL6vRcM2xSaF9Gy",
+      "result_chars": 102,
+      "is_error": true
+    },
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:06.704Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_vN5rPqY7mJc2HtBdX4zLe8Ux",
+      "result_chars": 113
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:07.378Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:08.047Z",
+      "source": "response_item.message",
+      "content_chars": 206
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:08.378Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_Qw8LzC3nTyR6pXsV1mKaE7Db",
+      "tool_name": "write_stdin",
+      "tool_index": 0
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:08.390Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "write_stdin",
+      "tool_call_id": "call_Qw8LzC3nTyR6pXsV1mKaE7Db",
+      "emitted_at": "2026-03-21T10:06:08.378Z",
+      "result_at": "2026-03-21T10:06:13.380Z",
+      "input": "{\"session_id\":74219,\"chars\":\"\",\"yield_time_ms\":1000,\"max_output_tokens\":2000}",
+      "input_chars": 77,
+      "result_chars": 113,
+      "tool_wall_latency_ms": 5002,
+      "tool_internal_latency_ms": 5001,
+      "is_error": null
+    }
+  ],
+  "current_input_event_count": 3,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 3,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 337,
+  "current_input_chars": 337,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:1"
+}
+
+===== round 0013 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 2,
+  "round_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:2",
+  "turn_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 10058,
+  "prefix_tokens": 9856,
+  "newly_append_tokens": 202,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 59,
+  "reasoning_output_tokens": 15,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:13.380Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_Qw8LzC3nTyR6pXsV1mKaE7Db",
+      "result_chars": 113
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:14.210Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:14.626Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_mE4bXy9VcT2qLpN6sRdH8WaJ",
+      "tool_name": "write_stdin",
+      "tool_index": 0
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:14.632Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "write_stdin",
+      "tool_call_id": "call_mE4bXy9VcT2qLpN6sRdH8WaJ",
+      "emitted_at": "2026-03-21T10:06:14.626Z",
+      "result_at": "2026-03-21T10:06:14.634Z",
+      "input": "{\"session_id\":74219,\"chars\":\"\\u0003\",\"yield_time_ms\":1000,\"max_output_tokens\":2000}",
+      "input_chars": 83,
+      "result_chars": 105,
+      "tool_wall_latency_ms": 8,
+      "tool_internal_latency_ms": null,
+      "is_error": null
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 113,
+  "current_input_chars": 113,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:2"
+}
+
+===== round 0014 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 3,
+  "round_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:3",
+  "turn_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 10152,
+  "prefix_tokens": 3456,
+  "newly_append_tokens": 6696,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 233,
+  "reasoning_output_tokens": 26,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:14.634Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_mE4bXy9VcT2qLpN6sRdH8WaJ",
+      "result_chars": 105
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:16.103Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:18.478Z",
+      "source": "response_item.message",
+      "content_chars": 152
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:18.480Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_Zp6tRw2KhV9nQxC5yLaD3MsF",
+      "tool_name": "exec_command",
+      "tool_index": 0
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:18.486Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_cT7yNa4PqL8vMxR2sWfJ9HeB",
+      "tool_name": "exec_command",
+      "tool_index": 1
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:18.529Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_Zp6tRw2KhV9nQxC5yLaD3MsF",
+      "emitted_at": "2026-03-21T10:06:18.480Z",
+      "result_at": "2026-03-21T10:06:18.571Z",
+      "input": "{\"cmd\":\"find . -maxdepth 3 \\\\( -name AGENTS.md -o -name agents.md -o -name Agents.md \\\\)\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":1200,\"yield_time_ms\":1000}",
+      "input_chars": 167,
+      "result_chars": 102,
+      "tool_wall_latency_ms": 91,
+      "tool_internal_latency_ms": 0,
+      "is_error": false
+    },
+    {
+      "tool_index": 1,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_cT7yNa4PqL8vMxR2sWfJ9HeB",
+      "emitted_at": "2026-03-21T10:06:18.486Z",
+      "result_at": "2026-03-21T10:06:18.662Z",
+      "input": "{\"cmd\":\"find .. -maxdepth 3 \\\\( -name AGENTS.md -o -name agents.md -o -name Agents.md \\\\)\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":1200,\"yield_time_ms\":1000}",
+      "input_chars": 168,
+      "result_chars": 102,
+      "tool_wall_latency_ms": 176,
+      "tool_internal_latency_ms": 10,
+      "is_error": false
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 105,
+  "current_input_chars": 105,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:3"
+}
+
+===== round 0015 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 4,
+  "round_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:4",
+  "turn_id": "01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 10472,
+  "prefix_tokens": 10240,
+  "newly_append_tokens": 232,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 294,
+  "reasoning_output_tokens": 96,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:18.571Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_Zp6tRw2KhV9nQxC5yLaD3MsF",
+      "result_chars": 102,
+      "is_error": false
+    },
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:18.662Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_cT7yNa4PqL8vMxR2sWfJ9HeB",
+      "result_chars": 102,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:20.848Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:23.365Z",
+      "source": "response_item.message",
+      "content_chars": 730
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:23.374Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [],
+  "current_input_event_count": 2,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 2,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 204,
+  "current_input_chars": 204,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e4-a8f3-7c91-b2e0-31d6f4a9c580:4"
+}
+
+===== round 0016 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 5,
+  "round_id": "01a7c9e5-0d4b-761e-9c72-fa3e8b15d904:0",
+  "turn_id": "01a7c9e5-0d4b-761e-9c72-fa3e8b15d904",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 10436,
+  "prefix_tokens": 9216,
+  "newly_append_tokens": 1220,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 262,
+  "reasoning_output_tokens": 69,
+  "timing_events": [
+    {
+      "event_type": "user_message",
+      "timestamp": "2026-03-21T10:06:29.707Z",
+      "source": "event_msg.user_message",
+      "content_chars": 29
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:31.470Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:33.500Z",
+      "source": "response_item.message",
+      "content_chars": 127
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:33.501Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_Bx2VnF8kQw5rTcY1mLpZ6SdH",
+      "tool_name": "exec_command",
+      "tool_index": 0
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:33.548Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_hL9pQa3XvN6cRyT4wMkD8FsE",
+      "tool_name": "exec_command",
+      "tool_index": 1
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:33.556Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_Bx2VnF8kQw5rTcY1mLpZ6SdH",
+      "emitted_at": "2026-03-21T10:06:33.501Z",
+      "result_at": "2026-03-21T10:06:33.558Z",
+      "input": "{\"cmd\":\"ls -l /workspace/project/AGENT.md\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":1200,\"yield_time_ms\":1000}",
+      "input_chars": 120,
+      "result_chars": 173,
+      "tool_wall_latency_ms": 57,
+      "tool_internal_latency_ms": 0,
+      "is_error": false
+    },
+    {
+      "tool_index": 1,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_hL9pQa3XvN6cRyT4wMkD8FsE",
+      "emitted_at": "2026-03-21T10:06:33.548Z",
+      "result_at": "2026-03-21T10:06:33.610Z",
+      "input": "{\"cmd\":\"ls -l /workspace/project | sed -n '1,40p'\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":2000,\"yield_time_ms\":1000}",
+      "input_chars": 128,
+      "result_chars": 930,
+      "tool_wall_latency_ms": 62,
+      "tool_internal_latency_ms": 0,
+      "is_error": false
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 1,
+  "current_tool_result_count": 0,
+  "current_user_message_chars": 29,
+  "current_tool_result_chars": 0,
+  "current_input_chars": 29,
+  "first_input_event_type": "user_message",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e5-0d4b-761e-9c72-fa3e8b15d904:0"
+}
+
+===== round 0017 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 6,
+  "round_id": "01a7c9e5-0d4b-761e-9c72-fa3e8b15d904:1",
+  "turn_id": "01a7c9e5-0d4b-761e-9c72-fa3e8b15d904",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 11636,
+  "prefix_tokens": 10624,
+  "newly_append_tokens": 1012,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 198,
+  "reasoning_output_tokens": 41,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:33.558Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_Bx2VnF8kQw5rTcY1mLpZ6SdH",
+      "result_chars": 173,
+      "is_error": false
+    },
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:33.610Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_hL9pQa3XvN6cRyT4wMkD8FsE",
+      "result_chars": 930,
+      "is_error": false
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:35.069Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:36.851Z",
+      "source": "response_item.message",
+      "content_chars": 400
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:36.854Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [],
+  "current_input_event_count": 2,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 2,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 1103,
+  "current_input_chars": 1103,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e5-0d4b-761e-9c72-fa3e8b15d904:1"
+}
+
+===== round 0018 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 7,
+  "round_id": "01a7c9e5-8f20-7a6d-a14c-6e9b27c3f0d1:0",
+  "turn_id": "01a7c9e5-8f20-7a6d-a14c-6e9b27c3f0d1",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 11727,
+  "prefix_tokens": 10368,
+  "newly_append_tokens": 1359,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 279,
+  "reasoning_output_tokens": 124,
+  "timing_events": [
+    {
+      "event_type": "user_message",
+      "timestamp": "2026-03-21T10:06:55.216Z",
+      "source": "event_msg.user_message",
+      "content_chars": 6
+    },
+    {
+      "event_type": "reasoning",
+      "timestamp": "2026-03-21T10:06:57.396Z",
+      "source": "response_item.reasoning"
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:06:58.063Z",
+      "source": "response_item.message",
+      "content_chars": 157
+    },
+    {
+      "event_type": "tool_call",
+      "timestamp": "2026-03-21T10:06:59.156Z",
+      "source": "response_item.function_call",
+      "tool_call_id": "call_Yd5GmR2sKq8vWnC7xPaT4LeJ",
+      "tool_name": "exec_command",
+      "tool_index": 0
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:06:59.174Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [
+    {
+      "tool_index": 0,
+      "tool_name": "exec_command",
+      "tool_call_id": "call_Yd5GmR2sKq8vWnC7xPaT4LeJ",
+      "emitted_at": "2026-03-21T10:06:59.156Z",
+      "result_at": "2026-03-21T10:06:59.214Z",
+      "input": "{\"cmd\":\"mv /workspace/project/AGENT.md /workspace/project/AGENTS.md && ls -l /workspace/project/AGENTS.md\",\"workdir\":\"/workspace/project\",\"max_output_tokens\":1200,\"yield_time_ms\":1000}",
+      "input_chars": 184,
+      "result_chars": 174,
+      "tool_wall_latency_ms": 58,
+      "tool_internal_latency_ms": 0,
+      "is_error": false
+    }
+  ],
+  "current_input_event_count": 1,
+  "current_user_message_count": 1,
+  "current_tool_result_count": 0,
+  "current_user_message_chars": 6,
+  "current_tool_result_chars": 0,
+  "current_input_chars": 6,
+  "first_input_event_type": "user_message",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e5-8f20-7a6d-a14c-6e9b27c3f0d1:0"
+}
+
+===== round 0019 | provider codex =====
+{
+  "provider": "codex",
+  "session_id": "codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73",
+  "session_file": "example_sessions/codex/trace.json",
+  "round_index": 8,
+  "round_id": "01a7c9e5-8f20-7a6d-a14c-6e9b27c3f0d1:1",
+  "turn_id": "01a7c9e5-8f20-7a6d-a14c-6e9b27c3f0d1",
+  "cwd": "/workspace/project",
+  "model": "gpt-5.4",
+  "input_tokens_total": 12097,
+  "prefix_tokens": 9216,
+  "newly_append_tokens": 2881,
+  "claude_uncached_input_tokens": null,
+  "claude_cache_creation_input_tokens": null,
+  "claude_cache_read_input_tokens": null,
+  "output_tokens": 49,
+  "reasoning_output_tokens": 0,
+  "timing_events": [
+    {
+      "event_type": "tool_result",
+      "timestamp": "2026-03-21T10:06:59.214Z",
+      "source": "response_item.function_call_output",
+      "tool_call_id": "call_Yd5GmR2sKq8vWnC7xPaT4LeJ",
+      "result_chars": 174,
+      "is_error": false
+    },
+    {
+      "event_type": "text",
+      "timestamp": "2026-03-21T10:07:00.366Z",
+      "source": "response_item.message",
+      "content_chars": 169
+    },
+    {
+      "event_type": "usage_report",
+      "timestamp": "2026-03-21T10:07:00.374Z",
+      "source": "event_msg.token_count"
+    }
+  ],
+  "tools": [],
+  "current_input_event_count": 1,
+  "current_user_message_count": 0,
+  "current_tool_result_count": 1,
+  "current_user_message_chars": 0,
+  "current_tool_result_chars": 174,
+  "current_input_chars": 174,
+  "first_input_event_type": "tool_result",
+  "home": "/home/user",
+  "user": "user",
+  "store": ".codex",
+  "trace_key": "codex:codex:01a7c9e4-6d12-7b3a-9f42-8c6d5e1a0b73:01a7c9e5-8f20-7a6d-a14c-6e9b27c3f0d1:1"
+}

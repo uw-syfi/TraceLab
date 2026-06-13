@@ -1,0 +1,45 @@
+/* Production gallery additions: render matplotlib PNGs and summary-derived stat cards
+   inside the mockup's .canvas/.fig shell. */
+
+.canvas img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* graceful state when a figure PNG has not been rendered/copied yet */
+.fig--pending .canvas {
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+}
+.fig--pending .canvas img { display: none; }
+.fig--pending .canvas::after {
+  content: 'figure pending render';
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.04em;
+}
+/* in the Analyze results, a pending card is actively being computed */
+.results-wrap .fig--pending .canvas::after { content: 'rendering…'; }
+
+/* stat cards (experiments with no plot — values pulled from summary.json) */
+.stat-canvas {
+  min-height: 150px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+.stat-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px dashed var(--line);
+}
+.stat-line:last-child { border-bottom: none; padding-bottom: 0; }
+.stat-line .sl-label { color: var(--muted); font-size: var(--fs-xs); line-height: 1.3; }
+.stat-line .sl-val { font-size: var(--fs-lg); font-weight: 700; white-space: nowrap; }

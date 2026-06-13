@@ -1,0 +1,51 @@
+---
+import { loadSummary } from '../../lib/summary';
+import { buildCompare, COMING_SOON } from '../../lib/compare';
+import VsCard from '../VsCard.astro';
+import CompareTable from '../CompareTable.astro';
+import TermStrip from '../TermStrip.astro';
+import Footer from '../Footer.astro';
+
+const cmp = buildCompare(loadSummary());
+---
+
+<section class="surface" id="compare" role="tabpanel" aria-label="Provider comparison">
+  <div class="hero reveal" style="--d:60ms;">
+    <span class="eyebrow">Provider cuts</span>
+    <h1>Compare <em>providers</em>.</h1>
+    <p class="lede">
+      Provider-level sessions, requests, agent steps, tool use, cache reuse, context growth, and human waits.
+    </p>
+  </div>
+
+  <div class="svg-legend reveal" style="--d:180ms">
+    <span class="lg"><span class="sw" style="background:var(--terra)"></span>Claude</span>
+    <span class="lg"><span class="sw" style="background:var(--sage)"></span>Codex</span>
+    <span class="lg"><span class="sw" style="background:var(--card-2); border:1px dashed rgba(42,38,34,0.32);"></span>Coming soon</span>
+    <span style="font-size: var(--fs-xs); color:var(--muted); margin-left:auto;">Same public trace, grouped by provider.</span>
+  </div>
+
+  <div class="vs-head reveal" style="--d:240ms">
+    <VsCard tone="terra" head={cmp.claudeHead} sub="Current public-pool agent steps" />
+    <VsCard tone="sage" head={cmp.codexHead} sub="Current public-pool agent steps" />
+    <VsCard tone="ghost" soon={COMING_SOON} sub="More provider columns planned" />
+  </div>
+
+  <div class="sec-head reveal" style="--d:320ms">
+    <h2>Provider statistics</h2>
+    <span class="sub">Grouped with the same taxonomy as the Atlas figures.</span>
+  </div>
+
+  <TermStrip delay={340} />
+
+  <div class="tbl-legend reveal" style="--d:360ms">
+    <span class="lg"><span class="ar">↑</span> higher is better</span>
+    <span class="lg"><span class="ar">↓</span> lower is better</span>
+    <span>Rows without arrows are descriptive totals, shares, or accounting fields.</span>
+  </div>
+  <div class="reveal" style="--d:380ms">
+    <CompareTable groups={cmp.groups} soon={COMING_SOON} />
+  </div>
+
+  <Footer left="SyFI Trace Atlas · provider comparison" right="Per-provider cuts" />
+</section>

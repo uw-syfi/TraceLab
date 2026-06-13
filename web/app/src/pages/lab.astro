@@ -1,0 +1,118 @@
+---
+// /lab — sandbox for the interactive analytics surface. Starts on mock data (lib/mock/analytics.ts)
+// so we can iterate on layout/visuals, with a small intake to run REAL data through the same shared
+// dashboard (components/AnalyticsDashboard.astro + lib/analytics/dashboard.ts) that the Analyze
+// surface uses. NOT linked from the tab nav; reach it directly at /lab.
+import Base from '../layouts/Base.astro';
+import Footer from '../components/Footer.astro';
+import AnalyticsDashboard from '../components/AnalyticsDashboard.astro';
+---
+
+<Base title="Trace Atlas · Analytics Lab">
+  <section class="lab">
+    <div class="hero" style="max-width:820px;">
+      <span class="eyebrow" id="lab-eyebrow">Layout sandbox · mock data</span>
+      <h1>Your <em>coding trace</em>, in depth.</h1>
+      <p class="lede">A preview of the interactive analytics surface — cost, daily rhythm, session
+        drill-down, and superlatives. Drop your own trace to compute it for real.</p>
+    </div>
+
+    <!-- Intake for the sandbox: reuses the shared prepare→load pipeline so /lab can run REAL data.
+         The Analyze surface drives the same dashboard from its own dropzone. -->
+    <div class="lab-intake" id="lab-intake">
+      <input type="file" id="lab-file" accept=".gz,.tgz,.zip,.tar,.jsonl,.json,.ndjson" hidden />
+      <button class="intake-pick" id="lab-pick" type="button">Analyze your trace</button>
+      <span class="intake-status" id="lab-status">Showing mock data — drop a <code>.claude</code> / <code>.codex</code> export (or a sanitized <code>.gz</code>) here to compute your own.</span>
+    </div>
+
+    <AnalyticsDashboard />
+
+    <Footer left="Trace Atlas · analytics lab" right="Mock data — layout preview" />
+  </section>
+</Base>
+
+<style is:global>
+  /* sandbox intake: a compact dashed dropzone above the dashboard */
+  .lab-intake { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 18px 0 4px; padding: 16px 20px; border: 1px dashed var(--line); border-radius: var(--r-md); background: color-mix(in srgb, var(--card-2) 50%, transparent); transition: border-color .2s var(--ease), background .2s var(--ease); }
+  .lab-intake.drag { border-color: var(--terra); background: var(--terra-wash); }
+  .lab-intake.busy { opacity: .8; }
+  .intake-pick { font-family: var(--sans); font-size: var(--fs-sm); font-weight: 600; color: var(--on-terra); background: var(--terra); border: none; border-radius: var(--r-sm); padding: 9px 18px; cursor: pointer; flex: none; transition: filter .2s var(--ease); }
+  .intake-pick:hover { filter: brightness(1.06); }
+  .intake-pick:disabled { cursor: default; filter: grayscale(.4) brightness(.95); }
+  .intake-status { font-size: var(--fs-sm); color: var(--muted); line-height: 1.4; }
+  .intake-status code { font-family: var(--mono, ui-monospace, monospace); font-size: .92em; color: var(--ink); }
+  .intake-status.err { color: var(--terra); }
+</style>
+
+<script>
+  import { mockAnalytics } from '../lib/mock/analytics';
+  import { initDashboard, loadDashboard } from '../lib/analytics/dashboard';
+  import { AnalyticsSource } from '../lib/analytics/source';
+  import { intComma, fmtUsd } from '../lib/format';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
+
+  // Wire the static dashboard controls, then render the mock payload as the initial view.
+  initDashboard();
+  loadDashboard(mockAnalytics, null);
+
+  // ---- intake: upload a trace → real Python-computed payload (shared prepare→load path) ----
+  const intakeEl = $('lab-intake');
+  const fileInput = $('lab-file') as HTMLInputElement;
+  const pickBtn = $('lab-pick') as HTMLButtonElement;
+  const statusEl = $('lab-status');
+  const eyebrowEl = $('lab-eyebrow');
+  let busy = false;
+  const setStatus = (html: string, isErr = false) => {
+    statusEl.innerHTML = html;
+    statusEl.classList.toggle('err', isErr);
+  };
+
+  async function ingest(file: File): Promise<void> {
+    if (busy) return;
+    busy = true;
+    intakeEl.classList.add('busy');
+    pickBtn.disabled = true;
+    setStatus(`Preparing <b>${esc(file.name)}</b>…`);
+    try {
+      const src = new AnalyticsSource();
+      await src.load(file, (stage) => setStatus(`${esc(stage)}…`));
+      setStatus('Computing analytics…');
+      const payload = await src.bulk();
+      loadDashboard(payload, src); // disposes any prior source internally
+      eyebrowEl.textContent = 'Your trace · live data';
+      setStatus(
+        `Analyzed <b>${esc(file.name)}</b> — ${intComma(payload.kpis.rounds)} steps · ${intComma(payload.kpis.sessions)} sessions · ${fmtUsd(payload.kpis.totalCostUsd)}.`,
+      );
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message.split('\n')[0] : String(err);
+      setStatus(`Could not analyze that file — ${esc(msg)}`, true);
+    } finally {
+      busy = false;
+      intakeEl.classList.remove('busy');
+      pickBtn.disabled = false;
+      fileInput.value = '';
+    }
+  }
+
+  pickBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0];
+    if (f) ingest(f);
+  });
+  intakeEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    intakeEl.classList.add('drag');
+  });
+  intakeEl.addEventListener('dragleave', (e) => {
+    if (e.target === intakeEl) intakeEl.classList.remove('drag');
+  });
+  intakeEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    intakeEl.classList.remove('drag');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) ingest(f);
+  });
+</script>

@@ -1,0 +1,204 @@
+---
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createMarkdownProcessor } from '@astrojs/markdown-remark';
+import Base from '../../layouts/Base.astro';
+import Footer from '../../components/Footer.astro';
+import Lightbox from '../../components/Lightbox.astro';
+import TermStrip from '../../components/TermStrip.astro';
+import { experiments, type Experiment } from '../../lib/experiments';
+import { parseExperimentReadme, analysisForFigure } from '../../lib/readme';
+
+export function getStaticPaths() {
+  return experiments.map((e) => ({ params: { slug: e.slug }, props: { exp: e } }));
+}
+
+const { exp } = Astro.props as { exp: Experiment };
+
+// Read the paired README at build time (cwd = web/app) and split it into the structured parts the
+// page lays out: overview before the figures, per-figure analysis after each image, the rest below.
+function readReadme(rel: string): string {
+  for (const c of [resolve(process.cwd(), '../..', rel), resolve(process.cwd(), rel)]) {
+    if (existsSync(c)) return readFileSync(c, 'utf-8');
+  }
+  return '';
+}
+const parsed = parseExperimentReadme(readReadme(exp.readme));
+
+// syntaxHighlight off so the warm .readme pre styling applies (no cold shiki theme).
+const processor = await createMarkdownProcessor({ syntaxHighlight: false });
+const renderMd = async (md: string) => (md ? (await processor.render(md)).code : '');
+
+const overviewHtml = await renderMd(parsed.overviewMd);
+const detailsHtml = await renderMd(parsed.detailsMd);
+const figures = await Promise.all(
+  exp.figures.map(async (f) => ({
+    ...f,
+    analysisHtml: await renderMd(analysisForFigure(parsed, f.src)),
+  })),
+);
+
+const categoryLabels: Record<string, string> = {
+  tool_calls: 'Tool calls',
+  llm_generation: 'LLM generation',
+  prefix_cache: 'Prefix cache',
+  human_in_the_loop: 'Human in the loop',
+  session: 'Session context',
+};
+const categoryOrder = ['tool_calls', 'llm_generation', 'prefix_cache', 'human_in_the_loop', 'session'];
+const experimentGroups = categoryOrder
+  .map((category) => ({
+    category,
+    title: categoryLabels[category] ?? category,
+    items: experiments.filter((item) => item.category === category),
+  }))
+  .filter((group) => group.items.length > 0);
+const currentIndex = Math.max(0, experiments.findIndex((item) => item.slug === exp.slug));
+const prevExp = experiments[(currentIndex + experiments.length - 1) % experiments.length];
+const nextExp = experiments[(currentIndex + 1) % experiments.length];
+---
+
+<Base title={`${exp.title} · SyFI Trace Atlas`}>
+  {/* Personal mode (?personal=1, linked from the Analyze tab): describe the experiment via its
+      overview but hide the public-pool figures + reference sections — the user's own results live
+      on the Analyze tab. Set the html class synchronously so nothing flashes before being hidden. */}
+  <script is:inline>
+    if (location.search.includes('personal')) {
+      document.documentElement.classList.add('personal-exp');
+      addEventListener('DOMContentLoaded', () => {
+        const back = document.getElementById('back-link');
+        if (back) {
+          back.setAttribute('href', '/#analyze');
+          const label = back.querySelector('.back-label');
+          if (label) label.textContent = 'Back to your analysis';
+        }
+      });
+    }
+  </script>
+  <section class="surface live exp-page" aria-label={exp.title}>
+    <a id="back-link" class="back-link reveal" href="/" style="--d:0ms">
+      <span aria-hidden="true">←</span> <span class="back-label">All figures</span>
+    </a>
+
+    <div class="exp-layout">
+      {/* Sticky rail: title + on-this-page nav. The prose itself lives wide in the main column
+          so the overview/analysis read large, not squeezed into the narrow rail. */}
+      <aside class="exp-rail reveal" style="--d:40ms">
+        <div class="hero exp-hero">
+          <span class="eyebrow">{exp.category}</span>
+          <h1>{exp.title}</h1>
+          <p class="lede">{exp.blurb}</p>
+        </div>
+        {(overviewHtml || figures.length > 0 || detailsHtml) && (
+          <nav class="exp-nav" aria-label="On this page">
+            {overviewHtml && <a href="#overview">Overview</a>}
+            {figures.length > 0 && <a class="nav-figures" href="#figures">Figures</a>}
+            {detailsHtml && <a class="nav-details" href="#details">Reference</a>}
+          </nav>
+        )}
+
+        <nav class="exp-atlas-nav" aria-label="Experiment pages">
+          <div class="exp-nav-label">Experiment pages</div>
+          {experimentGroups.map((group) => (
+            <div class="exp-nav-group">
+              <div class="exp-nav-group-title">{group.title}</div>
+              <div class="exp-nav-list">
+                {group.items.map((item) => (
+                  <a
+                    href={`/exp/${item.slug}`}
+                    class={item.slug === exp.slug ? 'is-current' : undefined}
+                    aria-current={item.slug === exp.slug ? 'page' : undefined}
+                  >
+                    {item.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      <div class="exp-main">
+        <TermStrip delay={70} />
+
+        {overviewHtml && (
+          <section id="overview" class="exp-section reveal" style="--d:80ms">
+            <header class="exp-sec-head"><span class="eyebrow">Overview</span></header>
+            <article class="readme exp-overview" set:html={overviewHtml} />
+          </section>
+        )}
+        {!overviewHtml && !detailsHtml && (
+          <p class="lede reveal" style="--d:80ms">No write-up found for this experiment yet.</p>
+        )}
+
+        {figures.length > 0 && (
+          <section id="figures" class="exp-section reveal" style="--d:120ms" aria-label="Figures">
+            <header class="exp-sec-head">
+              <span class="eyebrow">Figures</span>
+              {figures.length > 1 && <span class="sec-count">{figures.length}</span>}
+            </header>
+            <div class="exp-figures">
+              {figures.map((f, i) => (
+                <figure class="fig">
+                  <div class="fig-plate">
+                    <div class="canvas">
+                      <img src={f.src} alt={f.caption} data-zoomable data-caption={f.caption} loading="lazy" onerror="this.closest('.fig')?.classList.add('fig--pending')" />
+                    </div>
+                  </div>
+                  <figcaption><span class="fig-n">Fig.&nbsp;{i + 1}</span>{f.caption}</figcaption>
+                  {f.analysisHtml && <div class="fig-analysis readme" set:html={f.analysisHtml} />}
+                </figure>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {detailsHtml && (
+          <section id="details" class="exp-section reveal" style="--d:160ms">
+            <header class="exp-sec-head"><span class="eyebrow">Reference</span></header>
+            <article class="readme exp-details" set:html={detailsHtml} />
+          </section>
+        )}
+
+        <nav class="exp-step-nav reveal" style="--d:190ms" aria-label="Adjacent experiment pages">
+          <a href={`/exp/${prevExp.slug}`} class="prev">
+            <span>Previous</span>
+            <strong>{prevExp.title}</strong>
+          </a>
+          <a href={`/exp/${nextExp.slug}`} class="next">
+            <span>Next</span>
+            <strong>{nextExp.title}</strong>
+          </a>
+        </nav>
+      </div>
+    </div>
+
+    <Footer left="SyFI Trace Atlas · experiment detail" />
+  </section>
+
+  <Lightbox />
+
+  {/* Scroll-spy: highlight the rail nav link for whichever section is in view. */}
+  <script is:inline>
+    (() => {
+      const links = Array.from(document.querySelectorAll('.exp-nav a'));
+      if (!links.length) return;
+      const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+      const sections = Array.from(byId.keys())
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+      if (!sections.length) return;
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            links.forEach((l) => l.classList.remove('is-active'));
+            byId.get(e.target.id)?.classList.add('is-active');
+          });
+        },
+        { rootMargin: '-28% 0px -62% 0px', threshold: 0 },
+      );
+      sections.forEach((s) => io.observe(s));
+    })();
+  </script>
+</Base>

@@ -1,0 +1,71 @@
+---
+// Ask-the-trace assistant: floating launcher + dock panel (collapses to a corner, expands to a
+// full-page overlay) with a source selector, history drawer, and composer. Markup is lifted from
+// web/mockups/scheme-04-atelier.html; all behavior lives in lib/ai/askTrace (mounted below).
+---
+
+<button class="launcher" id="launcher" aria-label="Open the trace assistant">
+  <span class="spark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"></path></svg></span>
+  Ask the data
+  <span class="pulse"></span>
+</button>
+
+<div class="scrim" id="scrim"></div>
+<section class="assistant" id="assistant" aria-label="Trace assistant">
+  <div class="a-head">
+    <div class="a-id">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"></path></svg></span>
+      <div>
+        <div class="ttl">Trace assistant</div>
+        <div class="sub" id="headSub">Reading the public SYFI pool</div>
+      </div>
+    </div>
+    <div class="tools">
+      <button class="iconbtn" id="btnHistory" title="Conversations" aria-label="Conversations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg></button>
+      <button class="iconbtn" id="btnNew" title="New conversation" aria-label="New conversation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg></button>
+      <button class="iconbtn expand-only" id="btnExpand" title="Expand to full page" aria-label="Expand to full page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H3v6M3 3l7 7M15 21h6v-6M21 21l-7-7"></path></svg></button>
+      <button class="iconbtn collapse-only" id="btnCollapse" title="Collapse to corner" aria-label="Collapse to corner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4v6H4M10 10L3 3M14 20v-6h6M14 14l7 7"></path></svg></button>
+      <button class="iconbtn" id="btnClose" title="Close" aria-label="Close assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
+    </div>
+  </div>
+
+  <div class="a-main">
+    <aside class="hist" id="hist">
+      <div class="hist-top">
+        <button class="hist-new" id="histNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>New conversation</button>
+      </div>
+      <div class="hist-label">Recent</div>
+      <div class="hist-list" id="histList"></div>
+    </aside>
+    <div class="hist-scrim" id="histScrim"></div>
+
+    <div class="a-col">
+      <div class="source-bar">
+        <div class="seg" id="seg" data-active="public" data-trace="none">
+          <div class="thumb"></div>
+          <button class="on" data-src="public"><span class="d"></span>Public SYFI</button>
+          <button data-src="user"><span class="d"></span><span class="lk" aria-label="locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></span>Your trace</button>
+        </div>
+        <div class="src-cap" id="srcCap">
+          <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4l3 2"></path></svg></span>
+          <span id="srcCapText">357,161 agent steps across Claude &amp; Codex — public, shareable.</span>
+        </div>
+      </div>
+
+      <div class="a-body" id="asstBody"></div>
+
+      <div class="composer" id="composer">
+        <div class="composer-inner">
+          <textarea id="asstInput" rows="1" placeholder="Ask about tools, tokens, cache, sessions…"></textarea>
+          <button class="send" id="asstSend" aria-label="Send" disabled><svg class="ic-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><svg class="ic-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"></rect></svg></button>
+        </div>
+        <div class="foot"><span class="gd"></span><span id="footNote">Answers run real DuckDB/Python in a sandbox · code is shown</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { mountAskTrace } from '../lib/ai/askTrace';
+  mountAskTrace();
+</script>

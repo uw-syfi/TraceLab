@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">SyFI</title>
+  <rect width="512" height="512" fill="#563184" />
+  <g transform="translate(76 102)" fill="none" stroke="#e3bf86" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 88h104" />
+    <path d="M20 88 92 50l33-8 46-25 24 14 28 5 118 52h-50l-32-17-20 3-25-16-29 17-60-33-46 30 9-17-34 7Z" />
+    <path d="M125 42 171 73" />
+    <circle cx="181" cy="80" r="9" />
+    <path d="M171 17 242 66" />
+    <circle cx="255" cy="74" r="9" />
+    <path d="M185 75 224 53l40 25" />
+    <circle cx="274" cy="83" r="9" />
+    <path d="M291 88h15" />
+    <circle cx="318" cy="88" r="9" />
+    <path d="M124 88h14" />
+    <circle cx="150" cy="88" r="9" />
+  </g>
+  <text x="256" y="356" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="142" font-weight="800" fill="#fff">SyFI</text>
+</svg>

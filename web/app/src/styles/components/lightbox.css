@@ -1,0 +1,64 @@
+  /* ---- image viewer / lightbox (see components/Lightbox.astro) ---- */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 90; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(26, 23, 20, 0.88); backdrop-filter: blur(6px);
+    touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  .lightbox.open { display: flex; animation: fadeIn .25s var(--ease); }
+
+  .lightbox .lb-img {
+    max-width: 92vw; max-height: 86vh; width: auto; height: auto;
+    border-radius: 10px; box-shadow: 0 24px 90px rgba(0, 0, 0, 0.55);
+    transform: translate(0, 0) scale(1); transform-origin: center center;
+    transition: transform .18s var(--ease); will-change: transform;
+    cursor: zoom-in; -webkit-user-drag: none;
+  }
+  .lightbox.zoomed .lb-img { cursor: grab; }
+  .lightbox.dragging .lb-img { transition: none; cursor: grabbing; }
+
+  .lb-close {
+    position: fixed; top: 18px; right: 20px; z-index: 92;
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(20, 18, 16, 0.55);
+    color: #f3ece1; font-size: var(--fs-xl); line-height: 1; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px); transition: background .2s var(--ease);
+  }
+  .lb-close:hover { background: rgba(255, 255, 255, 0.16); }
+
+  .lb-caption {
+    position: fixed; top: 22px; left: 50%; transform: translateX(-50%); z-index: 91;
+    max-width: 66vw; text-align: center; color: #efe7da; font-size: var(--fs-xs); line-height: 1.5;
+    background: rgba(20, 18, 16, 0.5); padding: 7px 16px; border-radius: 999px;
+    backdrop-filter: blur(8px);
+  }
+
+  .lb-toolbar {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 92;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(20, 18, 16, 0.62); border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 5px; border-radius: 999px; backdrop-filter: blur(8px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  }
+  .lb-btn {
+    width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer;
+    background: transparent; color: #f3ece1; font-size: var(--fs-md); line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background .2s var(--ease);
+  }
+  .lb-btn:hover { background: rgba(255, 255, 255, 0.14); }
+  .lb-btn:focus-visible { outline: 2px solid var(--terra-soft); outline-offset: 2px; }
+  .lb-zoom {
+    min-width: 54px; text-align: center; color: #f3ece1; font-size: var(--fs-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .lb-close:focus-visible { outline: 2px solid var(--terra-soft); outline-offset: 2px; }
+
+  /* affordance on any rendered figure (detail pages + Analyze results); not while pending */
+  .fig:not(.fig--pending) img[data-zoomable] { cursor: zoom-in; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lightbox.open { animation: none; }
+    .lightbox .lb-img { transition: none; }
+  }

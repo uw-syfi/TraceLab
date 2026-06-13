@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SyFI Trace Atlas — Scheme Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,560&family=Hanken+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --line:rgba(255,255,255,.10);
+    --ink:#eceef2; --muted:#9aa1ad; --accent:#5b9dff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(900px 520px at 18% -10%, rgba(91,157,255,.10), transparent 60%),
+      radial-gradient(900px 520px at 88% 0%, rgba(79,184,166,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"Hanken Grotesk", ui-sans-serif, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:64px 24px 80px;
+  }
+  .wrap{max-width:980px;margin:0 auto}
+  .kicker{font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted)}
+  h1{
+    font-family:"Fraunces", Georgia, serif;
+    font-weight:560;font-size:clamp(34px,6vw,58px);
+    line-height:1.04;margin:.35em 0 .25em;letter-spacing:-.01em;
+  }
+  h1 em{font-style:italic;color:var(--accent)}
+  .lede{color:var(--muted);max-width:62ch;line-height:1.65;font-size:15.5px}
+  .lede a{color:var(--accent)}
+  .grid{margin-top:46px;display:grid;gap:20px;grid-template-columns:repeat(2,1fr)}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}body{padding:40px 16px 64px}}
+  a.card{
+    display:block;text-decoration:none;color:inherit;
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)), var(--panel);
+    border:1px solid var(--line);border-radius:18px;padding:24px;
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    position:relative;overflow:hidden;
+  }
+  a.card:hover{transform:translateY(-4px);border-color:rgba(91,157,255,.5);box-shadow:0 18px 50px -24px rgba(0,0,0,.85)}
+  .swatch{height:84px;border-radius:12px;margin-bottom:18px;border:1px solid var(--line);position:relative;overflow:hidden}
+  .s03{background:linear-gradient(120deg,#0b0f1f,#0e1530)}
+  .s03::after{content:"";position:absolute;inset:0;background:
+     radial-gradient(64px 48px at 26% 60%, rgba(91,157,255,.55), transparent 70%),
+     radial-gradient(60px 46px at 58% 38%, rgba(79,184,166,.5), transparent 70%),
+     radial-gradient(46px 40px at 84% 62%, rgba(214,168,92,.45), transparent 70%)}
+  .s04{background:#f3ece1}
+  .s04::after{content:"";position:absolute;inset:0;background:
+     radial-gradient(80px 70px at 30% 60%, rgba(200,100,60,.85), transparent 70%),
+     radial-gradient(64px 60px at 70% 40%, rgba(111,125,94,.78), transparent 70%)}
+  .name{font-family:"Fraunces",Georgia,serif;font-size:23px;margin:0 0 .35em;font-weight:560}
+  .desc{color:var(--muted);font-size:14px;line-height:1.6}
+  .chips{margin-top:16px;display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:11px;letter-spacing:.05em;color:var(--ink);border:1px solid var(--line);
+       border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.03)}
+  .refined{font-size:11px;letter-spacing:.05em;color:#79e3c8;border-color:rgba(121,227,200,.4)}
+  .open{margin-top:18px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  footer{margin-top:46px;color:var(--muted);font-size:13px;line-height:1.7}
+  footer a{color:var(--ink)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">SyFI Trace Atlas · Phase 0 · iteration 2</div>
+    <h1>Two <em>directions</em>, refined.</h1>
+    <p class="lede"><strong>Atelier is the chosen direction</strong>; Control Room is kept as
+      an alternate draft. Each shows the same three surfaces — Overview, Analyze-your-trace,
+      and the Contributed dashboard — with identical fake data, so you're judging the
+      <strong>look</strong>, not the numbers. See <a href="PLAN.md">PLAN.md</a> for the full
+      build plan.</p>
+
+    <div class="grid">
+      <a class="card" href="scheme-03-control-room.html" target="_blank" rel="noopener">
+        <div class="swatch s03"></div>
+        <div class="name">Control Room</div>
+        <div class="desc">Dark, glassy analytics cockpit — now with a restrained, professional
+          palette (calm blue + muted teal, glow dialed back). Frosted panels, tabular numerals,
+          count-up KPIs.</div>
+        <div class="chips"><span class="chip">Dark</span><span class="chip">Glass</span><span class="chip">Data-dense</span><span class="chip">kept as alternate</span></div>
+        <div class="open">Open →</div>
+      </a>
+
+      <a class="card" href="scheme-04-atelier.html" target="_blank" rel="noopener">
+        <div class="swatch s04"></div>
+        <div class="name">Atelier</div>
+        <div class="desc">Light, warm soft-luxury — cream, terracotta + sage, organic shapes.
+          Typography reworked for legibility: Fraunces headings, clean tabular numerals.</div>
+        <div class="chips"><span class="chip">Light</span><span class="chip">Warm</span><span class="chip">Premium</span><span class="chip refined">✓ selected direction</span></div>
+        <div class="open">Open →</div>
+      </a>
+    </div>
+
+    <footer>
+      Mockup · fake data · scheme preview. &nbsp;Mix-and-match is still on the table — e.g.
+      Control Room's structure with Atelier's warmth. Tell me which to take forward, plus any
+      tweaks, and I'll refine the winner into the production template.
+    </footer>
+  </div>
+</body>
+</html>
