@@ -115,12 +115,15 @@ EXPERIMENTS: list[Experiment] = [
     Experiment("tool_calls", "tool_time_by_kind", "tool_calls/tool_time_by_kind/plot.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("tool_calls", "tool_category_distribution", "tool_calls/tool_category_distribution/analyze.py", "global", "db", after=BUILD_DB_NAME),
     Experiment("tool_calls", "claude_long_tool_calls", "tool_calls/claude_long_tool_calls/analyze.py", "-i", "db", after=BUILD_DB_NAME),
+    Experiment("tool_calls", "codex_wall_internal_gap", "tool_calls/codex_wall_internal_gap/analyze.py", "-i", "db", after=BUILD_DB_NAME),
     # prefix_cache ---------------------------------------------------------
     Experiment("prefix_cache", "cache_hit_ratio", "prefix_cache/cache_hit_ratio/analyze.py", "-i", "db", after=BUILD_DB_NAME),
+    Experiment("prefix_cache", "redundant_prefill", "prefix_cache/redundant_prefill/analyze.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "cache_hit_idle_relationship/gap", "prefix_cache/cache_hit_idle_relationship/cache_hit_idle_gap_analysis.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "cache_hit_idle_relationship/scatters", "prefix_cache/cache_hit_idle_relationship/plot_user_wait_time_vs_hit_rate.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "cache_replay", "prefix_cache/cache_replay/analyze.py", "--input", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "kv_cache_active_ratio", "prefix_cache/kv_cache_active_ratio/plot.py", "-i", "db", after=BUILD_DB_NAME),
+    Experiment("prefix_cache", "eviction_tradeoff", "prefix_cache/eviction_tradeoff/analyze.py", "-i", "db", after=BUILD_DB_NAME),
     # synthetic schematic — takes no trace input, so no build-db dependency.
     Experiment("prefix_cache", "timeout_miss_pattern", "prefix_cache/timeout_miss_pattern/plot.py", "none"),
     # human_in_the_loop ----------------------------------------------------
