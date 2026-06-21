@@ -205,6 +205,17 @@ With `llm.provider: "vllm"` in the config (the default), the tester/runtime alre
 For uploaded traces using browser/Pyodide tools, E2B is not needed. For public SYFI trace analysis
 through the baked DuckDB template, keep `E2B_API_KEY` set.
 
+## Session Workload Replay
+
+A session-aware vLLM workload runner lives in [`session_runner/`](session_runner/). It replays
+trace-derived sessions as closed-loop chains of LLM rounds, preserving `prefix_len`, appended input
+length, target decode length, `arrival_time`, and `tool_wait_after_ms` while using a synthetic text
+corpus instead of raw private prompts.
+
+Use it when you need to benchmark serving behavior for multi-round coding-agent sessions rather than
+independent request arrivals. See [`session_runner/README.md`](session_runner/README.md) for build,
+dry-run, replay, and prefix-cache accounting instructions.
+
 ## Standalone Loop Tests (no browser, no server)
 
 The same model -> tool loop is testable as plain CLI calls, so the user-trace path has a regression

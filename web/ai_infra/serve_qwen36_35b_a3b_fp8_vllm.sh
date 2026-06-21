@@ -16,6 +16,8 @@ set -euo pipefail
 #   TOOL_CALL_PARSER=qwen3_xml
 #   VLLM_API_KEY=...
 #   VLLM_CACHE_HOST=/path/to/vllm-cache
+#   ENABLE_PROMPT_TOKENS_DETAILS=1
+#   ENABLE_PREFIX_CACHING=1
 #   DETACH=1
 
 # Defaults for the served-model name + port come from the centralized config/services.json so they
@@ -38,6 +40,8 @@ GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-qwen3_xml}"
 TRUST_REMOTE_CODE="${TRUST_REMOTE_CODE:-1}"
 VLLM_API_KEY="${VLLM_API_KEY:-${SYFI_VLLM_API_KEY:-}}"
+ENABLE_PROMPT_TOKENS_DETAILS="${ENABLE_PROMPT_TOKENS_DETAILS:-0}"
+ENABLE_PREFIX_CACHING="${ENABLE_PREFIX_CACHING:-}"
 DETACH="${DETACH:-0}"
 
 HF_CACHE_HOST="${HF_HOME:-$HOME/.cache/huggingface}"
@@ -78,6 +82,16 @@ args+=(
   --enable-auto-tool-choice
   --tool-call-parser "${TOOL_CALL_PARSER}"
 )
+
+if [[ "${ENABLE_PROMPT_TOKENS_DETAILS}" == "1" || "${ENABLE_PROMPT_TOKENS_DETAILS}" == "true" ]]; then
+  args+=(--enable-prompt-tokens-details)
+fi
+
+if [[ "${ENABLE_PREFIX_CACHING}" == "1" || "${ENABLE_PREFIX_CACHING}" == "true" ]]; then
+  args+=(--enable-prefix-caching)
+elif [[ "${ENABLE_PREFIX_CACHING}" == "0" || "${ENABLE_PREFIX_CACHING}" == "false" ]]; then
+  args+=(--no-enable-prefix-caching)
+fi
 
 if [[ "${TRUST_REMOTE_CODE}" == "1" || "${TRUST_REMOTE_CODE}" == "true" ]]; then
   args+=(--trust-remote-code)
