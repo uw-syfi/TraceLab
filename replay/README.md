@@ -33,6 +33,19 @@ Fields:
 
 A small example lives at `examples/session_workload_example.csv`.
 
+## Text Corpus (`--text-file`)
+
+The runner only needs the *token shape* of text, not its meaning, so any large UTF-8 text file works: your own code/logs, a Project Gutenberg book, a Wikipedia dump, etc. Only about `--token-pool-limit` tokens are consumed (default: `200000`, roughly 1 MB of text), so a small file is enough; the rest of a large file is never read.
+
+A convenient, widely used option is **enwik9**: the first 10^9 bytes of English Wikipedia from the Large Text Compression Benchmark. It is **not bundled** with this repository. Since enwik9 is derived from Wikipedia content, users should download it from the original source and comply with the applicable license terms.
+
+```bash
+curl -O http://mattmahoney.net/dc/enwik9.zip
+unzip enwik9.zip   # -> ./enwik9 (~1 GB; only the first ~1 MB is tokenized)
+```
+
+Then pass `--text-file ./enwik9`. Any other sufficiently large UTF-8 text file works just as well.
+
 ## Request Path
 
 The runner targets vLLM's OpenAI-compatible completions endpoint:
@@ -46,7 +59,7 @@ Pass `--base-url http://HOST:PORT/v1`. The runner constructs exact prompt token 
 ## Build
 
 ```bash
-cargo build --release --manifest-path web/ai_infra/session_runner/Cargo.toml --bin session_runner
+cargo build --release --manifest-path replay/Cargo.toml --bin session_runner
 ```
 
 ## Dry Run
@@ -54,8 +67,8 @@ cargo build --release --manifest-path web/ai_infra/session_runner/Cargo.toml --b
 Dry-run mode validates and summarizes the CSV without contacting vLLM:
 
 ```bash
-cargo run --manifest-path web/ai_infra/session_runner/Cargo.toml --bin session_runner -- \
-  --trace web/ai_infra/session_runner/examples/session_workload_example.csv \
+cargo run --manifest-path replay/Cargo.toml --bin session_runner -- \
+  --trace replay/examples/session_workload_example.csv \
   --text-file /path/to/text-corpus \
   --tokenizer /path/to/tokenizer.json \
   --model qwen3.6-35b-a3b-fp8 \
@@ -68,8 +81,8 @@ cargo run --manifest-path web/ai_infra/session_runner/Cargo.toml --bin session_r
 ## Run Against vLLM
 
 ```bash
-cargo run --release --manifest-path web/ai_infra/session_runner/Cargo.toml --bin session_runner -- \
-  --trace web/ai_infra/session_runner/examples/session_workload_example.csv \
+cargo run --release --manifest-path replay/Cargo.toml --bin session_runner -- \
+  --trace replay/examples/session_workload_example.csv \
   --text-file /path/to/text-corpus \
   --tokenizer /path/to/tokenizer.json \
   --model qwen3.6-35b-a3b-fp8 \
