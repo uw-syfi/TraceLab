@@ -12,7 +12,7 @@ from typing import Any, Iterable, Iterator
 
 
 MICRO_REDUCTION_MAX_TOKENS = 1_024
-MAJOR_COMPACT_MIN_TOKENS = 50_000
+MAJOR_REDUCTION_MIN_TOKENS = 64_000
 TRIGGER_LABELS = {
     "user_message": "user",
     "tool_result": "tool_result",
@@ -32,7 +32,7 @@ SUMMARY_COLUMNS = [
     "micro_pct",
     "ordinary_reduction",
     "ordinary_pct",
-    "major_compact",
+    "major_reduction",
     "major_pct",
     "total_context_increase",
     "avg_raw_delta",
@@ -134,7 +134,7 @@ def reduction_bucket(
     raw_delta_tokens: int,
     *,
     micro_reduction_max_tokens: int = MICRO_REDUCTION_MAX_TOKENS,
-    major_compact_min_tokens: int = MAJOR_COMPACT_MIN_TOKENS,
+    major_reduction_min_tokens: int = MAJOR_REDUCTION_MIN_TOKENS,
 ) -> str:
     if raw_delta_tokens > 0:
         return "positive"
@@ -144,21 +144,21 @@ def reduction_bucket(
     reduction_tokens = -raw_delta_tokens
     if reduction_tokens <= micro_reduction_max_tokens:
         return "micro_reduction"
-    if reduction_tokens >= major_compact_min_tokens:
-        return "major_compact"
+    if reduction_tokens >= major_reduction_min_tokens:
+        return "major_reduction"
     return "ordinary_reduction"
 
 
 @dataclass
 class InputGrowthStats:
     micro_reduction_max_tokens: int = MICRO_REDUCTION_MAX_TOKENS
-    major_compact_min_tokens: int = MAJOR_COMPACT_MIN_TOKENS
+    major_reduction_min_tokens: int = MAJOR_REDUCTION_MIN_TOKENS
     rounds: int = 0
     positive_growth_rounds: int = 0
     zero_growth_rounds: int = 0
     micro_reduction_rounds: int = 0
     ordinary_reduction_rounds: int = 0
-    major_compact_rounds: int = 0
+    major_reduction_rounds: int = 0
     total_raw_delta_tokens: int = 0
     total_positive_growth_tokens: int = 0
     total_reduction_tokens: int = 0
@@ -173,7 +173,7 @@ class InputGrowthStats:
         bucket = reduction_bucket(
             raw_delta_tokens,
             micro_reduction_max_tokens=self.micro_reduction_max_tokens,
-            major_compact_min_tokens=self.major_compact_min_tokens,
+            major_reduction_min_tokens=self.major_reduction_min_tokens,
         )
         if bucket == "positive":
             self.positive_growth_rounds += 1
@@ -188,8 +188,8 @@ class InputGrowthStats:
         self.max_reduction_tokens = max(self.max_reduction_tokens, reduction_tokens)
         if bucket == "micro_reduction":
             self.micro_reduction_rounds += 1
-        elif bucket == "major_compact":
-            self.major_compact_rounds += 1
+        elif bucket == "major_reduction":
+            self.major_reduction_rounds += 1
         else:
             self.ordinary_reduction_rounds += 1
 
@@ -198,7 +198,7 @@ class InputGrowthStats:
         return (
             self.micro_reduction_rounds
             + self.ordinary_reduction_rounds
-            + self.major_compact_rounds
+            + self.major_reduction_rounds
         )
 
     def share(self, count: int) -> float | None:
@@ -215,13 +215,13 @@ class InputGrowthStats:
             "negative_growth_rounds": self.negative_growth_rounds,
             "micro_reduction_rounds": self.micro_reduction_rounds,
             "ordinary_reduction_rounds": self.ordinary_reduction_rounds,
-            "major_compact_rounds": self.major_compact_rounds,
+            "major_reduction_rounds": self.major_reduction_rounds,
             "positive_growth_share": self.share(self.positive_growth_rounds),
             "zero_growth_share": self.share(self.zero_growth_rounds),
             "negative_growth_share": self.share(self.negative_growth_rounds),
             "micro_reduction_share": self.share(self.micro_reduction_rounds),
             "ordinary_reduction_share": self.share(self.ordinary_reduction_rounds),
-            "major_compact_share": self.share(self.major_compact_rounds),
+            "major_reduction_share": self.share(self.major_reduction_rounds),
             "total_context_increase_tokens": self.total_positive_growth_tokens,
             "total_raw_delta_tokens": self.total_raw_delta_tokens,
             "total_reduction_tokens": (
@@ -332,12 +332,12 @@ def build_growth_stats(
     events: Iterable[dict[str, Any]],
     *,
     micro_reduction_max_tokens: int = MICRO_REDUCTION_MAX_TOKENS,
-    major_compact_min_tokens: int = MAJOR_COMPACT_MIN_TOKENS,
+    major_reduction_min_tokens: int = MAJOR_REDUCTION_MIN_TOKENS,
 ) -> dict[tuple[str, str], InputGrowthStats]:
     stats: dict[tuple[str, str], InputGrowthStats] = defaultdict(
         lambda: InputGrowthStats(
             micro_reduction_max_tokens=micro_reduction_max_tokens,
-            major_compact_min_tokens=major_compact_min_tokens,
+            major_reduction_min_tokens=major_reduction_min_tokens,
         )
     )
     for event in events:
@@ -376,8 +376,8 @@ def summary_row(scope: str, trigger: str, stats: InputGrowthStats) -> dict[str, 
         "micro_pct": pct_string(data["micro_reduction_share"]),
         "ordinary_reduction": data["ordinary_reduction_rounds"],
         "ordinary_pct": pct_string(data["ordinary_reduction_share"]),
-        "major_compact": data["major_compact_rounds"],
-        "major_pct": pct_string(data["major_compact_share"]),
+        "major_reduction": data["major_reduction_rounds"],
+        "major_pct": pct_string(data["major_reduction_share"]),
         "total_context_increase": data["total_context_increase_tokens"],
         "avg_raw_delta": blank_if_none(data["average_raw_delta_tokens"]),
         "p10_raw_delta": blank_if_none(data["p10_raw_delta_tokens"]),

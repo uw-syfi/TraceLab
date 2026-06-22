@@ -478,9 +478,93 @@ def plot_tool_latency(
     save_plot(fig, out)
 
 
+def plot_tool_latency_top12_wide(
+    tool_stats_by_provider: dict[str, dict[str, ToolStats]],
+    output_dir: Path,
+) -> None:
+    """Paper-sized side-by-side top-tool latency plot, without replacing the full plot."""
+    provider_panels: list[
+        tuple[str, list[tuple[str, ToolStats]], list[list[float]]]
+    ] = []
+    for provider in provider_order(tool_stats_by_provider):
+        candidates = [
+            (name, stats)
+            for name, stats in tool_stats_by_provider[provider].items()
+            if stats.latency_count > 0 and stats.values
+        ]
+        if not candidates:
+            continue
+        candidates.sort(key=lambda item: item[1].calls, reverse=True)
+        selected = candidates[:12]
+        selected.sort(key=lambda item: np.median(item[1].values), reverse=True)
+        data = [list(stats.values) for _name, stats in selected]
+        provider_panels.append((provider, selected, data))
+    if not provider_panels:
+        return
+
+    x_min = 30.0
+    x_max = 600_000.0
+    x_ticks = [100.0, 1_000.0, 10_000.0, 60_000.0, 600_000.0]
+    fig, axes = plt.subplots(
+        1,
+        len(provider_panels),
+        figsize=(7.15, 4.25),
+        squeeze=False,
+        sharex=True,
+    )
+
+    for ax, (provider, selected, data) in zip(
+        axes.ravel(), provider_panels, strict=True
+    ):
+        labels = [
+            f"{short_label(name, 20)} ({stats.calls:,})" for name, stats in selected
+        ]
+        ax.set_title(f"{provider_title(provider)} top 12", loc="left", pad=5, fontsize=8.8)
+        ax.set_xscale("log")
+        ax.set_xlim(x_min, x_max)
+        ax.set_xticks(x_ticks)
+        ax.xaxis.set_major_formatter(mticker.FuncFormatter(format_latency_tick))
+        ax.xaxis.set_minor_formatter(mticker.NullFormatter())
+        polish_axes(ax, grid_axis="x", minor=True)
+
+        box = ax.boxplot(
+            data,
+            vert=False,
+            **{_BOXPLOT_LABEL_KW: labels},
+            showfliers=False,
+            whis=(5, 95),
+            patch_artist=True,
+            widths=0.58,
+            medianprops={"color": TEXT_COLOR, "linewidth": 0.95},
+            whiskerprops={"color": MUTED_TEXT, "linewidth": 0.75},
+            capprops={"color": MUTED_TEXT, "linewidth": 0.75},
+        )
+        for patch in box["boxes"]:
+            patch.set_facecolor(BOX_FACE)
+            patch.set_edgecolor(BOX_EDGE)
+            patch.set_alpha(0.82)
+            patch.set_linewidth(0.75)
+
+        ax.tick_params(axis="y", labelsize=6.4, pad=1.5)
+        ax.tick_params(axis="x", labelsize=7.0, pad=2)
+
+    for ax in axes.ravel():
+        ax.set_xlabel("Effective latency (log scale)", fontsize=7.6, labelpad=4)
+
+    fig.subplots_adjust(left=0.125, right=0.995, top=0.92, bottom=0.13, wspace=0.55)
+    pdf_out = output_dir / "tool_latency_by_tool_top12_wide.pdf"
+    png_out = output_dir / "tool_latency_by_tool_top12_wide.png"
+    fig.savefig(pdf_out, bbox_inches="tight", facecolor="white")
+    print(f"Saved {pdf_out}", file=sys.stderr)
+    save_plot(fig, png_out)
+
+
 def plot_tool_latency_weighted_bins(
     bins_by_provider: dict[str, list[ToolLatencyBinStats]],
     output_dir: Path,
+    *,
+    compact: bool = False,
+    out_name: str = "tool_latency_weighted_bins.png",
 ) -> None:
     provider_panels = [
         (provider, bins)
@@ -523,7 +607,8 @@ def plot_tool_latency_weighted_bins(
         suptitle="Tool Calls vs Latency",
         caption="Most Calls Are Fast — But Most Latency Comes From the Rare Slow Calls",
         legend_title="Per-Call Latency",
-        out_name="tool_latency_weighted_bins.png",
+        out_name=out_name,
+        compact=compact,
     )
 
 
@@ -862,18 +947,64 @@ def main() -> int:
         "--min-tool-calls-for-plot", type=int, default=DEFAULT_MIN_TOOL_CALLS,
         help="collapse tools with fewer provider-local calls into an Other bucket",
     )
+    parser.add_argument(
+        "--paper-wide-only",
+        action="store_true",
+        help="only generate the compact side-by-side top-12 paper figure",
+    )
+    parser.add_argument(
+        "--paper-weighted-only",
+        action="store_true",
+        help="only generate the compact weighted latency-bin paper figure",
+    )
     args = parser.parse_args()
 
     con = trace_db.open_from_args(args)
     out = args.output_dir
-    tool_stats = load_tool_stats(con)
     by_provider = load_tool_stats_by_provider(con, min_calls=args.min_tool_calls_for_plot)
+
+    if args.paper_wide_only:
+        plot_tool_latency_top12_wide(by_provider, out)
+        png_sidecar.make_self_contained(
+            out,
+            code_files=[Path(__file__), *png_sidecar.util_code_files()],
+            readme_path=EXP_DIR / "README.md",
+            png_names=["tool_latency_by_tool_top12_wide.png"],
+        )
+        print(f"All outputs saved to {out}", file=sys.stderr)
+        return 0
+
+    if args.paper_weighted_only:
+        latency_bins_by_provider = load_tool_latency_bins(con, by_provider=True)
+        plot_tool_latency_weighted_bins(
+            latency_bins_by_provider,
+            out,
+            compact=True,
+            out_name="tool_latency_weighted_bins_paper.png",
+        )
+        png_sidecar.make_self_contained(
+            out,
+            code_files=[Path(__file__), *png_sidecar.util_code_files()],
+            readme_path=EXP_DIR / "README.md",
+            png_names=["tool_latency_weighted_bins_paper.png"],
+        )
+        print(f"All outputs saved to {out}", file=sys.stderr)
+        return 0
+
+    tool_stats = load_tool_stats(con)
     latency_values = load_tool_latency_values_by_provider(con)
     latency_bins = load_tool_latency_bins(con, by_provider=False)
     latency_bins_by_provider = load_tool_latency_bins(con, by_provider=True)
 
     plot_tool_latency(by_provider, out, args.top_tools)
+    plot_tool_latency_top12_wide(by_provider, out)
     plot_tool_latency_weighted_bins(latency_bins_by_provider, out)
+    plot_tool_latency_weighted_bins(
+        latency_bins_by_provider,
+        out,
+        compact=True,
+        out_name="tool_latency_weighted_bins_paper.png",
+    )
     plot_tool_total_latency_cdf_by_provider(latency_values, out)
     plot_count_cdf_by_provider(
         latency_values,

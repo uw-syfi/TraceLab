@@ -132,6 +132,7 @@ def plot_stacked_share_panels(
     legend_title: str,
     out_name: str,
     label_threshold: float = 6.0,
+    compact: bool = False,
 ) -> None:
     """Two 100%-stacked horizontal bars per provider: a count-weighted and a
     mass-weighted composition over the same ordered bins, sharing one color ramp.
@@ -160,25 +161,132 @@ def plot_stacked_share_panels(
         return centers
 
     n_panels = len(panels)
-    fig, axes = plt.subplots(
-        n_panels,
-        1,
-        figsize=(11.0, max(3.6, 2.7 * n_panels) + 0.5),
-        squeeze=False,
-    )
-    left_margin = 0.13
-    right_margin = 0.985
+
+    # A "compact" profile renders nicely at one LaTeX column. It uses one
+    # shared axis instead of vertically stacked provider panels, so the figure is
+    # designed for column width rather than being squeezed into it.
+    if compact:
+        fig, ax = plt.subplots(figsize=(3.45, 2.35))
+        fs_bar, fs_group, fs_ytick, fs_xlabel, fs_legend = 6.0, 7.2, 6.6, 6.8, 4.9
+        compact_bar_h = 0.34
+        group_gap = 0.72
+        row_gap = 0.42
+        y_positions: list[tuple[float, str, list[float]]] = []
+        y = (n_panels - 1) * (2 * row_gap + group_gap)
+        group_labels: list[tuple[float, str]] = []
+        for title, count_share, mass_share in panels:
+            count_y_pos = y + row_gap
+            mass_y_pos = y
+            y_positions.append((count_y_pos, count_bar_label, count_share))
+            y_positions.append((mass_y_pos, mass_bar_label, mass_share))
+            group_labels.append((count_y_pos + compact_bar_h / 2 + 0.13, title))
+            y -= 2 * row_gap + group_gap
+
+        compact_label_threshold = max(label_threshold, 7.5)
+        for y_pos, _row_label, shares in y_positions:
+            left = 0.0
+            for i, share in enumerate(shares):
+                if share <= 0:
+                    continue
+                ax.barh(
+                    y_pos,
+                    share,
+                    left=left,
+                    height=compact_bar_h,
+                    color=colors[i],
+                    edgecolor="white",
+                    linewidth=0.6,
+                )
+                if share >= compact_label_threshold:
+                    ax.text(
+                        left + share / 2,
+                        y_pos,
+                        f"{share:.0f}%",
+                        ha="center",
+                        va="center",
+                        fontsize=fs_bar,
+                        color=readable_text_color(colors[i]),
+                    )
+                left += share
+
+        for label_y, title in group_labels:
+            ax.text(
+                50,
+                label_y,
+                title,
+                ha="center",
+                va="bottom",
+                fontsize=fs_group,
+                fontweight="semibold",
+                color=TEXT_COLOR,
+            )
+
+        ax.set_yticks([item[0] for item in y_positions])
+        ax.set_yticklabels([item[1] for item in y_positions], fontsize=fs_ytick)
+        ax.tick_params(axis="y", length=0, pad=2)
+        ax.set_xlim(0, 100)
+        ax.set_ylim(y_positions[-1][0] - 0.42, group_labels[0][0] + 0.28)
+        ax.set_xlabel("Share of total", fontsize=fs_xlabel, labelpad=2)
+        ax.xaxis.set_major_locator(mticker.FixedLocator([0, 25, 50, 75, 100]))
+        ax.xaxis.set_major_formatter(mticker.PercentFormatter())
+        ax.tick_params(axis="x", labelsize=6.2, pad=1.5)
+        polish_axes(ax, grid_axis="x")
+
+        handles = [
+            mpatches.Patch(facecolor=colors[i], edgecolor="white") for i in range(n_bins)
+        ]
+        compact_legend_title = legend_title.split(" per ")[0]
+        legend_center_x = 0.57
+        fig.text(
+            legend_center_x,
+            0.985,
+            compact_legend_title,
+            ha="center",
+            va="center",
+            fontsize=fs_legend + 0.3,
+            color=TEXT_COLOR,
+        )
+        fig.legend(
+            handles,
+            active_labels,
+            loc="upper center",
+            ncol=n_bins,
+            frameon=False,
+            bbox_to_anchor=(legend_center_x, 0.955),
+            fontsize=fs_legend,
+            handlelength=0.65,
+            handletextpad=0.2,
+            columnspacing=0.42,
+            borderaxespad=0.0,
+        )
+        fig.subplots_adjust(left=0.22, right=0.985, bottom=0.17, top=0.84)
+        # Vector PDF sibling for the paper (these panels are pure vector — bars + text).
+        fig.savefig(
+            output_dir / f"{Path(out_name).stem}.pdf", bbox_inches="tight", facecolor="white"
+        )
+        save_plot(fig, output_dir / out_name)
+        return
+
+    # The non-compact branch is the original wide figure.
+    figsize = (11.0, max(3.6, 2.7 * n_panels) + 0.5)
+    fs_bar, fs_title, fs_ytick, fs_xlabel, fs_legend = 8.5, None, 10.0, None, None
+    legend_ncol, legend_anchor = min(n_bins, 8), (0.5, -0.01)
+    left_margin, right_margin = 0.13, 0.985
+    margins = dict(left=left_margin, right=right_margin, bottom=0.19, top=0.835, hspace=0.62)
+
+    fig, axes = plt.subplots(n_panels, 1, figsize=figsize, squeeze=False)
     plot_center = (left_margin + right_margin) / 2
-    fig.suptitle(suptitle, x=plot_center, fontsize=17, y=0.990)
-    fig.text(
-        plot_center,
-        0.925,
-        caption,
-        ha="center",
-        fontsize=12,
-        color=MUTED_TEXT,
-        style="italic",
-    )
+    if not compact:
+        fig.suptitle(suptitle, x=plot_center, fontsize=17, y=0.990)
+        fig.text(
+            plot_center,
+            0.925,
+            caption,
+            ha="center",
+            fontsize=12,
+            color=MUTED_TEXT,
+            style="italic",
+        )
 
     # count bar on top, mass bar below, so the eye reads the shift from "where the
     # events are" down to "where the volume is".
@@ -206,7 +314,7 @@ def plot_stacked_share_panels(
                         f"{share:.0f}%",
                         ha="center",
                         va="center",
-                        fontsize=8.5,
+                        fontsize=fs_bar,
                         color=readable_text_color(colors[i]),
                     )
                 left += share
@@ -235,15 +343,18 @@ def plot_stacked_share_panels(
                 },
             )
 
-        ax.set_title(title, loc="left", pad=3)
+        ax.set_title(title, loc="left", pad=3, fontsize=fs_title)
         ax.set_yticks([mass_y, count_y])
         ax.set_yticklabels(
-            [mass_bar_label.title(), count_bar_label.title()], fontsize=10
+            [mass_bar_label.title(), count_bar_label.title()], fontsize=fs_ytick
         )
         ax.set_ylim(-0.45, 1.75)
         ax.set_xlim(0, 100)
         ax.xaxis.set_major_formatter(mticker.PercentFormatter())
-        ax.set_xlabel("Share of Total (each bar sums to 100%)")
+        # In the compact (single-column) profile only the bottom panel is labelled,
+        # to avoid a mid-figure label and a collision with the legend.
+        if (not compact) or ax is axes.ravel()[-1]:
+            ax.set_xlabel("Share of Total (each bar sums to 100%)", fontsize=fs_xlabel)
         polish_axes(ax, grid_axis="x")
 
     handles = [
@@ -253,17 +364,17 @@ def plot_stacked_share_panels(
         handles,
         active_labels,
         loc="lower center",
-        ncol=min(n_bins, 8),
+        ncol=legend_ncol,
         frameon=False,
         title=legend_title,
-        bbox_to_anchor=(0.5, -0.01),
+        bbox_to_anchor=legend_anchor,
+        fontsize=fs_legend,
+        title_fontsize=fs_legend,
     )
-    fig.subplots_adjust(
-        left=left_margin,
-        right=right_margin,
-        bottom=0.19,
-        top=0.835,
-        hspace=0.62,
+    fig.subplots_adjust(**margins)
+    # Vector PDF sibling for the paper (these panels are pure vector — bars + text).
+    fig.savefig(
+        output_dir / f"{Path(out_name).stem}.pdf", bbox_inches="tight", facecolor="white"
     )
     save_plot(fig, output_dir / out_name)
 

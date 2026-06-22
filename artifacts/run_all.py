@@ -15,8 +15,11 @@ outputs (so it is scheduled only after that experiment succeeds).
 
 Examples
 --------
-    # run everything on the full merged trace, 16 at a time (defaults)
+    # run everything on the released DuckDB, 16 at a time (defaults)
     uv run python artifacts/run_all.py
+
+    # rebuild a DuckDB from JSONL first, then run everything against it
+    uv run python artifacts/run_all.py --build-db --input trace/syfi_coding_trace.jsonl --db trace/syfi_coding_trace.duckdb
 
     # serial, or a different width
     uv run python artifacts/run_all.py --jobs 1
@@ -29,8 +32,8 @@ Examples
     uv run python artifacts/run_all.py --only tool_calls
     uv run python artifacts/run_all.py --only prefix_cache/cache_hit_ratio
 
-    # a fast pass on a sample, and a dry run
-    uv run python artifacts/run_all.py --input trace/sample.jsonl
+    # run against a different prebuilt DuckDB, and a dry run
+    uv run python artifacts/run_all.py --db trace/syfi_coding_trace.duckdb
     uv run python artifacts/run_all.py --dry-run
 """
 
@@ -47,7 +50,8 @@ from pathlib import Path
 
 ARTIFACTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = ARTIFACTS_DIR.parent
-DEFAULT_JSONL = REPO_ROOT / "trace" / "llm_round_trace.merged.all_users.jsonl"
+DEFAULT_JSONL = Path("trace") / "syfi_coding_trace.jsonl"
+DEFAULT_DB = Path("trace") / "syfi_coding_trace.duckdb"
 DEFAULT_TIMING = ARTIFACTS_DIR / "llm_generation" / "timing_fit" / "timing_fit_trace.csv"
 DEFAULT_JOBS = 16
 TIMING_BUILD_NAME = "timing_fit/build_trace"
@@ -58,9 +62,9 @@ BUILD_DB_NAME = "build"
 TRACE_DB_SCRIPT = "utils/trace_db.py"
 
 
-def default_db_path(jsonl: Path) -> Path:
-    """Where build-db materializes the trace DuckDB for a given input (rebuilt each run)."""
-    return Path(tempfile.gettempdir()) / "coding_trace_db" / f"run_all.{jsonl.stem}.duckdb"
+def repo_relative(path: Path) -> Path:
+    """Resolve relative CLI paths against the repository root."""
+    return path if path.is_absolute() else REPO_ROOT / path
 
 # Shim used to drive experiments whose input is a module-level INPUT global
 # (they have no -i/--input flag): import the script, override INPUT, call main().
@@ -115,12 +119,15 @@ EXPERIMENTS: list[Experiment] = [
     Experiment("tool_calls", "tool_time_by_kind", "tool_calls/tool_time_by_kind/plot.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("tool_calls", "tool_category_distribution", "tool_calls/tool_category_distribution/analyze.py", "global", "db", after=BUILD_DB_NAME),
     Experiment("tool_calls", "claude_long_tool_calls", "tool_calls/claude_long_tool_calls/analyze.py", "-i", "db", after=BUILD_DB_NAME),
+    Experiment("tool_calls", "codex_wall_internal_gap", "tool_calls/codex_wall_internal_gap/analyze.py", "-i", "db", after=BUILD_DB_NAME),
     # prefix_cache ---------------------------------------------------------
     Experiment("prefix_cache", "cache_hit_ratio", "prefix_cache/cache_hit_ratio/analyze.py", "-i", "db", after=BUILD_DB_NAME),
+    Experiment("prefix_cache", "redundant_prefill", "prefix_cache/redundant_prefill/analyze.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "cache_hit_idle_relationship/gap", "prefix_cache/cache_hit_idle_relationship/cache_hit_idle_gap_analysis.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "cache_hit_idle_relationship/scatters", "prefix_cache/cache_hit_idle_relationship/plot_user_wait_time_vs_hit_rate.py", "-i", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "cache_replay", "prefix_cache/cache_replay/analyze.py", "--input", "db", after=BUILD_DB_NAME),
     Experiment("prefix_cache", "kv_cache_active_ratio", "prefix_cache/kv_cache_active_ratio/plot.py", "-i", "db", after=BUILD_DB_NAME),
+    Experiment("prefix_cache", "eviction_tradeoff", "prefix_cache/eviction_tradeoff/analyze.py", "-i", "db", after=BUILD_DB_NAME),
     # synthetic schematic — takes no trace input, so no build-db dependency.
     Experiment("prefix_cache", "timeout_miss_pattern", "prefix_cache/timeout_miss_pattern/plot.py", "none"),
     # human_in_the_loop ----------------------------------------------------
@@ -198,13 +205,14 @@ def matches(exp: Experiment, only: str | None) -> bool:
     return exp.category == only or exp.name == only
 
 
-def select_with_dependencies(only: str | None, *, skip_timing_build: bool) -> list[Experiment]:
+def select_with_dependencies(only: str | None, *, skip_timing_build: bool, include_db_build: bool) -> list[Experiment]:
     """Select matching experiments and add required prerequisites."""
     by_name = {exp.name: exp for exp in EXPERIMENTS}
     selected: dict[str, Experiment] = {
         exp.name: exp
         for exp in EXPERIMENTS
         if matches(exp, only)
+        and not (not include_db_build and exp.name == BUILD_DB_NAME)
         and not (skip_timing_build and exp.name == TIMING_BUILD_NAME)
     }
 
@@ -217,6 +225,8 @@ def select_with_dependencies(only: str | None, *, skip_timing_build: bool) -> li
             if skip_timing_build and exp.after == TIMING_BUILD_NAME:
                 continue
             dep = by_name.get(exp.after)
+            if dep is not None and dep.name == BUILD_DB_NAME and not include_db_build:
+                continue
             if dep is None or dep.name in selected:
                 continue
             selected[dep.name] = dep
@@ -306,7 +316,23 @@ def schedule(selected, *, jobs, python, jsonl, timing, db, log_dir, stop_on_fail
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--input", type=Path, default=DEFAULT_JSONL, help="JSONL trace for most experiments")
+    parser.add_argument(
+        "--db",
+        type=Path,
+        default=DEFAULT_DB,
+        help=f"DuckDB trace used by db-backed experiments (default: {DEFAULT_DB})",
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_JSONL,
+        help=f"JSONL trace used only with --build-db or jsonl-backed experiments (default: {DEFAULT_JSONL})",
+    )
+    parser.add_argument(
+        "--build-db",
+        action="store_true",
+        help="Materialize --input into --db before running db-backed experiments",
+    )
     parser.add_argument(
         "--timing-input",
         type=Path,
@@ -327,25 +353,45 @@ def main() -> int:
 
     jobs = max(1, args.jobs)
     timing_input = args.timing_input or DEFAULT_TIMING
-    db_path = default_db_path(args.input)
     skip_timing_build = args.timing_input is not None
-    selected = select_with_dependencies(args.only, skip_timing_build=skip_timing_build)
+    selected = select_with_dependencies(
+        args.only,
+        skip_timing_build=skip_timing_build,
+        include_db_build=args.build_db,
+    )
     if not selected:
         print(f"No experiments match --only {args.only!r}", file=sys.stderr)
         return 2
 
     if args.list:
+        selected_names = {e.name for e in selected}
         for e in selected:
-            dep = f"  after={e.after}" if e.after else ""
+            dep = f"  after={e.after}" if e.after and e.after in selected_names else ""
             print(f"{e.category:<18} {e.name:<38} [{e.style}, {e.data}]{dep}")
         return 0
 
+    db_path = args.db
     if args.dry_run:
         for e in selected:
             cmd, redirect = build_command(e, args.python, args.input, timing_input, db_path)
             print(f"# {e.category}/{e.name}", file=sys.stderr)
             print(f"$ {display_command(e, cmd, redirect)}", file=sys.stderr)
         return 0
+
+    db_fs_path = repo_relative(db_path)
+    if not args.build_db and any(e.data == "db" for e in selected) and not db_fs_path.exists():
+        print(f"Missing DuckDB trace: {db_path}", file=sys.stderr)
+        print("Download the released database first:", file=sys.stderr)
+        print("  mkdir -p trace", file=sys.stderr)
+        print("  curl -L --fail -o trace/syfi_coding_trace.duckdb \\", file=sys.stderr)
+        print("    https://github.com/uw-syfi/TraceLab/releases/latest/download/syfi_coding_trace.duckdb", file=sys.stderr)
+        return 2
+
+    if args.build_db:
+        jsonl_fs_path = repo_relative(args.input)
+        if not jsonl_fs_path.exists():
+            print(f"Missing JSONL input for --build-db: {args.input}", file=sys.stderr)
+            return 2
 
     args.log_dir.mkdir(parents=True, exist_ok=True)
     print(f"Dispatcher: {len(selected)} experiment(s), up to {jobs} at a time", file=sys.stderr)

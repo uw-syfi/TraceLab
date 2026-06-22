@@ -1,6 +1,6 @@
 {
   "_comment": "Single source of truth for local service ports + the LLM backend. Consumers (web/ai_infra/app.py, syfi_llm_runtime.py, web/server, web/local_sidecar, web/app/astro.config.mjs, the vLLM serve script) read this. Environment variables still override at runtime: env > this file > hardcoded fallback (e.g. MASTER_SERVER_ADDRESS, LOCAL_SIDECAR_PORT).",
-  "master_server_address": "https://master.example.com",
+  "master_server_address": "https://tracelab.cs.washington.edu",
   "ports": {
     "ai_backend": 60980,
     "contribute_backend": 60981,
@@ -17,7 +17,11 @@
     },
     "openrouter": {
       "base_url": "https://openrouter.ai/api/v1",
-      "model": "nex-agi/nex-n2-pro:free"
+      "model": "qwen/qwen3.6-35b-a3b",
+      "provider_routing": {
+        "order": ["atlas-cloud", "wandb"],
+        "allow_fallbacks": true
+      }
     }
   }
 }

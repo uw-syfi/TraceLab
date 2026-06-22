@@ -14,6 +14,9 @@ Method and assumptions:
 
 - **Prefix hit ratio** = `prefix_tokens / (prefix_tokens + newly_append_tokens)` per step — the
   share of input tokens that were a cache read rather than newly charged.
+- **Token-weighted summary rate** = `sum(prefix_tokens) / sum(prefix_tokens + newly_append_tokens)`.
+  The paper table uses all valid steps for the overall row, and first-event `user_message` /
+  `tool_result` steps for the trigger rows.
 - **Step eligibility / trigger.** A step is included only when its **first timing event**
   (`timing_events` with `event_index = 1`, the in-order first event) is a `user_message` or a
   `tool_result`; all other first-event types (and steps with no timing events) are dropped. That
@@ -78,6 +81,8 @@ uv run python artifacts/prefix_cache/cache_hit_ratio/analyze.py --no-plots
   count + share across the fixed hit-ratio bins.
 - `cache_hit_ratio_round_split.csv` — per `(scope, trigger)`: step counts/shares across the coarse
   `<10% / 10-40% / 40-80% / 80%+` buckets.
+- `cache_hit_ratio_token_weighted.csv` — token-weighted hit-rate inputs for the paper table.
+- `prefix_cache_hit_rate_table.tex` — LaTeX table body for the paper.
 
 The PNGs are self-contained — they embed this README, the CSVs, and the plotting code (`analyze.py`
 + shared `artifacts/utils/` modules). Unpack with

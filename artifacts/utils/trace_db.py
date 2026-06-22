@@ -269,7 +269,62 @@ def _cache_db_path(trace_path: Path) -> Path:
     return Path(tempfile.gettempdir()) / "coding_trace_db" / f"{trace_path.stem}.{digest}.duckdb"
 
 
+def _ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _has_column(con: "duckdb.DuckDBPyConnection", table: str, column: str) -> bool:
+    return bool(
+        con.execute(
+            """
+            SELECT count(*) > 0
+            FROM information_schema.columns
+            WHERE table_name = ? AND column_name = ?
+            """,
+            [table, column],
+        ).fetchone()[0]
+    )
+
+
+def _primary_database_name(con: "duckdb.DuckDBPyConnection") -> str:
+    """Return the attached database name for the opened DuckDB file."""
+    for _, name, path in con.execute("PRAGMA database_list").fetchall():
+        if path:
+            return name
+    return "memory"
+
+
+def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
+    """Expose current-schema views for older released DB assets.
+
+    The first public DuckDB release predated ``timing_events.event_index``. Current analyses use
+    that column to recover the original per-round timing-event order. DuckDB table ``rowid`` preserves
+    the insertion order of the materialized child rows, so a temp view can reconstruct the same
+    1-based per-round index without modifying the read-only release asset.
+    """
+    if _has_column(con, "timing_events", "event_index"):
+        return
+
+    db = _ident(_primary_database_name(con))
+    con.execute(
+        f"""
+        CREATE TEMP VIEW timing_events AS
+        SELECT
+          row_number() OVER (PARTITION BY round_pk ORDER BY rowid) AS event_index,
+          *
+        FROM {db}.timing_events
+        """
+    )
+
+
 def connect(db_path, *, read_only: bool = True) -> "duckdb.DuckDBPyConnection":
+    con = duckdb.connect(str(db_path), read_only=read_only)
+    _install_compat_views(con)
+    return con
+
+
+def raw_connect(db_path, *, read_only: bool = True) -> "duckdb.DuckDBPyConnection":
+    """Open a DuckDB file without installing compatibility views."""
     return duckdb.connect(str(db_path), read_only=read_only)
 
 

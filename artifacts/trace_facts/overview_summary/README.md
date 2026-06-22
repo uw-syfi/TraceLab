@@ -16,7 +16,7 @@ each provider seen. The sections:
 - **tokens** — total / append / cached-read input lengths and per-step averages; user-initiated vs
   tool-triggered prompt-growth and context-delta stats; prefix hit rates; output and reasoning
   token totals. Growth bucketing reuses `artifacts/utils/growth.py` (`InputGrowthStats`,
-  micro-reduction `≤ 1024`, major-compact `≥ 50000` tokens).
+  micro-reduction `≤ 1024`, major-reduction `≥ 50000` tokens).
 - **generation_timing** — observable generation span (latest input event → last model-output event),
   input-to-reasoning-end span, waiting-for-human-input stats, and the post-reasoning TPOT / residual
   TTFT estimates that are populated **only** for agent steps with exact `reasoning_output_tokens` (the
@@ -57,7 +57,7 @@ the per-step aggregation and growth bucketing unchanged.
   subprocess; both keep working unchanged.
 - `Summary` / `SummaryBundle` / `as_dict` / `print_text` and all per-step metric helpers are
   unchanged — only the data source was swapped from line-parsing JSONL to DB fetches.
-- `InputGrowthStats`, `MAJOR_COMPACT_MIN_TOKENS`, `MICRO_REDUCTION_MAX_TOKENS`,
+- `InputGrowthStats`, `MAJOR_REDUCTION_MIN_TOKENS`, `MICRO_REDUCTION_MAX_TOKENS`,
   `first_timing_event_type` — unchanged shared helpers from `artifacts/utils/growth.py`.
 
 The data layer lives in `artifacts/utils/trace_db.py` (see `artifacts/utils/DB_SCHEMA.md`).

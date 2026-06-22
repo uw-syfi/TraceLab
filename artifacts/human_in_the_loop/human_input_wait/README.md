@@ -5,25 +5,27 @@ where does total idle time accumulate?**
 
 ## Experiment overview
 
-**Human input wait** is the gap, within one session, from the model's *previous* output to the
-*next* user message. It is computed by a stateful single-pass walk over agent steps in ingestion order
-(`round_pk` == file order), keeping `last_model_output_by_session: {session_id -> datetime}`. For
-each step, in order:
+**Human input wait** is the gap, within one session, from the *previous event of any type* to each
+`user_message`. It is provider-agnostic (the shared `timing.human_waits_from_event_pairs`): the gap
+spans non-output events such as Codex `usage_report`, and **every** user message counts, not only
+turn-triggering ones. It is computed by a stateful single-pass walk over agent steps in ingestion
+order (`round_pk` == file order), keeping `last_event_at_by_session: {session_id -> datetime}`. For
+each step, in event time order:
 
-1. `start` = the **request-start user-message timestamp** for the step: among the step's
-   `timing_events`, take the earliest model-output (`reasoning`/`text`/`tool_call`) timestamp as
-   `first_output`, keep the `user_message` timestamps at-or-before `first_output`, and take the
-   latest such candidate (None if there is no user message or no output, or none qualifies).
-2. If `start` is not None and the step has a non-empty string `session_id`, and that session
-   already has a recorded previous model-output timestamp `prev`, the wait is
-   `(start − prev).total_seconds()`; when **strictly positive** it is appended to the `"all"` list
-   and to that step's provider bucket.
-3. The session's `last_model_output_by_session[session_id]` is then updated with this step's
-   **last model-output timestamp** (the latest `reasoning`/`text`/`tool_call` timestamp), when
-   present.
+1. For each `user_message` event with a recorded previous-event timestamp `prev` for the session,
+   the wait is `(user_ts − prev).total_seconds()`; when **strictly positive** it is appended to the
+   `"all"` list and to that step's provider bucket.
+2. `prev` advances to every event's timestamp as the walk passes it (so consecutive user→user gaps
+   count too), carrying across rounds via `last_event_at_by_session`.
 
 This is a **trace-level estimate**, not a serving-engine timer; it reflects only recorded events.
 The wait spans the human think/read time between requests and excludes the model's own generation.
+
+> **Note (definition change).** Earlier this metric used *previous model output → response-triggering
+> user message*, which dropped non-trigger messages and Codex's post-output `usage_report` tail —
+> undercounting Codex idle (it surfaced elsewhere as an unattributed "Other" residual). The current
+> provider-agnostic definition captures all human idle (Claude ≈ 90%, Codex ≈ 94% of session
+> wall-clock).
 
 The experiment renders the wait distribution three ways, with the x-axis on a log duration scale and
 the count/total panels capped at 1h (a 5-minute reference line marks a plausible cache-eviction
@@ -57,9 +59,11 @@ Method and assumptions:
   `timing_events` (event_type + epoch-microsecond timestamp, in `round_pk` ingest order) and the
   per-step `(session_id, provider)` from `rounds`, then runs the stateful walk above, returning
   `{"all": [...], provider: [...]}`. The full per-provider lists are returned, no sampling.
-- `_response_trigger_user_message_timestamp(events)` / `_last_model_output_timestamp(events)` —
-  reproduce the pre-DuckDB `timing.response_trigger_user_message_timestamp` and
-  `timing.last_model_output_timestamp` for one step's events.
+- `timing.human_waits_from_event_pairs(...)` — the shared, provider-agnostic core (imported from
+  `artifacts/utils/timing.py`): given a session's `(event_type, timestamp)` pairs and the carried
+  previous-event time, it walks them in time order and returns the positive previous-event→user_message
+  waits. The same helper backs the row-dict consumers (`trace_loader`, `overview_summary`), so every
+  path computes identical waits.
 - `_epoch_us_to_datetime(...)` — rebuilds a naive datetime from epoch-microseconds.
 - `ordered_human_wait_items` / `human_wait_summary_row` / `plot_human_input_wait_cdf` /
   `write_human_input_wait_summary` — shape the overlay CDF and the summary CSV (unchanged from the
@@ -106,8 +110,8 @@ Each PNG embeds this README, the CSVs above, and the plotting code (`plot.py` + 
 ### human_input_wait_cdf.png
 
 A single log-x CDF overlaying the `all` curve (in the neutral text color) and one curve per provider,
-each labeled with its count and `p50`/`p90` wait. The x-axis is the wait from the previous model
-output to the next user message, with landmark ticks from 1s out to a week. Read the height a curve
+each labeled with its count and `p50`/`p90` wait. The x-axis is the wait from the previous event of
+any type to the next user message, with landmark ticks from 1s out to a week. Read the height a curve
 reaches at, say, the 5-minute or 1-hour tick to gauge what fraction of requests the human answers
 quickly versus walking away: an early, steep rise means tight back-and-forth, while a long right tail
 shows sessions resumed minutes, hours, or days later. Provider curves can be compared directly for

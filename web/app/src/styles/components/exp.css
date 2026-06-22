@@ -58,8 +58,8 @@
 
   .exp-layout {
     display: grid;
-    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
-    gap: 52px; align-items: start; margin-top: 10px;
+    grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) minmax(112px, 132px);
+    gap: 34px; align-items: start; margin-top: 10px;
   }
   /* The rail pins while the wide main column scrolls; it scrolls internally if ever taller than
      the viewport, so a long title block never pushes the nav off-screen. */
@@ -77,18 +77,27 @@
   .exp-rail .exp-hero .eyebrow { margin-bottom: 16px; }
   .exp-rail .exp-hero .lede { font-size: var(--fs-sm); max-width: none; }
 
-  /* On-this-page nav */
+  /* On-this-page nav: a compact floating unit on the right side of detail pages. */
+  .exp-floating-nav {
+    position: sticky; top: 86px; align-self: start; z-index: 20;
+  }
   .exp-nav {
-    display: flex; flex-direction: column; gap: 2px; margin-top: 22px;
-    border-top: 1px solid var(--line); padding-top: 16px;
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 7px; border: 1px solid var(--line); border-radius: 8px;
+    background: color-mix(in srgb, var(--card) 86%, transparent);
+    box-shadow: var(--sh-1); backdrop-filter: blur(12px) saturate(1.05);
   }
   .exp-nav a {
+    display: block; text-align: center;
     font-size: var(--fs-xs); font-weight: 600; color: var(--muted); text-decoration: none;
-    padding: 7px 10px; border-radius: 8px; border-left: 2px solid transparent;
-    transition: color .2s var(--ease), background .2s var(--ease);
+    padding: 9px 10px; border-radius: 6px;
+    transition: color .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease);
   }
   .exp-nav a:hover { color: var(--ink); background: var(--card-2); }
-  .exp-nav a.is-active { color: var(--ink); background: var(--card-2); border-left-color: var(--terra); }
+  .exp-nav a.is-active {
+    color: var(--ink); background: var(--card-2);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--terra) 48%, transparent);
+  }
   .exp-nav a:focus-visible { outline: 2px solid var(--terra); outline-offset: 2px; }
 
   /* Cross-experiment navigation: lets readers move between detail pages without returning to the
@@ -147,6 +156,45 @@
     order: 3; flex: 0 0 auto; font-family: var(--serif); font-style: italic;
     font-size: var(--fs-md); color: var(--muted);
   }
+  .exp-reference-list {
+    display: flex; flex-direction: column; border-top: 1px solid var(--line);
+  }
+  .exp-reference-item {
+    border-bottom: 1px solid var(--line);
+  }
+  .exp-reference-summary {
+    display: flex; align-items: center; gap: 18px; padding: 18px 0;
+    cursor: pointer; list-style: none; user-select: none;
+  }
+  .exp-reference-summary::-webkit-details-marker { display: none; }
+  .exp-reference-summary:focus-visible {
+    outline: 2px solid var(--terra); outline-offset: 4px; border-radius: 8px;
+  }
+  .exp-reference-summary::after {
+    content: ""; order: 2; flex: 1 1 auto; height: 1px; background: var(--line);
+  }
+  .exp-reference-title {
+    flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere;
+    font-family: var(--serif); font-weight: 560;
+    font-size: var(--fs-xl); line-height: 1.2; color: var(--ink);
+  }
+  .exp-reference-icon {
+    order: 3; flex: 0 0 36px; width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+  }
+  .exp-reference-icon::before {
+    content: ""; width: 10px; height: 10px;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg) translate(-1px, -2px);
+    transition: transform .2s var(--ease), border-color .2s var(--ease);
+  }
+  .exp-reference-item[open] .exp-reference-icon::before {
+    transform: rotate(225deg) translate(-1px, -2px);
+  }
+  .exp-reference-summary:hover .exp-reference-icon::before { border-color: var(--terra); }
+  .exp-main .exp-reference-item > .readme { padding: 0 0 24px; }
+  .exp-reference-item .exp-details > :first-child { margin-top: 0; }
 
   /* Prose runs as open editorial text — NOT a boxed card — so it flows on the page and its left
      edge lines up flush with the figure plates (the old card padding was pushing text out of
@@ -214,6 +262,9 @@
     margin-top: 18px; padding: 18px 2px 2px;
     max-width: none; font-size: var(--fs-base);
   }
+  .fig-analysis.readme p {
+    color: var(--ink); font-size: inherit; line-height: inherit; margin: 0 0 14px;
+  }
   .fig-analysis.readme > :first-child { margin-top: 0; }
   .fig-analysis.readme h3, .fig-analysis.readme h4 { margin-top: 16px; }
 
@@ -272,7 +323,7 @@
   .readme a { color: var(--terra); text-decoration: underline; text-underline-offset: 2px; }
   .readme strong { font-weight: 650; color: var(--ink); }
   .readme code {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: var(--fs-xs);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em;
     background: var(--card-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
   }
   .readme pre {
@@ -293,19 +344,26 @@
   .personal-exp .exp-nav .nav-figures,
   .personal-exp .exp-nav .nav-details { display: none; }
 
-  /* Narrow screens: collapse the rail above the content (no sticky), nav becomes a horizontal row. */
-  @media (max-width: 920px) {
+  /* Medium and narrow screens: collapse the rail above the content, and keep the floating nav as a
+     sticky horizontal strip so it never covers the figures. */
+  @media (max-width: 1280px) {
     .shell:has(.exp-page) { max-width: 1180px; }
     .exp-layout { grid-template-columns: 1fr; gap: 4px; margin-top: 4px; }
     .exp-rail {
+      grid-row: 1;
       position: static; max-height: none; overflow: visible; margin-bottom: 10px;
     }
     .exp-rail .exp-hero h1 { font-size: var(--fs-title-lg); }
+    .exp-floating-nav {
+      grid-row: 2; position: sticky; top: 74px; justify-self: start;
+      width: min(100%, 520px); margin: 0 0 28px;
+    }
+    .exp-main { grid-row: 3; }
     .exp-nav {
       flex-direction: row; flex-wrap: wrap; gap: 6px;
-      border-top: none; padding-top: 0; margin-top: 16px;
+      padding: 6px; width: 100%;
     }
-    .exp-nav a { border-left: none; background: var(--card-2); }
+    .exp-nav a { flex: 1 1 130px; background: var(--card-2); }
     .exp-atlas-nav {
       margin-top: 18px; padding-top: 14px;
     }

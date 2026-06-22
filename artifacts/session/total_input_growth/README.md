@@ -23,7 +23,7 @@ Method and assumptions:
   (`round_pk` = file order), the same line-order sequencing the pre-DuckDB scan used.
 - **Reduction buckets** (thresholds from `artifacts/utils/growth.py`, overridable on the CLI):
   - **micro-reduction** — drop `≤ 1024` tokens (accounting jitter);
-  - **major-compact** — drop `≥ 50000` tokens (a real context compaction);
+  - **major-reduction** — drop `≥ 50000` tokens (a real context compaction);
   - **ordinary reduction** — anything between the two.
 - **Triggers reported.** Summary rows are cut three ways — `all`, `user`, and `tool_result` — by the
   current step's trigger, and per scope (`merged` plus each provider).
@@ -61,7 +61,7 @@ uv run python artifacts/session/total_input_growth/analyze.py -i trace/sample.js
 uv run python artifacts/session/total_input_growth/analyze.py --db /tmp/trace.duckdb -o /tmp/out
 ```
 
-Knobs: `--micro-reduction-max-tokens` / `--major-compact-min-tokens` retune the reduction buckets,
+Knobs: `--micro-reduction-max-tokens` / `--major-reduction-min-tokens` retune the reduction buckets,
 `--no-drilldowns` writes only the summary, `--limit-events` caps each drilldown after a stable sort,
 and `--summary-csv` / `--events-csv` / `--reductions-csv` / `--micro-csv` override individual paths.
 
@@ -82,7 +82,7 @@ CSV only — no figures.
 The headline table. Each row is a `(scope, trigger)` cut. Read the **positive / zero / negative**
 split first: in the sample the window grows on ~99.6% of steps, so context accumulation is the
 overwhelming norm and reductions are rare. Within the negatives, the **micro / ordinary / major**
-columns separate harmless accounting jitter from genuine compactions — major-compacts are a small
+columns separate harmless accounting jitter from genuine compactions — major-reductions are a small
 minority but carry the largest `max_reduction`. The `avg_raw_delta` / `p10` / `median` / `p90`
 columns describe the per-step growth distribution, and `total_context_increase` is the summed
 positive growth. Comparing the `user` vs `tool_result` trigger rows shows whether reductions cluster

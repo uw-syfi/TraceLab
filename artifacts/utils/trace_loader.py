@@ -25,8 +25,8 @@ from accumulators import (
     tool_name,
 )
 from timing import (
+    human_input_wait_seconds_for_row,
     input_to_last_output_span_seconds,
-    last_model_output_timestamp,
     last_response_end_timestamp,
     response_trigger_user_message_timestamp,
 )
@@ -71,7 +71,7 @@ def load_trace(
     human_input_wait_seconds_by_provider: dict[str, list[float]] = {"all": []}
     llm_generation_seconds_by_provider: dict[str, list[float]] = {}
     user_turn_response_seconds_by_provider: dict[str, list[float]] = {"all": []}
-    last_model_output_by_session: dict[str, datetime] = {}
+    last_event_at_by_session: dict[str, datetime] = {}
     current_user_turn_by_session: dict[str, dict[str, Any]] = {}
 
     rows = 0
@@ -161,19 +161,24 @@ def load_trace(
                 )
 
             session_id = row.get("session_id")
+
+            # Human wait: gap from the previous event of any type to each user_message in this row
+            # (provider-agnostic; see timing.human_input_wait_seconds_for_row). Independent of the
+            # turn state machine below, which still keys on the response-triggering user message.
+            if isinstance(session_id, str):
+                waits, _n_user, last_event_at = human_input_wait_seconds_for_row(
+                    row, last_event_at_by_session.get(session_id)
+                )
+                for wait_seconds in waits:
+                    human_input_wait_seconds_by_provider["all"].append(wait_seconds)
+                    human_input_wait_seconds_by_provider.setdefault(provider, []).append(
+                        wait_seconds
+                    )
+                if last_event_at is not None:
+                    last_event_at_by_session[session_id] = last_event_at
+
             user_message_start_at = response_trigger_user_message_timestamp(row)
             if user_message_start_at is not None and isinstance(session_id, str):
-                previous_model_output_at = last_model_output_by_session.get(session_id)
-                if previous_model_output_at is not None:
-                    wait_seconds = (
-                        user_message_start_at - previous_model_output_at
-                    ).total_seconds()
-                    if wait_seconds > 0:
-                        human_input_wait_seconds_by_provider["all"].append(wait_seconds)
-                        human_input_wait_seconds_by_provider.setdefault(
-                            provider,
-                            [],
-                        ).append(wait_seconds)
                 close_user_turn(session_id)
                 current_user_turn_by_session[session_id] = {
                     "provider": provider,
@@ -248,9 +253,6 @@ def load_trace(
                                 )
                                 break
 
-            last_output_at = last_model_output_timestamp(row)
-            if isinstance(session_id, str) and last_output_at is not None:
-                last_model_output_by_session[session_id] = last_output_at
             response_end_at = last_response_end_timestamp(row)
             if isinstance(session_id, str) and response_end_at is not None:
                 user_turn = current_user_turn_by_session.get(session_id)

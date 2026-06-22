@@ -13,7 +13,7 @@ const outDir = resolve(here, 'out/analyze');
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
-const TAR = process.env.TAR || '/m-coriander/coriander/kanzhu/coding_trace_refactor/test_workload_claude_sessions.tar.gz';
+const TAR = process.env.TAR || resolve(here, '../../../test_workload_claude_sessions.tar.gz');
 
 // Serve the built dist/ ourselves (stable, no dev-server HMR that would destroy the page context
 // mid-analysis). Mirrors shoot_compare.mjs.

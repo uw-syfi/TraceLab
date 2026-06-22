@@ -18,9 +18,10 @@ import sys  # noqa: E402
 
 sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 import trace_db  # noqa: E402
+from timing import human_input_wait_seconds_for_row  # noqa: E402
 from growth import (  # noqa: E402
     InputGrowthStats,
-    MAJOR_COMPACT_MIN_TOKENS,
+    MAJOR_REDUCTION_MIN_TOKENS,
     MICRO_REDUCTION_MAX_TOKENS,
     first_timing_event_type,
 )
@@ -396,7 +397,7 @@ class Summary:
     providers: Counter[str] = field(default_factory=Counter)
     models: Counter[str] = field(default_factory=Counter)
     event_type_counts: Counter[str] = field(default_factory=Counter)
-    last_model_output_by_session: dict[str, datetime] = field(default_factory=dict)
+    last_event_at_by_session: dict[str, datetime] = field(default_factory=dict)
     last_total_input_tokens_by_session: dict[str, int] = field(default_factory=dict)
 
     def add(self, row: dict[str, Any]) -> None:
@@ -414,21 +415,21 @@ class Summary:
         if isinstance(session_id, str):
             self.session_ids.add(session_id)
 
-        user_message_start_at = response_trigger_user_message_timestamp(row)
-        if user_message_start_at is not None:
-            self.human_input_wait_candidate_rounds += 1
-            if isinstance(session_id, str):
-                previous_model_output_at = self.last_model_output_by_session.get(
-                    session_id
-                )
-                if previous_model_output_at is not None:
-                    wait_seconds = (
-                        user_message_start_at - previous_model_output_at
-                    ).total_seconds()
-                    if wait_seconds > 0:
-                        self.human_input_wait_rounds += 1
-                        self.total_human_input_wait_seconds += wait_seconds
-                        self.human_input_wait_seconds.append(wait_seconds)
+        # Human wait: gap from the previous event of any type to each user_message in this row
+        # (provider-agnostic; see timing.human_input_wait_seconds_for_row), spanning non-output
+        # events such as Codex usage_report and counting every user message, not only triggers.
+        if isinstance(session_id, str):
+            waits, n_user_messages, last_event_at = human_input_wait_seconds_for_row(
+                row, self.last_event_at_by_session.get(session_id)
+            )
+            if n_user_messages:
+                self.human_input_wait_candidate_rounds += 1
+            for wait_seconds in waits:
+                self.human_input_wait_rounds += 1
+                self.total_human_input_wait_seconds += wait_seconds
+                self.human_input_wait_seconds.append(wait_seconds)
+            if last_event_at is not None:
+                self.last_event_at_by_session[session_id] = last_event_at
 
         user = row.get("user")
         if isinstance(user, str):
@@ -576,9 +577,6 @@ class Summary:
             if row_tool_calls:
                 self.rounds_with_tool_calls += 1
 
-        last_output_at = last_model_output_timestamp(row)
-        if isinstance(session_id, str) and last_output_at is not None:
-            self.last_model_output_by_session[session_id] = last_output_at
         if isinstance(session_id, str):
             self.last_total_input_tokens_by_session[session_id] = row_total_input_tokens
 
@@ -864,11 +862,11 @@ class Summary:
                         "ordinary_reduction": (
                             f"raw delta is negative, the reduction is > "
                             f"{MICRO_REDUCTION_MAX_TOKENS} tokens, and the "
-                            f"reduction is < {MAJOR_COMPACT_MIN_TOKENS} tokens"
+                            f"reduction is < {MAJOR_REDUCTION_MIN_TOKENS} tokens"
                         ),
-                        "major_compact": (
+                        "major_reduction": (
                             f"raw delta is negative and the reduction is >= "
-                            f"{MAJOR_COMPACT_MIN_TOKENS} tokens"
+                            f"{MAJOR_REDUCTION_MIN_TOKENS} tokens"
                         ),
                     },
                     "total_input_growth_when_started_with_user_message": (
@@ -930,12 +928,12 @@ class Summary:
                     self.input_to_reasoning_end_rounds
                 ),
                 "waiting_for_human_input_definition": (
-                    "For rows with a `user_message` before the first model-output event, "
-                    "subtract the previous last model-output event (`reasoning`, `text`, "
-                    "or `tool_call`) in the same session from the latest such "
-                    "`user_message` timestamp."
+                    "For each `user_message` event, the gap from the previous event of any "
+                    "type in the same session (including non-output events such as Codex "
+                    "`usage_report`); counts every user message, not only turn-triggering "
+                    "ones. Summed and percentiled per session over strictly-positive gaps."
                 ),
-                "rounds_with_user_message_before_model_output": (
+                "rounds_with_user_message": (
                     self.human_input_wait_candidate_rounds
                 ),
                 "rounds_with_waiting_for_human_input_time": (
@@ -1102,13 +1100,13 @@ def print_input_growth(label: str, growth: dict[str, Any]) -> None:
         f"({fmt_pct(growth['negative_growth_share'])})"
     )
     print(
-        "    negative buckets, micro / ordinary / major compact: "
+        "    negative buckets, micro / ordinary / major reduction: "
         f"{fmt_int(growth['micro_reduction_rounds'])} "
         f"({fmt_pct(growth['micro_reduction_share'])}) / "
         f"{fmt_int(growth['ordinary_reduction_rounds'])} "
         f"({fmt_pct(growth['ordinary_reduction_share'])}) / "
-        f"{fmt_int(growth['major_compact_rounds'])} "
-        f"({fmt_pct(growth['major_compact_share'])})"
+        f"{fmt_int(growth['major_reduction_rounds'])} "
+        f"({fmt_pct(growth['major_reduction_share'])})"
     )
     print(
         "    total context increase tokens: "

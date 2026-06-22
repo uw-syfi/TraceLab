@@ -1,5 +1,5 @@
 // Parse the toolkit's structured experiment READMEs into the pieces the detail page lays out:
-//   ## Experiment overview      -> shown ABOVE the figures
+//   README preamble             -> shown ABOVE the figures (usually the driving question)
 //   ## SyFI result analysis      -> ### <figure>.png subsections, shown AFTER each matching image
 //   ## Code structure / Running it / Outputs / … -> reference block below
 //
@@ -9,25 +9,27 @@
 // generic ### subsection — when there is exactly one, it applies to every figure.
 
 export interface ParsedReadme {
-  /** Intro/question preamble + the "Experiment overview" section, markdown. */
+  /** Intro/question preamble, markdown. */
   overviewMd: string;
-  /** Remaining sections (Code structure, Running it, Outputs, …), markdown. */
+  /** Remaining sections (Experiment overview, Code structure, Running it, Outputs, …), markdown. */
   detailsMd: string;
+  /** Remaining sections split by their ## heading, for expandable reference rows. */
+  detailsSections: ReadmeSection[];
   /** Per-figure analysis keyed by figure basename (the ### heading text). */
   analysisByFigure: Record<string, string>;
   /** ### headings in document order (for the single-generic fallback). */
   analysisHeadings: string[];
 }
 
-interface Section {
+export interface ReadmeSection {
   title: string;
   body: string;
 }
 
 /** Split markdown into sections at a given ATX heading marker (e.g. "## " or "### "). */
-function splitByHeading(md: string, marker: string): { preamble: string; sections: Section[] } {
+function splitByHeading(md: string, marker: string): { preamble: string; sections: ReadmeSection[] } {
   const lines = md.split('\n');
-  const sections: Section[] = [];
+  const sections: ReadmeSection[] = [];
   const preamble: string[] = [];
   let title: string | null = null;
   let buf: string[] = [];
@@ -60,12 +62,14 @@ export function parseExperimentReadme(md: string): ParsedReadme {
   const overviewParts: string[] = [];
   if (preamble) overviewParts.push(preamble);
   const detailParts: string[] = [];
+  const detailsSections: ReadmeSection[] = [];
   const analysisByFigure: Record<string, string> = {};
   const analysisHeadings: string[] = [];
 
   for (const sec of sections) {
     if (isOverview(sec.title)) {
-      overviewParts.push(sec.body);
+      detailParts.push(`## ${sec.title}\n\n${sec.body}`);
+      detailsSections.push(sec);
     } else if (isAnalysis(sec.title)) {
       const { sections: figs } = splitByHeading(sec.body, '### ');
       for (const fig of figs) {
@@ -74,12 +78,14 @@ export function parseExperimentReadme(md: string): ParsedReadme {
       }
     } else {
       detailParts.push(`## ${sec.title}\n\n${sec.body}`);
+      detailsSections.push(sec);
     }
   }
 
   return {
     overviewMd: overviewParts.join('\n\n').trim(),
     detailsMd: detailParts.join('\n\n').trim(),
+    detailsSections,
     analysisByFigure,
     analysisHeadings,
   };

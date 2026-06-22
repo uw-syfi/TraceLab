@@ -42,11 +42,12 @@ Validation and audit checks live under `../validators/` and are run with
 
 ## Running
 
-Each experiment defaults its input to `trace/llm_round_trace.merged.all_users.jsonl`
-and writes outputs next to its script:
+Most experiments accept the released DuckDB at `trace/syfi_coding_trace.duckdb`;
+JSONL inputs are still supported for scripts that expose `-i` / `--input`. Each
+experiment writes outputs next to its script:
 
 ```bash
-uv run python artifacts/<category>/<experiment>/<script>.py [-i trace/<file>.jsonl]
+uv run python artifacts/<category>/<experiment>/<script>.py --db trace/syfi_coding_trace.duckdb
 ```
 
 Plotting experiments embed their README, source CSV data, and plotting code into every
@@ -55,31 +56,35 @@ PNG as the final step; read them back with `python artifacts/utils/png_sidecar.p
 ### Running everything
 
 `artifacts/run_all.py` is a dispatcher that runs every experiment (or a subset),
-defaulting to 16 at a time. It knows each experiment's invocation style (`-i`,
+defaulting to 16 at a time and to the released database at
+`trace/syfi_coding_trace.duckdb`. It knows each experiment's invocation style (`-i`,
 `--input`, a module-level `INPUT` default, `csv_export`'s `-i`/`-o`, `overview_summary`'s
 stdout→`summary.json`), derives the local timing CSV before timing experiments, and runs
 `build_summary` only after `timing_feature_ambiguity` succeeds. Each experiment's console
 output is captured to a per-experiment log under the `--log-dir`.
 
 ```bash
-uv run python artifacts/run_all.py                 # all experiments, 16-way parallel, full trace
+uv run python artifacts/run_all.py                 # all experiments, 16-way parallel, released DuckDB
 uv run python artifacts/run_all.py --list          # show the registry
 uv run python artifacts/run_all.py --jobs 1        # serial
 uv run python artifacts/run_all.py --only tool_calls
 uv run python artifacts/run_all.py --only prefix_cache/cache_hit_ratio
-uv run python artifacts/run_all.py --input trace/llm_round_trace.public.jsonl
+uv run python artifacts/run_all.py --db trace/syfi_coding_trace.duckdb
+uv run python artifacts/run_all.py \
+  --build-db --input trace/llm_round_trace.public.jsonl \
+  --db trace/llm_round_trace.public.duckdb
 ```
 
 Timing experiments (`append_vs_prefix_latency`, `timing_feature_ambiguity`, `timing_fit`)
 read the local timing-segment CSV at
 `artifacts/llm_generation/timing_fit/timing_fit_trace.csv`. The dispatcher builds it from
-`--input` by running `llm_generation/timing_fit/build_trace` first. Pass `--timing-input`
+`--db` by running `llm_generation/timing_fit/build_trace` first. Pass `--timing-input`
 only when you intentionally want to consume an existing external CSV instead.
 
 The default dependency flow is:
 
 ```text
-normalized JSONL trace
+released DuckDB trace
   -> llm_generation/timing_fit/build_trace
   -> llm_generation/timing_fit
   -> llm_generation/append_vs_prefix_latency
@@ -92,11 +97,11 @@ Use these commands when checking the timing path by itself:
 ```bash
 uv run python artifacts/run_all.py \
   --only llm_generation/timing_fit/build_trace \
-  --input trace/llm_round_trace.public.jsonl
+  --db trace/syfi_coding_trace.duckdb
 
 uv run python artifacts/run_all.py \
   --only llm_generation/timing_fit \
-  --input trace/llm_round_trace.public.jsonl
+  --db trace/syfi_coding_trace.duckdb
 ```
 
 Generated artifact outputs are intentionally local to each experiment folder and ignored
