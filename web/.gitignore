@@ -11,6 +11,11 @@ app/public/data/
 app/public/figures/
 app/public/py/
 app/public/pyodide/
+# Self-hosted webfonts (霞鹜文楷 shards + Fraunces/Hanken), copied from npm deps by
+# web/scripts/build-fonts.mjs on prebuild, plus the generated @font-face CSS it emits into src/.
+app/public/fonts/
+app/src/styles/*.generated.css
+app/src/styles/font-preload.json
 
 # Runtime logs (contain client IPs / user questions) — never commit.
 server/data/audit/

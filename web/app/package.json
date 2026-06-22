@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "npm run build:payload",
+    "predev": "npm run build:fonts && npm run build:payload",
     "dev": "astro dev",
-    "prebuild": "npm run build:payload",
+    "prebuild": "npm run build:fonts && npm run build:payload",
     "build": "astro build",
     "preview": "astro preview",
+    "build:fonts": "node ../scripts/build-fonts.mjs",
     "build:payload": "node ../scripts/build-payload.mjs",
     "astro": "astro"
   },
@@ -17,5 +18,10 @@
     "dompurify": "^3.4.8",
     "echarts": "^6.1.0",
     "marked": "^18.0.5"
+  },
+  "devDependencies": {
+    "@fontsource-variable/fraunces": "^5.2.9",
+    "@fontsource-variable/hanken-grotesk": "^5.2.8",
+    "lxgw-wenkai-webfont": "^1.7.0"
   }
 }
