@@ -116,7 +116,7 @@ The sanitized all-user trace and a prebuilt DuckDB database are distributed as
 | **Tool records** | `432,510` |
 | **Pseudonymous users** | `43` |
 | **Providers** | `claude=140,338` · `codex=216,823` |
-| **Release tag** | `v2026-06-08-syfi-trace` |
+| **Release tag** | `v0.0.1` |
 
 </td><td>
 
@@ -126,7 +126,7 @@ The sanitized all-user trace and a prebuilt DuckDB database are distributed as
 
 **SHA256**
 - JSONL · `9d265eae…da0b4e6b`
-- DuckDB · `5d2ef124…87721507`
+- DuckDB · `97715265…d9f15619`
 
 </td></tr>
 </table>
@@ -138,13 +138,13 @@ The sanitized all-user trace and a prebuilt DuckDB database are distributed as
 mkdir -p trace
 curl -L --fail \
   -o trace/syfi_coding_trace.jsonl.gz \
-  https://github.com/uw-syfi/TraceLab/releases/download/v2026-06-08-syfi-trace/syfi_coding_trace.jsonl.gz
+  https://github.com/uw-syfi/TraceLab/releases/download/v0.0.1/syfi_coding_trace.jsonl.gz
 curl -L --fail \
   -o trace/syfi_coding_trace.duckdb \
-  https://github.com/uw-syfi/TraceLab/releases/download/v2026-06-08-syfi-trace/syfi_coding_trace.duckdb
+  https://github.com/uw-syfi/TraceLab/releases/download/v0.0.1/syfi_coding_trace.duckdb
 
 echo "9d265eae69a31cae203848bea936f018148eed7ca8bf56050c5abe96da0b4e6b  trace/syfi_coding_trace.jsonl.gz" | sha256sum -c -
-echo "5d2ef12486cdfc26d770e8432fb45fd17381377be739a4d8e5b8556587721507  trace/syfi_coding_trace.duckdb"   | sha256sum -c -
+echo "97715265367cc72376475f5d444c8e1900b88cab1482aa7b9a742894d9f15619  trace/syfi_coding_trace.duckdb"   | sha256sum -c -
 gzip -t trace/syfi_coding_trace.jsonl.gz
 ```
 
