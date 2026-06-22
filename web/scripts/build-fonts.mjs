@@ -36,7 +36,7 @@ import { createHash } from 'node:crypto';
 
 const here = dirname(fileURLToPath(import.meta.url)); // web/scripts
 const appRoot = resolve(here, '../app'); // web/app
-const repoRoot = resolve(here, '../..'); // coding_trace_refactor
+const repoRoot = resolve(here, '../..'); // repo root
 const nodeModules = resolve(appRoot, 'node_modules');
 
 const FONT_VERSION = 'v1.522';
