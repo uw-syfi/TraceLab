@@ -16,7 +16,7 @@ sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 import trace_db  # noqa: E402
 from growth import (  # noqa: E402
     EVENT_COLUMNS,
-    MAJOR_COMPACT_MIN_TOKENS,
+    MAJOR_REDUCTION_MIN_TOKENS,
     MICRO_REDUCTION_MAX_TOKENS,
     TRIGGER_LABELS,
     build_growth_stats,
@@ -246,10 +246,10 @@ def parse_args() -> argparse.Namespace:
         help="Maximum absolute drop size counted as micro_reduction.",
     )
     parser.add_argument(
-        "--major-compact-min-tokens",
+        "--major-reduction-min-tokens",
         type=int,
-        default=MAJOR_COMPACT_MIN_TOKENS,
-        help="Minimum absolute drop size counted as major_compact.",
+        default=MAJOR_REDUCTION_MIN_TOKENS,
+        help="Minimum absolute drop size counted as major_reduction.",
     )
     return parser.parse_args()
 
@@ -258,9 +258,9 @@ def main() -> int:
     args = parse_args()
     if args.micro_reduction_max_tokens < 1:
         raise SystemExit("--micro-reduction-max-tokens must be positive")
-    if args.major_compact_min_tokens <= args.micro_reduction_max_tokens:
+    if args.major_reduction_min_tokens <= args.micro_reduction_max_tokens:
         raise SystemExit(
-            "--major-compact-min-tokens must be greater than "
+            "--major-reduction-min-tokens must be greater than "
             "--micro-reduction-max-tokens"
         )
     if args.limit_events is not None and args.limit_events < 0:
@@ -273,14 +273,14 @@ def main() -> int:
     events = iter_growth_events_from_db(con)
     if (
         args.micro_reduction_max_tokens != MICRO_REDUCTION_MAX_TOKENS
-        or args.major_compact_min_tokens != MAJOR_COMPACT_MIN_TOKENS
+        or args.major_reduction_min_tokens != MAJOR_REDUCTION_MIN_TOKENS
     ):
         for event in events:
             raw_delta_tokens = int(event.get("raw_delta_tokens") or 0)
             event["bucket"] = reduction_bucket(
                 raw_delta_tokens,
                 micro_reduction_max_tokens=args.micro_reduction_max_tokens,
-                major_compact_min_tokens=args.major_compact_min_tokens,
+                major_reduction_min_tokens=args.major_reduction_min_tokens,
             )
             event["reduction_tokens"] = (
                 -raw_delta_tokens if raw_delta_tokens < 0 else 0
@@ -289,7 +289,7 @@ def main() -> int:
     stats = build_growth_stats(
         events,
         micro_reduction_max_tokens=args.micro_reduction_max_tokens,
-        major_compact_min_tokens=args.major_compact_min_tokens,
+        major_reduction_min_tokens=args.major_reduction_min_tokens,
     )
     write_summary_csv(summary_csv, stats)
     print(f"summary_csv={summary_csv}")
@@ -311,7 +311,7 @@ def main() -> int:
         reduction_count = write_filtered_events_csv(
             reductions_csv,
             events,
-            buckets={"micro_reduction", "ordinary_reduction", "major_compact"},
+            buckets={"micro_reduction", "ordinary_reduction", "major_reduction"},
             limit=args.limit_events,
         )
         micro_count = write_filtered_events_csv(

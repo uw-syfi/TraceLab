@@ -238,8 +238,8 @@ def build_stats(
         "toolGrowthShare": _f(tg["positive_growth_share"]),
         "userReductionShare": _f(ug["negative_growth_share"]),
         "toolReductionShare": _f(tg["negative_growth_share"]),
-        "userMajorCompactShare": _f(ug["major_compact_share"]),
-        "toolMajorCompactShare": _f(tg["major_compact_share"]),
+        "userMajorCompactShare": _f(ug["major_reduction_share"]),
+        "toolMajorCompactShare": _f(tg["major_reduction_share"]),
 
         # 2d. cache efficiency
         "prefixHitRate": _f(tin["prefix_hit_rate"]),

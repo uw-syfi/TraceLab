@@ -118,10 +118,12 @@ plt.rcParams.update(
 @dataclass
 class HitRatioGroup:
     ratios: list[float] = field(default_factory=list)
+    prefix_tokens: list[int] = field(default_factory=list)
     append_tokens: list[int] = field(default_factory=list)
 
-    def add(self, ratio: float, append_tokens: int) -> None:
+    def add(self, ratio: float, prefix_tokens: int, append_tokens: int) -> None:
         self.ratios.append(ratio)
+        self.prefix_tokens.append(prefix_tokens)
         self.append_tokens.append(append_tokens)
 
     @property
@@ -131,6 +133,21 @@ class HitRatioGroup:
     @property
     def total_append_tokens(self) -> int:
         return sum(self.append_tokens)
+
+    @property
+    def total_prefix_tokens(self) -> int:
+        return sum(self.prefix_tokens)
+
+    @property
+    def total_input_tokens(self) -> int:
+        return self.total_prefix_tokens + self.total_append_tokens
+
+    @property
+    def token_weighted_hit_rate(self) -> float | None:
+        total = self.total_input_tokens
+        if total == 0:
+            return None
+        return self.total_prefix_tokens / total
 
 
 def percentile(values: list[float], quantile: float) -> float | None:
@@ -212,8 +229,54 @@ def read_groups(con) -> dict[tuple[str, str], HitRatioGroup]:
         trigger = "user" if event_type == "user_message" else "tool_result"
         hit_ratio = prefix_tokens / total_input_tokens
         for scope in ("merged", provider):
-            groups[(scope, trigger)].add(hit_ratio, append_tokens)
-            groups[(scope, "all")].add(hit_ratio, append_tokens)
+            groups[(scope, trigger)].add(hit_ratio, prefix_tokens, append_tokens)
+            groups[(scope, "all")].add(hit_ratio, prefix_tokens, append_tokens)
+    return dict(groups)
+
+
+def read_token_weighted_groups(con) -> dict[tuple[str, str], HitRatioGroup]:
+    """Token-weighted hit-rate groups for the paper table.
+
+    The overall (`all`) row intentionally includes every valid input-token row,
+    while the trigger rows are restricted to first-event `user_message` and
+    `tool_result` steps. This matches the paper summary macros and keeps the
+    histogram-oriented `read_groups` eligibility unchanged.
+    """
+    rows = con.execute(
+        """
+        WITH first_ev AS (
+            SELECT round_pk, event_type
+            FROM timing_events
+            WHERE event_index = 1
+        )
+        SELECT r.provider AS provider,
+               f.event_type AS event_type,
+               r.prefix_tokens AS prefix_tokens,
+               r.newly_append_tokens AS append_tokens
+        FROM rounds r LEFT JOIN first_ev f USING (round_pk)
+        WHERE r.prefix_tokens IS NOT NULL
+          AND r.newly_append_tokens IS NOT NULL
+          AND (r.prefix_tokens + r.newly_append_tokens) > 0
+        ORDER BY r.round_pk
+        """
+    ).fetchall()
+
+    groups: dict[tuple[str, str], HitRatioGroup] = defaultdict(HitRatioGroup)
+    for provider, event_type, prefix_tokens, append_tokens in rows:
+        provider = provider if isinstance(provider, str) else "unknown"
+        prefix_tokens = int(prefix_tokens)
+        append_tokens = int(append_tokens)
+        total_input_tokens = prefix_tokens + append_tokens
+        hit_ratio = prefix_tokens / total_input_tokens
+        trigger = None
+        if event_type == "user_message":
+            trigger = "user"
+        elif event_type == "tool_result":
+            trigger = "tool_result"
+        for scope in ("merged", provider):
+            groups[(scope, "all")].add(hit_ratio, prefix_tokens, append_tokens)
+            if trigger is not None:
+                groups[(scope, trigger)].add(hit_ratio, prefix_tokens, append_tokens)
     return dict(groups)
 
 
@@ -221,6 +284,96 @@ def format_pct(value: float | None) -> str:
     if value is None:
         return ""
     return f"{value * 100:.2f}%"
+
+
+def format_pct_one_latex(value: float | None) -> str:
+    if value is None:
+        return "--"
+    return f"{value * 100:.1f}\\%"
+
+
+def write_token_weighted_csv(
+    path: Path,
+    groups: dict[tuple[str, str], HitRatioGroup],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = [
+        "scope",
+        "trigger",
+        "rounds",
+        "prefix_tokens",
+        "append_tokens",
+        "total_input_tokens",
+        "token_weighted_hit_rate",
+    ]
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for scope in SCOPES:
+            for trigger in TRIGGERS:
+                group = groups.get((scope, trigger), HitRatioGroup())
+                writer.writerow(
+                    {
+                        "scope": scope,
+                        "trigger": trigger,
+                        "rounds": group.count,
+                        "prefix_tokens": group.total_prefix_tokens,
+                        "append_tokens": group.total_append_tokens,
+                        "total_input_tokens": group.total_input_tokens,
+                        "token_weighted_hit_rate": (
+                            group.token_weighted_hit_rate
+                            if group.token_weighted_hit_rate is not None
+                            else ""
+                        ),
+                    }
+                )
+
+
+def write_latex_hit_rate_table(
+    path: Path,
+    groups: dict[tuple[str, str], HitRatioGroup],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        ("Prefix cache-hit rate", "all"),
+        ("Prefix hit rate (user-initiated)", "user"),
+        ("Prefix hit rate (tool-result)", "tool_result"),
+    ]
+    scopes = ["claude", "codex", "merged"]
+    lines = [
+        "% ==========================================================================",
+        "% Data source: TraceLab/artifacts/prefix_cache/cache_hit_ratio/analyze.py",
+        "%   (token-weighted prefix-cache hit rates; auto-generates this table).",
+        "% ==========================================================================",
+        "\\begin{table}[t]",
+        "\\centering",
+        "\\caption{Token-weighted prefix cache hit rate by provider and step trigger.}",
+        "\\label{tab:prefix_cache_hit_rate}",
+        "\\small",
+        "\\setlength{\\tabcolsep}{6pt}",
+        "\\renewcommand{\\arraystretch}{1.15}",
+        "\\begin{tabular}{l r r r}",
+        "\\toprule",
+        "\\textbf{Metric} & \\textbf{Claude} & \\textbf{Codex} & \\textbf{Total} \\\\",
+        "\\midrule",
+    ]
+    for label, trigger in rows:
+        values = [
+            format_pct_one_latex(
+                groups.get((scope, trigger), HitRatioGroup()).token_weighted_hit_rate
+            )
+            for scope in scopes
+        ]
+        lines.append(f"{label} & {values[0]} & {values[1]} & {values[2]} \\\\")
+    lines.extend(
+        [
+            "\\bottomrule",
+            "\\end{tabular}",
+            "\\end{table}",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines))
 
 
 def write_summary_csv(path: Path, groups: dict[tuple[str, str], HitRatioGroup]) -> None:
@@ -467,16 +620,23 @@ def main() -> int:
     args = parse_args()
     con = trace_db.open_from_args(args)
     groups = read_groups(con)
+    token_weighted_groups = read_token_weighted_groups(con)
     output_dir = args.output_dir
     summary_csv = output_dir / "cache_hit_ratio_summary.csv"
     bins_csv = output_dir / "cache_hit_ratio_bins.csv"
     round_split_csv = output_dir / "cache_hit_ratio_round_split.csv"
+    token_weighted_csv = output_dir / "cache_hit_ratio_token_weighted.csv"
+    latex_table = output_dir / "prefix_cache_hit_rate_table.tex"
     write_summary_csv(summary_csv, groups)
     write_bins_csv(bins_csv, groups)
     write_round_split_csv(round_split_csv, groups)
+    write_token_weighted_csv(token_weighted_csv, token_weighted_groups)
+    write_latex_hit_rate_table(latex_table, token_weighted_groups)
     print(f"summary_csv={summary_csv}")
     print(f"bins_csv={bins_csv}")
     print(f"round_split_csv={round_split_csv}")
+    print(f"token_weighted_csv={token_weighted_csv}")
+    print(f"latex_table={latex_table}")
     if not args.no_plots:
         round_plot = output_dir / "cache_hit_ratio_histogram.png"
         append_plot = output_dir / "cache_hit_ratio_append_weighted_histogram.png"

@@ -100,4 +100,4 @@ These are the definitions every experiment README points back to:
 - **adjusted append** = `newly_append_tokens − prior-round output tokens`.
 - **KV active ratio(T)** = `gen_total / (gen_total + tool_total≤T + human_wait_total≤T)`
   for an eviction timeout `T`.
-- **growth buckets**: micro-reduction `< 1024` tokens, major-compact `≥ 50000` tokens.
+- **growth buckets**: micro-reduction `< 1024` tokens, major-reduction `≥ 50000` tokens.

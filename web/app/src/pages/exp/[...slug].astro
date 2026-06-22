@@ -30,7 +30,13 @@ const processor = await createMarkdownProcessor({ syntaxHighlight: false });
 const renderMd = async (md: string) => (md ? (await processor.render(md)).code : '');
 
 const overviewHtml = await renderMd(parsed.overviewMd);
-const detailsHtml = await renderMd(parsed.detailsMd);
+const detailSections = await Promise.all(
+  parsed.detailsSections.map(async (section) => ({
+    ...section,
+    html: await renderMd(section.body),
+  })),
+);
+const hasDetails = detailSections.length > 0;
 const figures = await Promise.all(
   exp.figures.map(async (f) => ({
     ...f,
@@ -81,21 +87,14 @@ const nextExp = experiments[(currentIndex + 1) % experiments.length];
     </a>
 
     <div class="exp-layout">
-      {/* Sticky rail: title + on-this-page nav. The prose itself lives wide in the main column
-          so the overview/analysis read large, not squeezed into the narrow rail. */}
+      {/* Sticky rail: title + cross-experiment navigation. The prose itself lives wide in the main
+          column so the overview/analysis read large, not squeezed into the narrow rail. */}
       <aside class="exp-rail reveal" style="--d:40ms">
         <div class="hero exp-hero">
           <span class="eyebrow">{exp.category}</span>
           <h1>{exp.title}</h1>
           <p class="lede">{exp.blurb}</p>
         </div>
-        {(overviewHtml || figures.length > 0 || detailsHtml) && (
-          <nav class="exp-nav" aria-label="On this page">
-            {overviewHtml && <a href="#overview">Overview</a>}
-            {figures.length > 0 && <a class="nav-figures" href="#figures">Figures</a>}
-            {detailsHtml && <a class="nav-details" href="#details">Reference</a>}
-          </nav>
-        )}
 
         <nav class="exp-atlas-nav" aria-label="Experiment pages">
           <div class="exp-nav-label">Experiment pages</div>
@@ -123,11 +122,11 @@ const nextExp = experiments[(currentIndex + 1) % experiments.length];
 
         {overviewHtml && (
           <section id="overview" class="exp-section reveal" style="--d:80ms">
-            <header class="exp-sec-head"><span class="eyebrow">Overview</span></header>
+            <header class="exp-sec-head"><span class="eyebrow">Problem</span></header>
             <article class="readme exp-overview" set:html={overviewHtml} />
           </section>
         )}
-        {!overviewHtml && !detailsHtml && (
+        {!overviewHtml && !hasDetails && (
           <p class="lede reveal" style="--d:80ms">No write-up found for this experiment yet.</p>
         )}
 
@@ -153,10 +152,20 @@ const nextExp = experiments[(currentIndex + 1) % experiments.length];
           </section>
         )}
 
-        {detailsHtml && (
-          <section id="details" class="exp-section reveal" style="--d:160ms">
+        {hasDetails && (
+          <section id="details" class="exp-section exp-reference reveal" style="--d:160ms">
             <header class="exp-sec-head"><span class="eyebrow">Reference</span></header>
-            <article class="readme exp-details" set:html={detailsHtml} />
+            <div class="exp-reference-list">
+              {detailSections.map((section) => (
+                <details class="exp-reference-item">
+                  <summary class="exp-reference-summary">
+                    <span class="exp-reference-title">{section.title}</span>
+                    <span class="exp-reference-icon" aria-hidden="true"></span>
+                  </summary>
+                  <article class="readme exp-details" set:html={section.html} />
+                </details>
+              ))}
+            </div>
           </section>
         )}
 
@@ -171,6 +180,16 @@ const nextExp = experiments[(currentIndex + 1) % experiments.length];
           </a>
         </nav>
       </div>
+
+      {(overviewHtml || figures.length > 0 || hasDetails) && (
+        <aside class="exp-floating-nav reveal" style="--d:70ms">
+          <nav class="exp-nav" aria-label="On this page">
+            {overviewHtml && <a href="#overview">Problem</a>}
+            {figures.length > 0 && <a class="nav-figures" href="#figures">Figures</a>}
+            {hasDetails && <a class="nav-details" href="#details">Reference</a>}
+          </nav>
+        </aside>
+      )}
     </div>
 
     <Footer left="SyFI TraceLab · experiment detail" />

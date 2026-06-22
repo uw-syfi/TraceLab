@@ -2,6 +2,7 @@
 .uv-cache/
 __pycache__/
 *.py[cod]
+*.tex
 
 trace/*.jsonl
 trace/*.jsonl.gz

@@ -137,3 +137,54 @@ def input_to_last_output_span_seconds(row: dict[str, Any]) -> float | None:
         return None
     duration = (max(output_timestamps) - max(candidate_inputs)).total_seconds()
     return duration if duration > 0 else None
+
+
+def human_waits_from_event_pairs(
+    event_pairs: Any, previous_event_at: datetime | None
+) -> tuple[list[float], int, datetime | None]:
+    """Provider-agnostic human-thinking waits for one round's timing events.
+
+    ``event_pairs`` is an iterable of ``(event_type, timestamp | None)``. Using
+    ``previous_event_at`` (the session's last event timestamp *before* this round, or ``None``),
+    return ``(waits, user_message_count, last_event_at)``:
+
+      * ``waits`` -- the strictly-positive gap from the immediately preceding event of **any**
+        type (including a prior round via ``previous_event_at``, and non-output events such as
+        Codex ``usage_report``) to each ``user_message`` event, in event time order. This counts
+        **every** user message (turn-triggering or not), so it captures all human idle -- unlike
+        the older "previous model output -> response-triggering user message" definition, which
+        dropped non-trigger messages and the post-output ``usage_report`` tail into an unattributed
+        residual.
+      * ``user_message_count`` -- number of ``user_message`` events in this round (candidates).
+      * ``last_event_at`` -- the latest event timestamp in this round, else ``previous_event_at``
+        (carry forward as the next round's ``previous_event_at``).
+    """
+    items = sorted(
+        ((ts, et) for et, ts in event_pairs if ts is not None),
+        key=lambda pair: pair[0],
+    )
+    waits: list[float] = []
+    user_message_count = 0
+    last = previous_event_at
+    for ts, event_type in items:
+        if event_type == "user_message":
+            user_message_count += 1
+            if last is not None:
+                wait = (ts - last).total_seconds()
+                if wait > 0:
+                    waits.append(wait)
+        last = ts
+    return waits, user_message_count, last
+
+
+def human_input_wait_seconds_for_row(
+    row: dict[str, Any], previous_event_at: datetime | None
+) -> tuple[list[float], int, datetime | None]:
+    """Row-dict wrapper over :func:`human_waits_from_event_pairs` (see it for semantics)."""
+    events = row.get("timing_events")
+    pairs: list[tuple[Any, datetime | None]] = []
+    if isinstance(events, list):
+        for event in events:
+            if isinstance(event, dict):
+                pairs.append((event.get("event_type"), parse_ts(event.get("timestamp"))))
+    return human_waits_from_event_pairs(pairs, previous_event_at)

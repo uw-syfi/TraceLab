@@ -54,7 +54,9 @@ class Pair:
     provider: str
     model: str
     next_input: str
+    prev_total: int
     prev_output: int
+    next_prefix: int
     next_append: int
     prefix_delta: int
     residual: int
@@ -67,6 +69,12 @@ class Scenario:
     key: str
     title: str
     predicate: Callable[[Pair], bool]
+
+
+@dataclass(frozen=True)
+class Tolerance:
+    absolute_tokens: float
+    relative_fraction: float
 
 
 def first_timestamp(events: list[tuple[str | None, datetime | None]]) -> datetime | None:
@@ -208,14 +216,17 @@ def load_pairs(
             if max_gap_seconds is not None and gap_seconds > max_gap_seconds:
                 stats["skipped_large_gap"] += 1
                 continue
+            next_prefix = int_field(current, "prefix_tokens")
             next_append = int_field(current, "newly_append_tokens")
-            prefix_delta = int_field(current, "prefix_tokens") - prev_total
+            prefix_delta = next_prefix - prev_total
             pairs.append(
                 Pair(
                     provider=str(previous.get("provider")),
                     model=str(previous.get("model") or "unknown"),
                     next_input=str(current.get("first_input_event_type") or "unknown"),
+                    prev_total=prev_total,
                     prev_output=prev_output,
+                    next_prefix=next_prefix,
                     next_append=next_append,
                     prefix_delta=prefix_delta,
                     residual=next_append - prev_output,
@@ -249,27 +260,27 @@ def fmt(value: float | None) -> str:
     return f"{value:.6g}"
 
 
-def tolerance_for_output(prev_output: int) -> float:
-    return max(512.0, 0.10 * float(prev_output))
+def tolerance_for_output(prev_output: int, tolerance: Tolerance) -> float:
+    return max(tolerance.absolute_tokens, tolerance.relative_fraction * float(prev_output))
 
 
-def prefix_close(pair: Pair) -> bool:
-    tolerance = tolerance_for_output(pair.prev_output)
-    return abs(pair.prefix_delta - pair.prev_output) <= tolerance
+def prefix_close(pair: Pair, tolerance: Tolerance) -> bool:
+    allowed_error = tolerance_for_output(pair.prev_output, tolerance)
+    return abs(pair.prefix_delta - pair.prev_output) <= allowed_error
 
 
-def prefix_rejects_output(pair: Pair) -> bool:
-    tolerance = tolerance_for_output(pair.prev_output)
-    return pair.prefix_delta < pair.prev_output - tolerance
+def prefix_rejects_output(pair: Pair, tolerance: Tolerance) -> bool:
+    allowed_error = tolerance_for_output(pair.prev_output, tolerance)
+    return pair.prefix_delta < pair.prev_output - allowed_error
 
 
-def append_can_contain_output(pair: Pair) -> bool:
-    tolerance = tolerance_for_output(pair.prev_output)
-    return pair.next_append >= pair.prev_output - tolerance
+def append_can_contain_output(pair: Pair, tolerance: Tolerance) -> bool:
+    allowed_error = tolerance_for_output(pair.prev_output, tolerance)
+    return pair.next_append >= pair.prev_output - allowed_error
 
 
-def append_side_pair(pair: Pair) -> bool:
-    return prefix_rejects_output(pair) and append_can_contain_output(pair)
+def append_side_pair(pair: Pair, tolerance: Tolerance) -> bool:
+    return prefix_rejects_output(pair, tolerance) and append_can_contain_output(pair, tolerance)
 
 
 def assignment_label(
@@ -384,6 +395,30 @@ def scenario_groups() -> list[Scenario]:
             ),
         ),
     ]
+
+
+def model_merged_groups() -> list[Scenario]:
+    return [
+        Scenario(
+            "claude",
+            "Claude",
+            lambda pair: pair.provider == "claude",
+        ),
+        Scenario(
+            "gpt55",
+            "gpt-5.5",
+            lambda pair: pair.provider == "codex" and pair.model == "gpt-5.5",
+        ),
+        Scenario(
+            "gpt54",
+            "gpt-5.4",
+            lambda pair: pair.provider == "codex" and pair.model == "gpt-5.4",
+        ),
+    ]
+
+
+def prior_composition(pair: Pair) -> int:
+    return pair.prev_total + pair.prev_output
 
 
 def output_axis_bounds(values: list[int], *, minimum: int) -> tuple[float, float]:
@@ -707,6 +742,154 @@ def plot_prefix_gain_scatter_grid(
     return out
 
 
+def plot_model_merged_grid(
+    model_pairs: list[tuple[Scenario, list[Pair]]],
+    output_dir: Path,
+    *,
+    min_output_tokens: int,
+    max_points_per_scenario: int,
+) -> Path | None:
+    nonempty = [(scenario, pairs) for scenario, pairs in model_pairs if pairs]
+    if not nonempty:
+        return None
+
+    fig, axes = plt.subplots(len(nonempty), 2, figsize=(10.8, 2.35 * len(nonempty)), squeeze=False)
+    axes[0][0].set_title("Prior output vs next prefix gain")
+    axes[0][1].set_title("Prior output vs next new input")
+
+    left_values = [
+        value
+        for _scenario, pairs in nonempty
+        for pair in pairs
+        for value in (pair.prev_output, positive_prefix_gain(pair))
+        if value > 0
+    ]
+    right_values = [
+        value
+        for _scenario, pairs in nonempty
+        for pair in pairs
+        for value in (pair.prev_output, pair.next_append)
+        if value > 0
+    ]
+    left_first_tick = infer_first_token_tick(left_values)
+    right_first_tick = infer_first_token_tick(right_values)
+    left_max = max(left_values) if left_values else 1.0
+    right_max = max(right_values) if right_values else 1.0
+    x_values = [
+        pair.prev_output
+        for _scenario, pairs in nonempty
+        for pair in pairs
+        if pair.prev_output > 0
+    ]
+    x_min_value, x_max_value = output_axis_bounds(x_values, minimum=min_output_tokens)
+    left_line = np.linspace(x_min_value, x_max_value, 256)
+    right_line = np.linspace(x_min_value, x_max_value, 256)
+
+    for row, (scenario, pairs) in enumerate(nonempty):
+        color = plot_color(f"merged_{scenario.key}", row)
+        sample = sampled_pairs(pairs, max_points_per_scenario)
+
+        ax = axes[row][0]
+        left_x = [pair.prev_output for pair in sample]
+        left_y = [positive_prefix_gain(pair) for pair in sample]
+        left_residuals = [pair.prefix_delta - pair.prev_output for pair in pairs]
+        ax.scatter(
+            token_axis_values(left_x, left_first_tick),
+            token_axis_values(left_y, left_first_tick),
+            s=10,
+            alpha=0.25,
+            linewidths=0,
+            color=color,
+            rasterized=True,
+        )
+        ax.plot(
+            token_axis_values(left_line, left_first_tick),
+            token_axis_values(left_line, left_first_tick),
+            color="#111827",
+            linewidth=1.0,
+            alpha=0.65,
+            label="y = x",
+        )
+        ax.set_ylabel(f"{scenario.title}\nnext prefix gain")
+        ax.set_xlabel("Prior output tokens")
+        ax.grid(True, alpha=0.25)
+        ax.tick_params(axis="both", labelsize=8.5)
+        ax.text(
+            0.02,
+            0.98,
+            f"n={len(pairs):,}\nmedian y-x: {fmt(percentile(left_residuals, 0.50))}",
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=8.0,
+            color="#526070",
+        )
+        apply_binary_token_axis_window(
+            ax,
+            min_value=x_min_value,
+            max_value=x_max_value,
+            first_tick=left_first_tick,
+            max_ticks=8,
+        )
+        apply_binary_token_axis(
+            ax, axis="y", max_value=left_max, first_tick=left_first_tick, max_ticks=8
+        )
+
+        ax = axes[row][1]
+        right_x = [pair.prev_output for pair in sample]
+        right_y = [pair.next_append for pair in sample]
+        right_residuals = [pair.next_append - pair.prev_output for pair in pairs]
+        ax.scatter(
+            token_axis_values(right_x, right_first_tick),
+            token_axis_values(right_y, right_first_tick),
+            s=10,
+            alpha=0.25,
+            linewidths=0,
+            color=color,
+            rasterized=True,
+        )
+        ax.plot(
+            token_axis_values(right_line, right_first_tick),
+            token_axis_values(right_line, right_first_tick),
+            color="#111827",
+            linewidth=1.0,
+            alpha=0.65,
+            label="y = x",
+        )
+        ax.set_ylabel("next new input tokens")
+        ax.set_xlabel("Prior output tokens")
+        ax.grid(True, alpha=0.25)
+        ax.tick_params(axis="both", labelsize=8.5)
+        ax.text(
+            0.02,
+            0.98,
+            f"n={len(pairs):,}\nmedian y-x: {fmt(percentile(right_residuals, 0.50))}",
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=8.0,
+            color="#526070",
+        )
+        apply_binary_token_axis_window(
+            ax,
+            min_value=x_min_value,
+            max_value=x_max_value,
+            first_tick=right_first_tick,
+            max_ticks=8,
+        )
+        apply_binary_token_axis(
+            ax, axis="y", max_value=right_max, first_tick=right_first_tick, max_ticks=8
+        )
+
+    fig.tight_layout(rect=(0, 0, 1, 1), h_pad=0.65)
+    out = output_dir / f"model_merged_output_attribution_min{min_output_tokens}.png"
+    pdf_out = out.with_suffix(".pdf")
+    fig.savefig(pdf_out, bbox_inches="tight", facecolor="white")
+    print(f"Saved {pdf_out}", file=sys.stderr)
+    save_plot(fig, out)
+    return out
+
+
 def plot_prefix_gain_rank_grid(
     scenario_pairs: list[tuple[Scenario, list[Pair]]],
     output_dir: Path,
@@ -786,6 +969,7 @@ def write_summary(
     output_dir: Path,
     *,
     min_output_tokens: int,
+    tolerance: Tolerance,
 ) -> Path:
     out = output_dir / f"output_append_assignment_summary_min{min_output_tokens}.csv"
     with out.open("w", encoding="utf-8", newline="") as fh:
@@ -796,6 +980,8 @@ def write_summary(
                 "count",
                 "decision",
                 "decision_strength",
+                "tolerance_absolute_tokens",
+                "tolerance_relative_fraction",
                 "corr_log_output_append",
                 "corr_log_output_prefix_gain",
                 "prefix_close_pct",
@@ -825,9 +1011,9 @@ def write_summary(
             unassigned_pair_count = 0
             residuals: list[float] = []
             for pair in pairs:
-                is_prefix_close = prefix_close(pair)
-                is_prefix_reject = prefix_rejects_output(pair)
-                is_append_can = append_can_contain_output(pair)
+                is_prefix_close = prefix_close(pair, tolerance)
+                is_prefix_reject = prefix_rejects_output(pair, tolerance)
+                is_append_can = append_can_contain_output(pair, tolerance)
                 is_append_side = is_prefix_reject and is_append_can
                 append_can_count += is_append_can
                 prefix_close_count += is_prefix_close
@@ -857,6 +1043,8 @@ def write_summary(
                     "count": len(pairs),
                     "decision": decision,
                     "decision_strength": decision_strength,
+                    "tolerance_absolute_tokens": fmt(tolerance.absolute_tokens),
+                    "tolerance_relative_fraction": fmt(tolerance.relative_fraction),
                     "corr_log_output_append": fmt(corr),
                     "corr_log_output_prefix_gain": fmt(prefix_corr),
                     "prefix_close_pct": fmt(prefix_close_pct),
@@ -895,6 +1083,87 @@ def write_summary(
     return out
 
 
+def write_model_merged_summary(
+    model_pairs: list[tuple[Scenario, list[Pair]]],
+    output_dir: Path,
+    *,
+    min_output_tokens: int,
+    tolerance: Tolerance,
+) -> Path:
+    out = output_dir / f"model_merged_output_attribution_summary_min{min_output_tokens}.csv"
+    with out.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(
+            fh,
+            fieldnames=[
+                "model_group",
+                "count",
+                "decision",
+                "decision_strength",
+                "tolerance_absolute_tokens",
+                "tolerance_relative_fraction",
+                "prefix_close_pct",
+                "append_side_pair_pct",
+                "median_prev_output_for_prefix_gain",
+                "median_next_prefix_gain",
+                "median_prefix_gain_minus_output",
+                "median_prev_output",
+                "median_next_append",
+                "median_append_minus_output",
+            ],
+        )
+        writer.writeheader()
+        for scenario, pairs in model_pairs:
+            if not pairs:
+                continue
+            prefix_close_count = sum(prefix_close(pair, tolerance) for pair in pairs)
+            append_side_count = sum(append_side_pair(pair, tolerance) for pair in pairs)
+            prefix_close_pct = 100 * prefix_close_count / len(pairs)
+            append_side_pair_pct = 100 * append_side_count / len(pairs)
+            decision, decision_strength = assignment_label(
+                count=len(pairs),
+                prefix_close_pct=prefix_close_pct,
+                append_side_pair_pct=append_side_pair_pct,
+            )
+            writer.writerow(
+                {
+                    "model_group": scenario.title,
+                    "count": len(pairs),
+                    "decision": decision,
+                    "decision_strength": decision_strength,
+                    "tolerance_absolute_tokens": fmt(tolerance.absolute_tokens),
+                    "tolerance_relative_fraction": fmt(tolerance.relative_fraction),
+                    "prefix_close_pct": fmt(prefix_close_pct),
+                    "append_side_pair_pct": fmt(append_side_pair_pct),
+                    "median_prev_output_for_prefix_gain": fmt(
+                        percentile([pair.prev_output for pair in pairs], 0.50)
+                    ),
+                    "median_next_prefix_gain": fmt(
+                        percentile([positive_prefix_gain(pair) for pair in pairs], 0.50)
+                    ),
+                    "median_prefix_gain_minus_output": fmt(
+                        percentile(
+                            [
+                                pair.prefix_delta - pair.prev_output
+                                for pair in pairs
+                            ],
+                            0.50,
+                        )
+                    ),
+                    "median_prev_output": fmt(
+                        percentile([pair.prev_output for pair in pairs], 0.50)
+                    ),
+                    "median_next_append": fmt(
+                        percentile([pair.next_append for pair in pairs], 0.50)
+                    ),
+                    "median_append_minus_output": fmt(
+                        percentile([pair.next_append - pair.prev_output for pair in pairs], 0.50)
+                    ),
+                }
+            )
+    print(f"Saved {out}", file=sys.stderr)
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     trace_db.add_db_args(parser, default_output_dir=DEFAULT_OUTPUT_DIR)
@@ -902,12 +1171,40 @@ def main() -> int:
     parser.add_argument(
         "--min-output-tokens", type=int, nargs="+", default=[2_000, 4_000]
     )
+    parser.add_argument(
+        "--tolerance-absolute-tokens",
+        type=float,
+        default=512.0,
+        help="absolute tolerance floor for output attribution predicates",
+    )
+    parser.add_argument(
+        "--tolerance-relative-fraction",
+        type=float,
+        default=0.10,
+        help="relative tolerance multiplier for output attribution predicates",
+    )
+    parser.add_argument(
+        "--model-merged-figure",
+        action="store_true",
+        help="also emit a merged-by-model figure for Claude, gpt-5.5, and gpt-5.4",
+    )
+    parser.add_argument(
+        "--model-merged-only",
+        action="store_true",
+        help="emit only the merged-by-model figure/summary and skip scenario grids",
+    )
     parser.add_argument("--max-points-per-scenario", type=int, default=6_000)
     args = parser.parse_args()
+    if args.model_merged_only:
+        args.model_merged_figure = True
 
     con = trace_db.open_from_args(args)
     pairs = load_pairs(con, max_gap_seconds=args.max_gap_seconds)
     scenarios = scenario_groups()
+    tolerance = Tolerance(
+        absolute_tokens=args.tolerance_absolute_tokens,
+        relative_fraction=args.tolerance_relative_fraction,
+    )
 
     outputs: list[Path] = []
     for minimum in args.min_output_tokens:
@@ -922,41 +1219,76 @@ def main() -> int:
             )
             for scenario in scenarios
         ]
-        outputs.append(
-            write_summary(filtered, args.output_dir, min_output_tokens=minimum)
-        )
-        scatter = plot_scatter_grid(
-            filtered,
-            args.output_dir,
-            min_output_tokens=minimum,
-            max_points_per_scenario=args.max_points_per_scenario,
-        )
-        if scatter is not None:
-            outputs.append(scatter)
-        rank = plot_rank_grid(
-            filtered,
-            args.output_dir,
-            min_output_tokens=minimum,
-            max_points_per_scenario=args.max_points_per_scenario,
-        )
-        if rank is not None:
-            outputs.append(rank)
-        prefix_scatter = plot_prefix_gain_scatter_grid(
-            filtered,
-            args.output_dir,
-            min_output_tokens=minimum,
-            max_points_per_scenario=args.max_points_per_scenario,
-        )
-        if prefix_scatter is not None:
-            outputs.append(prefix_scatter)
-        prefix_rank = plot_prefix_gain_rank_grid(
-            filtered,
-            args.output_dir,
-            min_output_tokens=minimum,
-            max_points_per_scenario=args.max_points_per_scenario,
-        )
-        if prefix_rank is not None:
-            outputs.append(prefix_rank)
+        if not args.model_merged_only:
+            outputs.append(
+                write_summary(
+                    filtered,
+                    args.output_dir,
+                    min_output_tokens=minimum,
+                    tolerance=tolerance,
+                )
+            )
+            scatter = plot_scatter_grid(
+                filtered,
+                args.output_dir,
+                min_output_tokens=minimum,
+                max_points_per_scenario=args.max_points_per_scenario,
+            )
+            if scatter is not None:
+                outputs.append(scatter)
+            rank = plot_rank_grid(
+                filtered,
+                args.output_dir,
+                min_output_tokens=minimum,
+                max_points_per_scenario=args.max_points_per_scenario,
+            )
+            if rank is not None:
+                outputs.append(rank)
+            prefix_scatter = plot_prefix_gain_scatter_grid(
+                filtered,
+                args.output_dir,
+                min_output_tokens=minimum,
+                max_points_per_scenario=args.max_points_per_scenario,
+            )
+            if prefix_scatter is not None:
+                outputs.append(prefix_scatter)
+            prefix_rank = plot_prefix_gain_rank_grid(
+                filtered,
+                args.output_dir,
+                min_output_tokens=minimum,
+                max_points_per_scenario=args.max_points_per_scenario,
+            )
+            if prefix_rank is not None:
+                outputs.append(prefix_rank)
+
+        if args.model_merged_figure:
+            model_filtered = [
+                (
+                    scenario,
+                    [
+                        pair
+                        for pair in pairs
+                        if pair.prev_output >= minimum and scenario.predicate(pair)
+                    ],
+                )
+                for scenario in model_merged_groups()
+            ]
+            outputs.append(
+                write_model_merged_summary(
+                    model_filtered,
+                    args.output_dir,
+                    min_output_tokens=minimum,
+                    tolerance=tolerance,
+                )
+            )
+            merged = plot_model_merged_grid(
+                model_filtered,
+                args.output_dir,
+                min_output_tokens=minimum,
+                max_points_per_scenario=args.max_points_per_scenario,
+            )
+            if merged is not None:
+                outputs.append(merged)
 
     png_sidecar.make_self_contained(
         args.output_dir,

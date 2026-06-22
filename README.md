@@ -66,7 +66,10 @@ curl -L --fail -o trace/syfi_coding_trace.duckdb \
 
 # Headline aggregate facts (add --json for machine-readable output)
 uv run python artifacts/trace_facts/overview_summary/analyze.py \
-  -i trace/syfi_coding_trace.jsonl
+  --db trace/syfi_coding_trace.duckdb
+
+# Regenerate all analysis artifacts from the released DuckDB
+uv run python artifacts/run_all.py
 ```
 
 See [The dataset](#-the-dataset) for the full download + checksum recipe.
@@ -86,7 +89,9 @@ uv run python scripts/sanitize_round_trace.py \
   trace/llm_round_trace.jsonl -o trace/llm_round_trace.public.jsonl
 
 # 3. Regenerate all analysis artifacts
-uv run python artifacts/run_all.py --input trace/llm_round_trace.public.jsonl
+uv run python artifacts/run_all.py \
+  --build-db --input trace/llm_round_trace.public.jsonl \
+  --db trace/llm_round_trace.public.duckdb
 
 # 4. Run validation / audit checks
 uv run python validators/run_all.py --input trace/llm_round_trace.public.jsonl
@@ -241,20 +246,24 @@ pseudonymous `user` values.
 Every analysis is a self-contained experiment under `artifacts/<category>/<experiment>/`.
 Read that folder's `README.md` for the question it answers and exactly how it computes its
 metric; shared metric definitions live in
-[`artifacts/utils/README.md`](artifacts/utils/README.md). Run an experiment directly — it
-defaults its input to `trace/llm_round_trace.merged.all_users.jsonl` and writes outputs
-into its own folder:
+[`artifacts/utils/README.md`](artifacts/utils/README.md). Most experiments accept the
+released DuckDB at `trace/syfi_coding_trace.duckdb`; JSONL inputs are still supported for
+scripts that expose `-i` / `--input`. Outputs are written into each experiment folder:
 
 ```bash
 # Headline aggregate facts (text or --json)
-uv run python artifacts/trace_facts/overview_summary/analyze.py
+uv run python artifacts/trace_facts/overview_summary/analyze.py \
+  --db trace/syfi_coding_trace.duckdb
 # Input-token composition; tool latency; generation-time CDFs
-uv run python artifacts/llm_generation/prefix_append_distribution/plot.py
-uv run python artifacts/tool_calls/tool_latency_distribution/plot.py
-uv run python artifacts/llm_generation/generation_time_cdf/plot.py
+uv run python artifacts/llm_generation/prefix_append_distribution/plot.py \
+  --db trace/syfi_coding_trace.duckdb
+uv run python artifacts/tool_calls/tool_latency_distribution/plot.py \
+  --db trace/syfi_coding_trace.duckdb
+uv run python artifacts/llm_generation/generation_time_cdf/plot.py \
+  --db trace/syfi_coding_trace.duckdb
 # Multi-round CSV export
 uv run python artifacts/trace_facts/csv_export/convert.py \
-  -i trace/llm_round_trace.public.jsonl \
+  --db trace/syfi_coding_trace.duckdb \
   -o artifacts/trace_facts/csv_export/coding_trace.csv
 ```
 

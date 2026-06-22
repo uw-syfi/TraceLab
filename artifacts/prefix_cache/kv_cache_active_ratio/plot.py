@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 EXP_DIR = Path(__file__).resolve().parent
@@ -41,10 +42,17 @@ from formatters import (
 )  # noqa: E402
 import trace_db  # noqa: E402
 import png_sidecar  # noqa: E402
+from timing import human_waits_from_event_pairs  # noqa: E402
 
 # Event-type sets (mirror artifacts/utils/timing.py exactly).
 _INPUT_EVENT_TYPES = ("user_message", "tool_result")
 _MODEL_OUTPUT_EVENT_TYPES = ("reasoning", "text", "tool_call")
+
+_EPOCH = datetime(1970, 1, 1)
+
+
+def _epoch_us_to_datetime(value: int | None) -> datetime | None:
+    return None if value is None else _EPOCH + timedelta(microseconds=value)
 
 
 def _in_set_sql(column: str, values: tuple[str, ...]) -> str:
@@ -131,72 +139,41 @@ def load_tool_latency_values_by_provider(con) -> dict[str, list[float]]:
 
 
 def load_human_input_wait_seconds_by_provider(con) -> dict[str, list[float]]:
-    """Per-session inter-round human-wait gaps grouped by provider, plus an ``all`` group.
+    """Per-session human-wait gaps grouped by provider, plus an ``all`` group.
 
-    Stateful, exactly like the old loader: walking rounds in file order (``round_pk`` =
-    ingest ordinal) per session, the wait before a round is
-    ``response_trigger_user_message_timestamp(row) - <previous round's
-    last_model_output_timestamp>``, recorded when strictly positive.
+    Provider-agnostic definition (see ``timing.human_waits_from_event_pairs``): the wait before a
+    ``user_message`` is the gap from the **previous event of any type** in the same session
+    (including non-output events such as Codex ``usage_report``), counting every user message. For
+    the cache-eviction view this is the right idle: the KV cache sits unused from the session's
+    last event until the next user prompt. Stateful single pass over rounds in ingestion order
+    (``round_pk`` == file order), carrying ``last_event_at`` per session.
     """
-    output_in = _in_set_sql("event_type", _MODEL_OUTPUT_EVENT_TYPES)
-    # Per-round trigger user timestamp + last model output timestamp.
-    rows = con.execute(
-        f"""
-        WITH ev AS (
-            SELECT round_pk, event_type, CAST(epoch_us(timestamp) AS BIGINT) AS ts_us
-            FROM timing_events
-            WHERE timestamp IS NOT NULL
-        ),
-        bounds AS (
-            SELECT
-                round_pk,
-                min(CASE WHEN {output_in} THEN ts_us END) AS first_output_us,
-                max(CASE WHEN {output_in} THEN ts_us END) AS last_output_us
-            FROM ev
-            GROUP BY round_pk
-        ),
-        per_round AS (
-            SELECT
-                b.round_pk,
-                b.first_output_us,
-                b.last_output_us,
-                -- response_trigger_user_message_timestamp = max(user_ts <= first_output);
-                -- null when there is no output event (first_output_us is null) so the
-                -- ts_us <= NULL comparison yields no rows.
-                max(CASE WHEN ev.event_type = 'user_message'
-                              AND b.first_output_us IS NOT NULL
-                              AND ev.ts_us <= b.first_output_us
-                         THEN ev.ts_us END) AS trigger_user_us
-            FROM bounds b
-            JOIN ev USING (round_pk)
-            GROUP BY b.round_pk, b.first_output_us, b.last_output_us
+    events_by_round: dict[int, list[tuple[str | None, datetime | None]]] = {}
+    for round_pk, event_type, ts_us in con.execute(
+        "SELECT round_pk, event_type, CAST(epoch_us(timestamp) AS BIGINT) AS ts_us "
+        "FROM timing_events ORDER BY round_pk, event_index"
+    ).fetchall():
+        events_by_round.setdefault(round_pk, []).append(
+            (event_type, _epoch_us_to_datetime(ts_us))
         )
-        SELECT
-            r.round_pk,
-            r.session_id,
-            COALESCE(r.provider, '<unknown-provider>') AS provider,
-            p.trigger_user_us AS trigger_user_us,
-            p.last_output_us AS last_output_us
-        FROM rounds r
-        LEFT JOIN per_round p USING (round_pk)
-        ORDER BY r.round_pk
-        """
-    ).fetchall()
 
     human_by_provider: dict[str, list[float]] = {"all": []}
-    last_output_by_session: dict[str, int] = {}
-    for _round_pk, session_id, provider, trigger_user_us, last_output_us in rows:
-        # response_trigger present and session_id is a string (old: isinstance str)
-        if trigger_user_us is not None and isinstance(session_id, str):
-            previous_output_us = last_output_by_session.get(session_id)
-            if previous_output_us is not None:
-                wait_seconds = (trigger_user_us - previous_output_us) / 1e6
-                if wait_seconds > 0:
-                    human_by_provider["all"].append(wait_seconds)
-                    human_by_provider.setdefault(provider, []).append(wait_seconds)
-        # update session's last model output (old: only when last_output present)
-        if isinstance(session_id, str) and last_output_us is not None:
-            last_output_by_session[session_id] = last_output_us
+    last_event_at_by_session: dict[str, datetime] = {}
+    for round_pk, session_id, provider in con.execute(
+        "SELECT round_pk, session_id, COALESCE(provider, '<unknown-provider>') AS provider "
+        "FROM rounds ORDER BY round_pk"
+    ).fetchall():
+        if not (isinstance(session_id, str) and session_id):
+            continue
+        events = events_by_round.get(round_pk, [])
+        waits, _n_user, last = human_waits_from_event_pairs(
+            events, last_event_at_by_session.get(session_id)
+        )
+        for wait_seconds in waits:
+            human_by_provider["all"].append(wait_seconds)
+            human_by_provider.setdefault(provider, []).append(wait_seconds)
+        if last is not None:
+            last_event_at_by_session[session_id] = last
     return human_by_provider
 
 

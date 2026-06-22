@@ -64,7 +64,7 @@ uv run python artifacts/llm_generation/output_tokens/plot.py -i trace/sample.jso
 ## Outputs
 
 - `output_tokens_distribution.png` — per-group output-token histogram on a base-2 token axis; the
-  legend reports each group's `n`, `p50`, and `p90`.
+  legend reports each group label.
 - `output_tokens_summary.csv` — per-group quantiles: `count, min, p50, p90, p95, p99, max, mean`,
   plus `sample_count` (= `count`) and `sampled` (always `False`, since the stats are exact).
 

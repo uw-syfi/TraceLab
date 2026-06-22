@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """How long the model waits for the human between responses (idle wait CDFs).
 
-Human input wait = previous model-output event -> the next user_message, in the same
-session. See README.md for the definition and caveats.
+Human input wait = previous event (of any type) -> the next user_message, in the same
+session. Provider-agnostic: every user message counts and the gap spans non-output events
+(e.g. Codex usage_report). See README.md for the definition and caveats.
 """
 
 from __future__ import annotations
@@ -39,11 +40,9 @@ from cdf import (
 )  # noqa: E402
 import trace_db  # noqa: E402
 import png_sidecar  # noqa: E402
+from timing import human_waits_from_event_pairs  # noqa: E402
 
 ONE_HOUR_SECONDS = 60 * 60
-
-# Same event-type partitions as the pre-DuckDB timing helper (artifacts/utils/timing.py).
-MODEL_OUTPUT_EVENT_TYPES = {"reasoning", "text", "tool_call"}
 
 # Timestamps are pulled from the DB as integer epoch-microseconds (epoch_us) rather than as a
 # TIMESTAMP, because native duckdb marshals TIMESTAMP to datetime but duckdb-wasm marshals it to a
@@ -58,93 +57,44 @@ def _epoch_us_to_datetime(value: int | None) -> datetime | None:
     return None if value is None else _EPOCH + timedelta(microseconds=value)
 
 
-def _response_trigger_user_message_timestamp(
-    events: list[tuple[str | None, datetime | None]],
-) -> datetime | None:
-    """Reproduce timing.response_trigger_user_message_timestamp for one round's events.
-
-    Collect this round's user_message timestamps and model-output (reasoning/text/tool_call)
-    timestamps. If either list is empty -> None. Otherwise take the earliest output as
-    first_output; keep only user inputs at-or-before first_output as candidates; if none -> None;
-    else return the latest such candidate.
-    """
-    user_timestamps: list[datetime] = []
-    output_timestamps: list[datetime] = []
-    for event_type, ts in events:
-        if ts is None:
-            continue
-        if event_type == "user_message":
-            user_timestamps.append(ts)
-        elif event_type in MODEL_OUTPUT_EVENT_TYPES:
-            output_timestamps.append(ts)
-    if not user_timestamps or not output_timestamps:
-        return None
-    first_output_at = min(output_timestamps)
-    candidate_users = [ts for ts in user_timestamps if ts <= first_output_at]
-    if not candidate_users:
-        return None
-    return max(candidate_users)
-
-
-def _last_model_output_timestamp(
-    events: list[tuple[str | None, datetime | None]],
-) -> datetime | None:
-    """Reproduce timing.last_model_output_timestamp: latest model-output timestamp, or None."""
-    output_timestamps = [
-        ts for event_type, ts in events if event_type in MODEL_OUTPUT_EVENT_TYPES and ts is not None
-    ]
-    return max(output_timestamps) if output_timestamps else None
-
-
 def load_human_input_wait_seconds_by_provider(
     con: "duckdb.DuckDBPyConnection",
 ) -> dict[str, list[float]]:
-    """``{"all": [...], provider: [...]}`` — per-session idle waits between turns.
+    """``{"all": [...], provider: [...]}`` — per-session human waits before each user message.
 
-    Stateful, single-pass over rounds in ingestion order (``round_pk`` == file order), reproducing
-    the old single-pass loader exactly. State is ``last_model_output_by_session``. For each round in
-    order:
-      1. ``start`` = response-trigger user_message timestamp for the round (None if absent).
-      2. If ``start`` is not None and the session_id is a non-empty str, and a previous model-output
-         timestamp exists for that session, the wait is ``(start - prev).total_seconds()``; when
-         strictly positive it is appended to ``"all"`` and to that round's provider bucket.
-      3. Update ``last_model_output_by_session[session_id]`` with this round's last model-output
-         timestamp (when present).
-    The full list is kept per provider — no sampling — so the CDF is exact.
+    Provider-agnostic definition (see ``timing.human_waits_from_event_pairs``): the wait before a
+    ``user_message`` is the gap from the **previous event of any type** in the same session
+    (including a prior round, and non-output events such as Codex ``usage_report``). Every user
+    message counts, not only turn-triggering ones. Stateful single pass over rounds in ingestion
+    order (``round_pk`` == file order), carrying ``last_event_at`` per session. The full list is
+    kept per provider — no sampling — so the CDF is exact.
     """
-    # Per-round timing events (epoch-microsecond ints, rebuilt to naive datetimes). Event order
-    # within a round is irrelevant: the per-round helpers only use min/max over the typed lists.
     events_by_round: dict[int, list[tuple[str | None, datetime | None]]] = {}
     for round_pk, event_type, ts_us in con.execute(
         "SELECT round_pk, event_type, CAST(epoch_us(timestamp) AS BIGINT) AS ts_us "
-        "FROM timing_events ORDER BY round_pk"
+        "FROM timing_events ORDER BY round_pk, event_index"
     ).fetchall():
         events_by_round.setdefault(round_pk, []).append(
             (event_type, _epoch_us_to_datetime(ts_us))
         )
 
     by_provider: dict[str, list[float]] = {"all": []}
-    last_model_output_by_session: dict[str, datetime] = {}
-    # Per-round (session_id, provider) in ingestion order so the stateful walk and the per-provider
-    # append order match the old line-by-line loader exactly.
+    last_event_at_by_session: dict[str, datetime] = {}
     for round_pk, session_id, provider in con.execute(
         "SELECT round_pk, session_id, provider FROM rounds ORDER BY round_pk"
     ).fetchall():
-        events = events_by_round.get(round_pk, [])
+        if not (isinstance(session_id, str) and session_id):
+            continue
         provider_key = str(provider) if provider else "<unknown-provider>"
-
-        start = _response_trigger_user_message_timestamp(events)
-        if start is not None and isinstance(session_id, str) and session_id:
-            prev = last_model_output_by_session.get(session_id)
-            if prev is not None:
-                wait_seconds = (start - prev).total_seconds()
-                if wait_seconds > 0:
-                    by_provider["all"].append(wait_seconds)
-                    by_provider.setdefault(provider_key, []).append(wait_seconds)
-
-        out = _last_model_output_timestamp(events)
-        if isinstance(session_id, str) and session_id and out is not None:
-            last_model_output_by_session[session_id] = out
+        events = events_by_round.get(round_pk, [])
+        waits, _n_user, last = human_waits_from_event_pairs(
+            events, last_event_at_by_session.get(session_id)
+        )
+        for wait_seconds in waits:
+            by_provider["all"].append(wait_seconds)
+            by_provider.setdefault(provider_key, []).append(wait_seconds)
+        if last is not None:
+            last_event_at_by_session[session_id] = last
     return by_provider
 
 
@@ -194,7 +144,7 @@ def plot_human_input_wait_cdf(
 
     fig, ax = plt.subplots(figsize=(9.5, 6.0))
     ax.set_title("Human Input Wait Time CDF")
-    ax.set_xlabel("Time from previous model output to next user message")
+    ax.set_xlabel("Time from previous event to next user message")
     ax.set_ylabel("CDF")
     ax.set_ylim(0, 100)
     ax.set_xscale("log")
@@ -291,7 +241,7 @@ def main() -> int:
         out,
         out_name="human_input_wait_count_cdf_by_provider.png",
         title="Human Input Wait Count CDF by Provider",
-        x_label="Wait from previous model output to next user message",
+        x_label="Wait from previous event to next user message",
         table_title="human input wait time",
         edge_kind="duration_seconds",
         unit_label="wait",
@@ -303,7 +253,7 @@ def main() -> int:
         out,
         out_name="human_input_wait_total_cdf_by_provider.png",
         title="Human Input Wait Total CDF by Provider",
-        x_label="Wait from previous model output to next user message",
+        x_label="Wait from previous event to next user message",
         table_title="human input wait time",
         x_max=ONE_HOUR_SECONDS,
         x_max_label="1h",
