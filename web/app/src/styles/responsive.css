@@ -27,6 +27,7 @@
     .gallery-section-head { display: block; }
     .gallery-section-head p { margin-top: 6px; }
     .hero { padding: 44px 0 20px; }
+    .link-strip { margin-bottom: 28px; }
     .term-strip { grid-template-columns: 1fr; margin-bottom: 28px; }
     .contribute { flex-direction: column; align-items: stretch; }
     .modal-actions { flex-direction: column-reverse; }

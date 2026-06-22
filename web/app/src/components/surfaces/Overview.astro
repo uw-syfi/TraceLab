@@ -8,6 +8,7 @@ import Band from '../Band.astro';
 import Panel from '../Panel.astro';
 import ProviderDonut from '../ProviderDonut.astro';
 import GalleryCard from '../GalleryCard.astro';
+import ProjectLinks from '../ProjectLinks.astro';
 import Footer from '../Footer.astro';
 import { localeFromUrl, useTranslations } from '../../i18n';
 
@@ -64,6 +65,8 @@ const localizedCard = (title: string, blurb: string) => fcopy.cards[title] ?? { 
       {o.lede[1]}
     </p>
   </div>
+
+  <ProjectLinks variant="strip" class="link-strip reveal" style="--d:150ms" />
 
   <div class="sec-head reveal" style="--d:190ms">
     <h2>{o.snapshot}</h2>

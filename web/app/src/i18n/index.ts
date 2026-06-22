@@ -32,6 +32,11 @@ export const uiCopy = {
       pool: 'Contributed pool',
       theme: 'Toggle dark mode',
       language: 'Language',
+      links: 'Project links',
+      github: 'GitHub',
+      paper: 'Paper (PDF)',
+      blog: 'Blog',
+      twitter: 'Follow on X',
     },
     assistant: {
       launcher: 'Ask the data',
@@ -624,6 +629,11 @@ export const uiCopy = {
       pool: '贡献池',
       theme: '切换深色模式',
       language: '语言',
+      links: '项目链接',
+      github: 'GitHub',
+      paper: '论文 (PDF)',
+      blog: '博客',
+      twitter: '关注 X',
     },
     assistant: {
       launcher: '询问数据',
