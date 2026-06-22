@@ -2,9 +2,9 @@
 
 <img src="web/app/public/syfi-mark.svg" alt="SyFI" width="150">
 
-<h1>TraceLab</h1>
+<h1>SyFI TraceLab</h1>
 
-**A real-world Claude / Codex trace dataset & open toolkit for coding-agent workload analysis.**
+**A real-world Claude / Codex trace & open toolkit for coding-agent workload analysis.**
 
 Collect · sanitize · analyze · visualize the LLM-invocation traces that coding agents
 actually produce in the wild — then explore them in your browser.
@@ -415,5 +415,5 @@ trace. By submitting a contribution you agree to license it under the project's
 - **Public trace dataset** — [Creative Commons Attribution 4.0 International (CC BY 4.0)](LICENSE-DATASET.md)
 
 <div align="center">
-<sub>Built by the <a href="https://tracelab.cs.washington.edu">SyFI Lab</a> at the University of Washington.</sub>
+<sub>Built by the <a href="https://syfi.cs.washington.edu">SyFI Lab</a> at the University of Washington.</sub>
 </div>
