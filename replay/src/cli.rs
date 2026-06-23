@@ -1,4 +1,11 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+
+/// Inference-server wire protocol selected with `--backend`.
+#[derive(ValueEnum, Clone, Copy, Debug)]
+pub(crate) enum BackendKind {
+    /// OpenAI-compatible `/completions` (vLLM, and SGLang's OpenAI endpoint).
+    Openai,
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -26,24 +33,12 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) model: String,
 
+    /// Inference-server wire protocol. `openai` covers vLLM and SGLang OpenAI endpoints.
+    #[arg(long, value_enum, default_value = "openai")]
+    pub(crate) backend: BackendKind,
+
     #[arg(long, default_value_t = 0.0)]
     pub(crate) temperature: f64,
-
-    /// Ask vLLM to continue generation after EOS until max_tokens is reached.
-    #[arg(long, default_value_t = false)]
-    pub(crate) ignore_eos: bool,
-
-    /// Do not request usage accounting in streaming responses.
-    #[arg(long, default_value_t = false)]
-    pub(crate) disable_stream_usage: bool,
-
-    /// Treat missing server cache-detail fields as zero cached tokens when usage is present.
-    ///
-    /// vLLM omits prompt_tokens_details when no tokens were cached. Enable this only when the
-    /// server is launched with --enable-prompt-tokens-details; otherwise missing details mean
-    /// "not reported", not necessarily zero.
-    #[arg(long, default_value_t = false)]
-    pub(crate) assume_missing_cache_details_zero: bool,
 
     #[arg(long)]
     pub(crate) max_sessions: Option<usize>,
@@ -51,8 +46,10 @@ pub(crate) struct Args {
     #[arg(long, default_value = "session_runner_output.jsonl")]
     pub(crate) log_path: String,
 
-    #[arg(long, default_value_t = 200_000)]
-    pub(crate) token_pool_limit: usize,
+    /// Cap on synthetic token-pool size. Defaults to cover the workload's longest prompt with
+    /// headroom, so synthetic content never repeats within a single request.
+    #[arg(long)]
+    pub(crate) token_pool_limit: Option<usize>,
 
     /// Max seconds to wait for the next streaming chunk before failing a request.
     #[arg(long, default_value_t = 600)]
@@ -61,10 +58,6 @@ pub(crate) struct Args {
     /// Stop a session after the first failed round.
     #[arg(long, default_value_t = true)]
     pub(crate) stop_session_on_error: bool,
-
-    /// Do not delay each session by the CSV arrival_time. Useful for old immediate-start runs.
-    #[arg(long, default_value_t = false)]
-    pub(crate) ignore_arrival_time: bool,
 
     /// Maximum number of sessions allowed to actively run at once.
     #[arg(long)]

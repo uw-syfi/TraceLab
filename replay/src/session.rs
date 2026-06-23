@@ -8,12 +8,12 @@ use crate::record::StepLog;
 use crate::tokens::{PromptBuilder, TokenProvider};
 use crate::trace::SessionStep;
 use crate::util::{prefix_hit_rate, unix_seconds_now};
-use crate::vllm::VllmClient;
+use crate::backend::{GenerationClient, StepOutcome};
 
 /// Shared, immutable-per-run state handed to every session task.
 pub(crate) struct AppState {
     pub(crate) args: Args,
-    pub(crate) vllm: Arc<VllmClient>,
+    pub(crate) client: Arc<GenerationClient>,
     pub(crate) token_pool: Arc<Vec<u32>>,
     pub(crate) stats: Arc<Stats>,
     pub(crate) run_start: Instant,
@@ -77,11 +77,20 @@ pub(crate) async fn run_session(
         let prompt_ids = prompt_builder.build_prompt(&step);
         let request_id = format!("{}_round_{:06}", session_id, step.round_idx);
         state.stats.record_submit();
-        let log = if should_skip_context_overflow(&state.args, prompt_ids.len()) {
-            context_overflow_log(&step, request_id, prompt_ids.len(), state.args.max_model_len)
+        let outcome = if should_skip_context_overflow(&state.args, prompt_ids.len()) {
+            StepOutcome {
+                log: context_overflow_log(
+                    &step,
+                    request_id,
+                    prompt_ids.len(),
+                    state.args.max_model_len,
+                ),
+                output_ids: Vec::new(),
+            }
         } else {
-            state.vllm.run_step(&step, request_id, &prompt_ids).await
+            state.client.run_step(&step, request_id, &prompt_ids).await
         };
+        let StepOutcome { log, output_ids } = outcome;
         let success = log.status == "SUCCESS";
         let _ = log_tx.send(log).await;
 
@@ -90,8 +99,9 @@ pub(crate) async fn run_session(
             break;
         }
 
-        // Use synthetic output tokens so the replayed context shape exactly follows the trace.
-        prompt_builder.commit_synthetic_output(prompt_ids, step.output_len);
+        // Carry the model's real output tokens forward (not synthetic) so the previous-output
+        // region of the next prefix matches what the server cached and stays cache-hittable.
+        prompt_builder.commit_output(prompt_ids, output_ids);
 
         if step.tool_wait_after_ms > 0.0 {
             tokio::time::sleep(Duration::from_secs_f64(step.tool_wait_after_ms / 1000.0)).await;
@@ -141,6 +151,7 @@ fn context_overflow_log(
         arrival_time_ms: step.arrival_time,
         submit_timestamp: unix_seconds_now(),
         post_timestamp: None,
+        complete_timestamp: unix_seconds_now(),
         first_token_ms: None,
         total_duration_ms: 0.0,
         chunk_count: 0,
@@ -154,9 +165,6 @@ fn context_overflow_log(
 }
 
 async fn wait_for_session_arrival(state: &AppState, steps: &[SessionStep]) {
-    if state.args.ignore_arrival_time {
-        return;
-    }
     let arrival_ms = steps
         .first()
         .map(|step| step.arrival_time.max(0.0))

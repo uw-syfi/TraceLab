@@ -60,10 +60,12 @@ impl PromptBuilder {
         prompt_ids
     }
 
-    pub(crate) fn commit_synthetic_output(&mut self, prompt_ids: Vec<u32>, output_len: usize) {
+    /// Carry this round's prompt plus the model's real output tokens forward as the next round's
+    /// context. Using the real output (not synthetic) keeps the previous-output region of the next
+    /// prefix byte-identical to what the server cached, so it stays prefix-cache-hittable.
+    pub(crate) fn commit_output(&mut self, prompt_ids: Vec<u32>, output_ids: Vec<u32>) {
         self.context_tokens = prompt_ids;
-        self.context_tokens
-            .extend(self.token_provider.take(output_len));
+        self.context_tokens.extend(output_ids);
     }
 }
 

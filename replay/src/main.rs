@@ -1,3 +1,4 @@
+mod backend;
 mod cli;
 mod record;
 mod session;
@@ -5,22 +6,21 @@ mod summary;
 mod tokens;
 mod trace;
 mod util;
-mod vllm;
 mod workload;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, Semaphore};
 
+use backend::GenerationClient;
 use cli::Args;
 use record::StepLog;
 use session::{run_session, status_task, AppState, Stats};
 use summary::{write_logs, write_summary_if_requested, ReplaySummary, RunSummary};
 use tokens::{build_token_pool, load_tokenizer};
 use trace::load_sessions;
-use vllm::VllmClient;
 use workload::WorkloadSummary;
 
 #[tokio::main]
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     workload_summary.print();
     if args.dry_run {
         write_summary_if_requested(
-            &args,
+            args.summary_path.as_deref(),
             RunSummary {
                 workload: workload_summary,
                 replay: ReplaySummary::default(),
@@ -50,18 +50,50 @@ async fn main() -> Result<()> {
     }
 
     let tokenizer = Arc::new(load_tokenizer(&args.tokenizer)?);
+    // Size the synthetic token pool to the workload by default: it must exceed the longest
+    // prompt so no single request repeats content, and stay larger than the session count so
+    // per-session seed offsets stay distinct (otherwise distant sessions draw identical content
+    // and fabricate cross-session prefix-cache hits). The 100M floor gives ~100 sessions of
+    // 1M-token context their own non-overlapping content window (~400 MB of u32).
+    const MIN_TOKEN_POOL: usize = 100_000_000;
+    let pool_limit = args.token_pool_limit.unwrap_or_else(|| {
+        workload_summary
+            .max_prompt_len()
+            .saturating_mul(2)
+            .max(sessions.len())
+            .max(MIN_TOKEN_POOL)
+    });
     let token_pool = Arc::new(build_token_pool(
         &args.text_file,
         tokenizer.as_ref(),
-        args.token_pool_limit,
+        pool_limit,
     )?);
+    if token_pool.len() < workload_summary.max_prompt_len() {
+        eprintln!(
+            "warning: token pool ({} tokens) is smaller than the longest prompt ({} tokens); \
+             synthetic content will repeat within a single request and may distort prefix-cache \
+             measurement. Use a larger --text-file corpus.",
+            token_pool.len(),
+            workload_summary.max_prompt_len(),
+        );
+    }
     let total_steps = workload_summary.total_steps();
 
-    let vllm = Arc::new(VllmClient::new(&args, tokenizer)?);
+    let client = Arc::new(GenerationClient::new(&args, tokenizer)?);
+
+    // Fail fast if the server won't report prefix-cache hits: otherwise every measured hit
+    // rate would silently read as zero. Dry-run returns earlier and never reaches here.
+    // Probe the TAIL of the pool: session 0 seeds at offset 0, so a head probe would warm its
+    // first round's prefix and fabricate a cache hit there.
+    let probe_len = token_pool.len().min(512);
+    client
+        .preflight_cache_check(&token_pool[token_pool.len() - probe_len..])
+        .await
+        .context("prefix-cache preflight failed")?;
 
     let state = Arc::new(AppState {
         args: args.clone(),
-        vllm,
+        client,
         token_pool,
         stats: Arc::new(Stats::default()),
         run_start: Instant::now(),
@@ -97,7 +129,7 @@ async fn main() -> Result<()> {
 
     let replay_summary = log_task.await?;
     write_summary_if_requested(
-        &args,
+        args.summary_path.as_deref(),
         RunSummary {
             workload: workload_summary,
             replay: replay_summary,

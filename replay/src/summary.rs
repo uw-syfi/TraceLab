@@ -4,7 +4,6 @@ use std::fs::File;
 use std::io::Write;
 use tokio::sync::mpsc;
 
-use crate::cli::Args;
 use crate::record::StepLog;
 use crate::util::ratio;
 use crate::workload::WorkloadSummary;
@@ -90,7 +89,6 @@ pub(crate) async fn write_logs(path: String, mut rx: mpsc::Receiver<StepLog>) ->
     let mut summary = ReplaySummary::default();
     let mut total_durations = Vec::new();
     let mut ttfts = Vec::new();
-    let mut warned_missing_cache_details = false;
 
     while let Some(record) = rx.recv().await {
         summary.add(&record);
@@ -98,7 +96,7 @@ pub(crate) async fn write_logs(path: String, mut rx: mpsc::Receiver<StepLog>) ->
         if let Some(ttft) = record.first_token_ms {
             ttfts.push(ttft);
         }
-        log_server_prefix_hit_rate(&record, &mut warned_missing_cache_details);
+        log_server_prefix_hit_rate(&record);
         if let Ok(json) = serde_json::to_string(&record) {
             let _ = writeln!(writer, "{json}");
             let _ = writer.flush();
@@ -110,7 +108,7 @@ pub(crate) async fn write_logs(path: String, mut rx: mpsc::Receiver<StepLog>) ->
     summary
 }
 
-fn log_server_prefix_hit_rate(record: &StepLog, warned_missing_cache_details: &mut bool) {
+fn log_server_prefix_hit_rate(record: &StepLog) {
     if record.status != "SUCCESS" {
         return;
     }
@@ -128,11 +126,6 @@ fn log_server_prefix_hit_rate(record: &StepLog, warned_missing_cache_details: &m
             cached,
             prompt,
         );
-    } else if record.server_prompt_tokens.is_some() && !*warned_missing_cache_details {
-        eprintln!(
-            "prefix hit rate | server usage did not include cached prompt tokens; start vLLM with ENABLE_PROMPT_TOKENS_DETAILS=1 / --enable-prompt-tokens-details to log the real hit rate"
-        );
-        *warned_missing_cache_details = true;
     }
 }
 
@@ -220,8 +213,11 @@ fn percentile_sorted(values: &[f64], q: f64) -> f64 {
 }
 
 /// Write the combined run summary to `--summary-path` when one was requested.
-pub(crate) fn write_summary_if_requested(args: &Args, summary: RunSummary) -> Result<()> {
-    let Some(path) = &args.summary_path else {
+pub(crate) fn write_summary_if_requested(
+    summary_path: Option<&str>,
+    summary: RunSummary,
+) -> Result<()> {
+    let Some(path) = summary_path else {
         return Ok(());
     };
     let file = File::create(path).with_context(|| format!("failed to create summary: {path}"))?;

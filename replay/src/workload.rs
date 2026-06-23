@@ -66,6 +66,11 @@ impl WorkloadSummary {
         self.steps
     }
 
+    /// Longest single-round prompt (`prefix_len + input_len`) in the workload.
+    pub(crate) fn max_prompt_len(&self) -> usize {
+        self.max_prompt_len
+    }
+
     pub(crate) fn print(&self) {
         eprintln!(
             "workload summary | sessions={} steps={} max_prompt_len={} max_prefix_len={} max_input_len={} max_output_len={} total_output_len={} max_arrival_time_ms={:.3} total_tool_wait_after_ms={:.3}",
