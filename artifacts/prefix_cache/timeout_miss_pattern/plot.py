@@ -61,10 +61,10 @@ configure_matplotlib_cache()
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.font_manager import FontProperties
+from matplotlib.font_manager import FontProperties, fontManager
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import AnnotationBbox, DrawingArea
-from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
+from matplotlib.patches import Circle, Rectangle
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[2]  # experiment -> category -> artifacts -> repo root
@@ -75,32 +75,51 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR
 OUTPUT_NAME = "timeout_miss_pattern.png"
 SAVE_DPI = 260
 
-# Palette mirrors the reference schematic: a light salmon "hit" with a dark-red
-# "miss" stacked on top, so a fully-dark bar instantly reads as a total miss.
+# Palette mirrors the prefix-cache slide: a light salmon hit with a shared
+# dark SyFI red miss stacked on top, so a fully-dark bar instantly reads as a
+# total miss.
 TEXT_COLOR = "#1b1b1f"
 MUTED_TEXT = "#2f2f36"
-FIG_BG = "#fffafa"
-BORDER_COLOR = "#f3b4b4"
-HIT_FILL = "#ffd0d0"      # cache read (hit) — light
-MISS_FILL = "#d40000"     # append / new input (miss portion) — dark
-MISS_EDGE = "#a80000"
-USER_MARK = "#e00000"
+FIG_BG = "none"
+HIT_FILL = "#ffd0d0"      # prefix tokens (hit) — light
+MISS_FILL = "#c90000"     # append tokens (miss portion) — dark
+MISS_EDGE = "#940000"
+USER_MARK = "#c90000"
 ARROW_GRAY = "#9ca3af"
 CLOCK_EDGE = USER_MARK
 CLOCK_RADIUS_PTS = 14.5
-BOLD_FONT = FontProperties(family="Liberation Sans", weight="bold")
+# This host does not ship Microsoft Arial; fontconfig maps Arial to Arimo, an
+# Arial-compatible Croscore font. Add the font files directly so Matplotlib
+# uses that face without noisy family-name fallback warnings.
+ARIAL_COMPAT_REGULAR = Path("/usr/share/fonts/truetype/croscore/Arimo-Regular.ttf")
+ARIAL_COMPAT_BOLD = Path("/usr/share/fonts/truetype/croscore/Arimo-Bold.ttf")
+for font_path in (ARIAL_COMPAT_REGULAR, ARIAL_COMPAT_BOLD):
+    if font_path.exists():
+        fontManager.addfont(str(font_path))
+FONT_FAMILY = ["Arimo", "Arial", "DejaVu Sans"]
+BOLD_FONT = (
+    FontProperties(fname=str(ARIAL_COMPAT_BOLD), weight="bold")
+    if ARIAL_COMPAT_BOLD.exists()
+    else FontProperties(family=FONT_FAMILY, weight="bold")
+)
+FONT_SCALE = 1.10
+
+
+def fs(size: float) -> float:
+    """Apply one shared text scale to the schematic."""
+    return size * FONT_SCALE
 
 plt.rcParams.update(
     {
-        "figure.facecolor": "white",
-        "axes.facecolor": "white",
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
         "axes.labelcolor": TEXT_COLOR,
         "axes.titlecolor": TEXT_COLOR,
         "xtick.color": MUTED_TEXT,
         "ytick.color": MUTED_TEXT,
         "text.color": TEXT_COLOR,
-        "font.family": ["Nimbus Sans", "Liberation Sans", "DejaVu Sans"],
-        "font.size": 9,
+        "font.family": FONT_FAMILY,
+        "font.size": fs(9),
         "font.weight": "bold",
         "axes.titleweight": "bold",
         "legend.frameon": False,
@@ -197,7 +216,7 @@ def group_bracket(ax, x0: float, x1: float, y: float, tick: float, label: str, c
         label,
         ha="center",
         va="bottom",
-        fontsize=10.2,
+        fontsize=fs(10.2),
         fontproperties=BOLD_FONT,
         color=color,
         clip_on=False,
@@ -291,20 +310,6 @@ def plot(output_dir: Path) -> Path:
 
     fig = plt.figure(figsize=(16.0, 2.75))
     fig.patch.set_facecolor(FIG_BG)
-    fig.add_artist(
-        FancyBboxPatch(
-            (0.006, 0.014),
-            0.988,
-            0.972,
-            boxstyle="round,pad=0.004,rounding_size=0.026",
-            transform=fig.transFigure,
-            facecolor="none",
-            edgecolor=BORDER_COLOR,
-            linewidth=0.8,
-            clip_on=False,
-            zorder=20,
-        )
-    )
 
     fig.text(
         0.014,
@@ -312,17 +317,17 @@ def plot(output_dir: Path) -> Path:
         "TIMEOUT-DRIVEN MISS PATTERN",
         ha="left",
         va="center",
-        fontsize=20.5,
+        fontsize=fs(20.5),
         fontproperties=BOLD_FONT,
         color=USER_MARK,
     )
     fig.text(
         0.350,
         0.905,
-        "Each block is one LLM invocation step (user-message round marked).",
+        "Each block is one LLM step (user-initiated step marked).",
         ha="left",
         va="center",
-        fontsize=12.0,
+        fontsize=fs(12.0),
         fontproperties=BOLD_FONT,
         color=TEXT_COLOR,
     )
@@ -343,10 +348,10 @@ def plot(output_dir: Path) -> Path:
     fig.text(
         0.039,
         legend_y,
-        "cache read (hit)",
+        "Prefix Token",
         ha="left",
         va="center",
-        fontsize=11.1,
+        fontsize=fs(11.1),
         fontproperties=BOLD_FONT,
         color=TEXT_COLOR,
     )
@@ -365,16 +370,16 @@ def plot(output_dir: Path) -> Path:
     fig.text(
         0.167,
         legend_y,
-        "append / new input (miss portion)",
+        "Append Tokens",
         ha="left",
         va="center",
-        fontsize=11.1,
+        fontsize=fs(11.1),
         fontproperties=BOLD_FONT,
         color=TEXT_COLOR,
     )
     fig.add_artist(
         Line2D(
-            [0.354, 0.392],
+            [0.296, 0.324],
             [legend_y, legend_y],
             transform=fig.transFigure,
             color=USER_MARK,
@@ -384,12 +389,12 @@ def plot(output_dir: Path) -> Path:
         )
     )
     fig.text(
-        0.405,
+        0.335,
         legend_y,
-        "user-initiated round",
+        "User-initiated Step",
         ha="left",
         va="center",
-        fontsize=11.1,
+        fontsize=fs(11.1),
         fontproperties=BOLD_FONT,
         color=TEXT_COLOR,
     )
@@ -434,10 +439,10 @@ def plot(output_dir: Path) -> Path:
             ax.text(
                 marker_x,
                 ymax * 1.08,
-                f"User-initiated\nround {user_counter}",
+                f"User-initiated\nstep {user_counter}",
                 ha="center",
                 va="bottom",
-                fontsize=9.5,
+                fontsize=fs(9.5),
                 color=TEXT_COLOR,
                 fontproperties=BOLD_FONT,
                 linespacing=1.18,
@@ -466,17 +471,17 @@ def plot(output_dir: Path) -> Path:
     place_clock(ax, gx1, clock_y, CLOCK_RADIUS_PTS)
     outward_gap_arrows(ax, gx1, clock_y, inner=0.34, outer=0.62)
     ax.text(gx1, short_cap_y, "Idle gap\n~1 min", ha="center", va="bottom",
-            fontsize=9.8, color=USER_MARK, fontproperties=BOLD_FONT, linespacing=1.02)
+            fontsize=fs(9.8), color=USER_MARK, fontproperties=BOLD_FONT, linespacing=1.02)
     ax.text(gx1, short_detail_y, "cache still valid\n(still hits)", ha="center", va="top",
-            fontsize=8.8, color=TEXT_COLOR, fontproperties=BOLD_FONT, linespacing=1.10)
+            fontsize=fs(8.8), color=TEXT_COLOR, fontproperties=BOLD_FONT, linespacing=1.10)
     # larger gap — cache expires
     gx2 = (xs[miss_index - 1] + xs[miss_index]) / 2
     place_clock(ax, gx2, clock_y, CLOCK_RADIUS_PTS)
     outward_gap_arrows(ax, gx2, clock_y, inner=0.43, outer=0.92)
-    ax.text(gx2, large_cap_y, "Idle gap > 5 min", ha="center", va="bottom",
-            fontsize=9.8, color=USER_MARK, fontproperties=BOLD_FONT)
+    ax.text(gx2, large_cap_y, "Idle gap\n> 5min", ha="center", va="bottom",
+            fontsize=fs(9.8), color=USER_MARK, fontproperties=BOLD_FONT, linespacing=1.02)
     ax.text(gx2, large_detail_y, "cache expires", ha="center", va="top",
-            fontsize=9.0, color=TEXT_COLOR, fontproperties=BOLD_FONT)
+            fontsize=fs(9.0), color=TEXT_COLOR, fontproperties=BOLD_FONT)
 
     # The full re-prefill bar: keep the corrected bar height, but annotate it in
     # the compact reference style.
@@ -486,7 +491,7 @@ def plot(output_dir: Path) -> Path:
         xytext=(xs[miss_index] + 0.65, ymax * 1.43),
         ha="left",
         va="bottom",
-        fontsize=10.6,
+        fontsize=fs(10.6),
         color=USER_MARK,
         fontproperties=BOLD_FONT,
         linespacing=1.18,
@@ -499,7 +504,7 @@ def plot(output_dir: Path) -> Path:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     out = output_dir / OUTPUT_NAME
-    fig.savefig(out, dpi=SAVE_DPI, facecolor=FIG_BG)
+    fig.savefig(out, dpi=SAVE_DPI, transparent=True)
     plt.close(fig)
     print(f"Saved {out}", file=sys.stderr)
     return out

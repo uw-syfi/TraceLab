@@ -904,8 +904,8 @@ export const uiCopy = {
           '每个会话的压缩次数及其用户触发与工具触发的占比，按提供商划分。',
         'Per-session, per-request, and per-step cost (USD) by category; % cost is each category’s share of total spend.':
           '按类别划分的每会话、每请求、每步骤成本（USD）；% cost 为各类别占总支出的份额。',
-        'Per-session, per-request, and per-step time by category; % time is each category’s share.':
-          '按类别划分的每会话、每请求、每步骤耗时；% time 为各类别的份额。',
+        'Per-session, per-request, per-step, and individual latency time by category; % time is each category’s share.':
+          '按类别划分的每会话、每请求、每步骤、每单独延迟耗时；% time 为各类别的份额。',
         'Token totals across a session.': '一个会话内的 token 总量。',
         'Human input wait CDF.': '人类输入等待 CDF。',
         'Human wait count CDF by provider.': '按提供商划分的人类等待次数 CDF。',

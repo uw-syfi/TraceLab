@@ -2,7 +2,7 @@
 % edit by hand; re-run on the trace to refresh.
 \begin{table}[t]
 \centering
-\caption{Per-session, per-request, and per-step wall-clock time by category. \emph{Human thinking} is the gap from the previous event to the next user message; it is a session-level quantity (no per-request or per-step term). The \emph{human capped (1h)} block re-states the per-session budget with each idle gap clamped to one hour (a prompt-cache TTL horizon), dropping the long abandoned-session tail so the engaged-time split is visible. \emph{\% time} is each category's share of its block total; shares can exceed 100\% only from generation/tool overlap (concurrent tools, generation streaming during a tool call).}
+\caption{Per-session, per-request, per-step, and individual latency wall-clock time by category. \emph{Human thinking} in the session blocks is the sum of gaps from the previous event to the next user message. The final block reports individual positive human-input waits, observable per-round generation spans, and per-tool effective latencies, matching the CDF/summary distributions. The \emph{human capped (1h)} block re-states the per-session budget with each idle gap clamped to one hour (a prompt-cache TTL horizon), dropping the long abandoned-session tail so the engaged-time split is visible. \emph{\% time} is each category's share of its block total; shares can exceed 100\% only from generation/tool overlap (concurrent tools, generation streaming during a tool call).}
 \label{tab:timing_distribution}
 \small
 \setlength{\tabcolsep}{4pt}
@@ -31,6 +31,11 @@
 \multicolumn{6}{@{}l}{\emph{Per step}} \\
 \quad LLM generation & 11.5s & 4.9s & 20.2s & 1.3m & 40.7\% \\
 \quad Tool execution & 16.8s & 0.1s & 10.0s & 3.2m & 59.3\% \\
+\addlinespace
+\multicolumn{6}{@{}l}{\emph{Per individual latency}} \\
+\quad Human thinking & 46.7m & 1.4m & 20.6m & 13.9h &  \\
+\quad LLM generation & 13.2s & 5.7s & 22.2s & 1.4m &  \\
+\quad Tool execution & 18.4s & 0.3s & 13.6s & 3.6m &  \\
 \bottomrule
 \end{tabular}
 \end{table}

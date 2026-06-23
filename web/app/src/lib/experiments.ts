@@ -96,7 +96,7 @@ export const experiments: Experiment[] = [
     tables: [
       {
         src: 'artifacts/session/session_timing_distribution/session_timing_distribution.md',
-        caption: 'Per-session, per-request, and per-step time by category; % time is each category’s share.',
+        caption: 'Per-session, per-request, per-step, and individual latency time by category; % time is each category’s share.',
       },
     ],
   },

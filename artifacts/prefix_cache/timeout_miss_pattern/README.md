@@ -7,9 +7,9 @@ Because a long idle wait expires the prefix cache while the context keeps growin
 
 This is a **synthetic schematic**, not a measurement — it takes no trace input. It hand-shapes a
 single session's `prefix` / `append` token counts and draws them with the exact stacked-bar idiom of
-the real per-session plot (`session/session_token_steps`): one x position per LLM invocation step, a
-light bar for the cached prefix (a cache **hit**), and a dark bar stacked on top for the newly
-appended input (the **miss** portion). A fully-dark bar is therefore a total miss at a glance.
+the real per-session plot (`session/session_token_steps`): one x position per LLM step, a light bar
+for **Prefix Tokens** served from cache (a cache **hit**), and a dark bar stacked on top for the
+**Append Tokens** (the **miss** portion). A fully-dark bar is therefore a total miss at a glance.
 
 It exists to correct a common wrong mental model — that the context "resets" after an idle gap — and
 to isolate the one real effect of the gap.
@@ -47,7 +47,7 @@ totally different cost — only the cache went cold.
 - `build_steps()` — deterministically (seeded) generates the `Step` sequence with the hit/miss
   accounting above; returns the steps and the index of the timeout-miss bar.
 - `plot()` — inserts the two horizontal idle-gap breaks into the x-layout, then renders the stacked
-  bars, the user-round verticals, the clock icons, and the group/callout annotations.
+  bars, the user-initiated step verticals, the clock icons, and the group/callout annotations.
 - `clock_icon()` / `place_clock()` — the aspect-correct analog clock (a fixed-pixel `DrawingArea`)
   and its placement.
 - `group_bracket()` — the flat top brackets labelling each phase.

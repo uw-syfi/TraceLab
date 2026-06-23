@@ -7,8 +7,7 @@ time a coding agent consumes, how much is the human thinking, the LLM generating
 executing? For each granularity we report avg / p50 / p90 / p99 per unit plus each category's
 share of the total (the same Avg/P50/P90/P99 + %% layout as the cost table).
 
-The category set differs by granularity, because **human thinking is a between-request quantity**
-and so only aggregates at the session level:
+The category set differs by granularity, because **human thinking is a between-request quantity**:
 
 * **Per session** -- ``Total elapsed`` = wall-clock span (first to last timing event of the
   session), with ``Human thinking`` + ``LLM generation`` + ``Tool execution`` shares of it.
@@ -21,11 +20,13 @@ and so only aggregates at the session level:
   wait sits *between* requests, never inside one.
 * **Per step** -- ``LLM generation`` vs ``Tool execution`` only; one LLM round has no human term
   and no clean e2e total.
+* **Per individual latency** -- the event-level distributions behind the CDF/summary views:
+  strictly-positive human-input waits, positive per-round generation spans, and positive per-tool
+  effective latencies.
 
 Shares need not sum to 100%: summed per-round generation and per-tool effective latency can
 overlap (concurrent tools, generation streaming during a tool call), so they can slightly exceed
-or fall short of the measured total. (The old ``Other (overhead)`` residual row is gone now that
-the provider-agnostic human-wait definition no longer leaks Codex idle into it.)
+or fall short of the measured total.
 
 Definitions reuse the canonical timing experiments so the numbers reconcile:
 
@@ -38,10 +39,9 @@ Definitions reuse the canonical timing experiments so the numbers reconcile:
 * **Human thinking** (per session) -- sum of human-input waits, the gap from the previous event of
   any type (including Codex ``usage_report``) to each user message; identical to
   ``human_in_the_loop/human_input_wait`` (provider-agnostic definition).
-* **Request e2e** and the residual ``Other (overhead)`` = ``e2e - generation - tool`` match
-  ``user_turn_decomposition`` turn-for-turn. The residual can be small or **negative**: summed
-  per-round generation and per-tool effective latency overlap (concurrent tools, generation that
-  streams while a tool runs), so they can exceed the measured e2e.
+* **Request e2e** matches ``user_turn_decomposition`` turn-for-turn. Summed per-round generation
+  and per-tool effective latency can overlap (concurrent tools, generation that streams while a
+  tool runs), so their shares can exceed the measured e2e.
 
 A **request** is one user turn -- the same turn state machine as
 ``human_in_the_loop/user_turn_decomposition`` (identical to ``user_turn_response_time``,
@@ -79,10 +79,14 @@ GRANULARITIES = (
     ("session_capped", "Per session, human capped (1h)"),
     ("request", "Per request"),
     ("step", "Per step"),
+    ("individual", "Per individual latency"),
 )
 # Which per-unit list each block draws from (the capped block reuses the session units).
 UNIT_KEY_BY_GRAN = {
-    "session": "session", "session_capped": "session", "request": "request", "step": "step",
+    "session": "session",
+    "session_capped": "session",
+    "request": "request",
+    "step": "step",
 }
 # Per-gap cap for the capped-session block: idle past one prompt-cache TTL horizon is moot for
 # serving (the KV/prefix cache is already cold), so each gap contributes min(gap, 1h).
@@ -113,11 +117,17 @@ STEP_CATS = (
     ("gen", "LLM generation", True),
     ("tool", "Tool execution", True),
 )
+INDIVIDUAL_CATS = (
+    ("human", "Human thinking", False),
+    ("gen", "LLM generation", False),
+    ("tool", "Tool execution", False),
+)
 CATS_BY_GRAN = {
     "session": SESSION_CATS,
     "session_capped": SESSION_CAPPED_CATS,
     "request": REQUEST_CATS,
     "step": STEP_CATS,
+    "individual": INDIVIDUAL_CATS,
 }
 
 
@@ -136,7 +146,7 @@ DEC = _load_module(
 )
 
 
-def collect(con) -> dict[str, dict[str, list[dict]]]:
+def collect(con) -> dict[str, dict[str, Any]]:
     """One stateful pass over rounds (ingestion order). Returns ``units[scope][granularity]``,
     a list of per-unit time dicts in seconds."""
     events_by_round = DEC.load_timing_events(con)
@@ -145,9 +155,24 @@ def collect(con) -> dict[str, dict[str, list[dict]]]:
         "SELECT round_pk, provider, session_id FROM rounds ORDER BY round_pk"
     ).fetchall()
 
-    units: dict[str, dict[str, list[dict]]] = {
-        s: {"session": [], "request": [], "step": []} for s in SCOPES
+    units: dict[str, dict[str, Any]] = {
+        s: {"session": [], "human_wait": [], "gen_observed": [], "tool_call": [], "request": [], "step": []}
+        for s in SCOPES
     }
+
+    eff = trace_db.EFFECTIVE_TOOL_LATENCY_MS_SQL
+    for provider, eff_ms in con.execute(
+        f"""
+        SELECT COALESCE(r.provider, '<unknown-provider>') AS provider, ({eff}) AS eff_ms
+        FROM tool_calls tc JOIN rounds r USING (round_pk)
+        WHERE ({eff}) IS NOT NULL AND ({eff}) > 0
+        ORDER BY tc.round_pk, tc.tool_index
+        """
+    ).fetchall():
+        unit = {"tool": float(eff_ms) / 1000.0}
+        for scope in ("merged", provider):
+            if scope in units:
+                units[scope]["tool_call"].append(unit)
     # Per-session accumulator: provider, summed gen/tool/human, wall-clock min/max event ts.
     sess: dict[str, dict] = {}
     last_event_at: dict[str, Any] = {}  # session_id -> last event datetime (any type; for human wait)
@@ -174,6 +199,12 @@ def collect(con) -> dict[str, dict[str, list[dict]]]:
         rtools = tools_by_round.get(rpk)
         tool = rtools.tool_effective_seconds if rtools is not None else 0.0
 
+        if gen > 0:
+            gen_unit = {"gen": gen}
+            for scope in ("merged", provider):
+                if scope in units:
+                    units[scope]["gen_observed"].append(gen_unit)
+
         # --- per step (every round) ---
         step_unit = {"gen": gen, "tool": tool}
         for scope in ("merged", provider):
@@ -198,6 +229,11 @@ def collect(con) -> dict[str, dict[str, list[dict]]]:
             waits, _n_user, last_ev = human_waits_from_event_pairs(events, last_event_at.get(sid))
             acc["human"] += sum(waits)
             acc["human_capped"] += sum(min(w, HUMAN_CAP_SECONDS) for w in waits)
+            for wait in waits:
+                wait_unit = {"human": wait, "human_capped": min(wait, HUMAN_CAP_SECONDS)}
+                for scope in ("merged", provider):
+                    if scope in units:
+                        units[scope]["human_wait"].append(wait_unit)
             if last_ev is not None:
                 last_event_at[sid] = last_ev
             acc["gen"] += gen
@@ -239,6 +275,12 @@ def collect(con) -> dict[str, dict[str, list[dict]]]:
     return units
 
 
+def unit_list_for(scope: dict[str, Any], granularity: str, category: str) -> list[dict]:
+    if granularity == "individual":
+        return scope[{"human": "human_wait", "gen": "gen_observed", "tool": "tool_call"}[category]]
+    return scope[UNIT_KEY_BY_GRAN[granularity]]
+
+
 def series(unit_list: list[dict], granularity: str, category: str) -> list[float]:
     """One number per unit for ``category`` at ``granularity`` (all seconds)."""
     if granularity == "session":
@@ -249,6 +291,8 @@ def series(unit_list: list[dict], granularity: str, category: str) -> list[float
         if category == "total_capped":
             return [u["human_capped"] + u["gen"] + u["tool"] for u in unit_list]
         return [u[category] for u in unit_list]  # human_capped / gen / tool
+    if granularity == "individual":
+        return [u[category] for u in unit_list]  # human / gen / tool from per-category lists
     if granularity == "request":
         if category == "total":
             return [u["e2e"] for u in unit_list]
@@ -278,6 +322,8 @@ def shares(unit_list: list[dict], granularity: str) -> dict[str, float]:
         if total <= 0:
             return {}
         comp = {k: sum(u[k] for u in unit_list) for k in ("human_capped", "gen", "tool")}
+    elif granularity == "individual":
+        return {}
     elif granularity == "request":
         total = sum(u["e2e"] for u in unit_list)
         if total <= 0:
@@ -310,21 +356,22 @@ def pct(x: float) -> str:
     return f"{x * 100:.1f}\\%"
 
 
-def render_tex(units: dict[str, dict[str, list[dict]]]) -> str:
+def render_tex(units: dict[str, dict[str, Any]]) -> str:
     scope = units["merged"]
     lines = [
         "% AUTO-GENERATED by artifacts/session/session_timing_distribution/analyze.py -- do not",
         "% edit by hand; re-run on the trace to refresh.",
         "\\begin{table}[t]",
         "\\centering",
-        "\\caption{Per-session, per-request, and per-step wall-clock time by category. "
-        "\\emph{Human thinking} is the gap from the previous event to the next user message; it is "
-        "a session-level quantity (no per-request or per-step term). The \\emph{human capped (1h)} "
-        "block re-states the per-session budget with each idle gap clamped to one hour (a "
-        "prompt-cache TTL horizon), dropping the long abandoned-session tail so the engaged-time "
-        "split is visible. \\emph{\\% time} is each category's share of its block total; shares can "
-        "exceed 100\\% only from generation/tool overlap (concurrent tools, generation streaming "
-        "during a tool call).}",
+        "\\caption{Per-session, per-request, per-step, and individual latency wall-clock time by category. "
+        "\\emph{Human thinking} in the session blocks is the sum of gaps from the previous event to "
+        "the next user message. The final block reports individual positive human-input waits, "
+        "observable per-round generation spans, and per-tool effective latencies, matching the "
+        "CDF/summary distributions. The \\emph{human capped (1h)} block re-states the per-session "
+        "budget with each idle gap clamped to one hour (a prompt-cache TTL horizon), dropping the "
+        "long abandoned-session tail so the engaged-time split is visible. \\emph{\\% time} is each "
+        "category's share of its block total; shares can exceed 100\\% only from generation/tool "
+        "overlap (concurrent tools, generation streaming during a tool call).}",
         "\\label{tab:timing_distribution}",
         "\\small",
         "\\setlength{\\tabcolsep}{4pt}",
@@ -339,9 +386,9 @@ def render_tex(units: dict[str, dict[str, list[dict]]]) -> str:
         if gi:
             lines.append("\\addlinespace")
         lines.append(f"\\multicolumn{{6}}{{@{{}}l}}{{\\emph{{{glabel}}}}} \\\\")
-        unit_list = scope[UNIT_KEY_BY_GRAN[gkey]]
-        sh = shares(unit_list, gkey)
+        sh = shares(scope[UNIT_KEY_BY_GRAN[gkey]], gkey) if gkey != "individual" else {}
         for ckey, clabel, has_share in CATS_BY_GRAN[gkey]:
+            unit_list = unit_list_for(scope, gkey, ckey)
             s = stats(series(unit_list, gkey, ckey))
             cells = " & ".join(dur(s[k]) for k in ("avg", "p50", "p90", "p99"))
             share = pct(sh[ckey]) if has_share and ckey in sh else ""
@@ -350,16 +397,16 @@ def render_tex(units: dict[str, dict[str, list[dict]]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_md(units: dict[str, dict[str, list[dict]]]) -> str:
+def render_md(units: dict[str, dict[str, Any]]) -> str:
     """GFM mirror of :func:`render_tex` for the web detail page (table only — the page adds a caption)."""
     scope = units["merged"]
     headers = ["Metric", "Avg", "P50", "P90", "P99", "% time"]
     sections: list[tuple[str, list[list[str]]]] = []
     for gkey, glabel in GRANULARITIES:
-        unit_list = scope[UNIT_KEY_BY_GRAN[gkey]]
-        sh = shares(unit_list, gkey)
+        sh = shares(scope[UNIT_KEY_BY_GRAN[gkey]], gkey) if gkey != "individual" else {}
         rows: list[list[str]] = []
         for ckey, clabel, has_share in CATS_BY_GRAN[gkey]:
+            unit_list = unit_list_for(scope, gkey, ckey)
             s = stats(series(unit_list, gkey, ckey))
             share = f"{sh[ckey] * 100:.1f}%" if has_share and ckey in sh else ""
             rows.append([clabel, dur(s["avg"]), dur(s["p50"]), dur(s["p90"]), dur(s["p99"]), share])
@@ -367,7 +414,7 @@ def render_md(units: dict[str, dict[str, list[dict]]]) -> str:
     return md_table.section_tables(headers, sections, ["l", "r", "r", "r", "r", "r"])
 
 
-def render_headline(units: dict[str, dict[str, list[dict]]]) -> list[dict[str, str]]:
+def render_headline(units: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
     """The 2–4 most important numbers for the Overview gallery card (label + formatted value).
 
     Derived from the same merged data as the table so the card never drifts. Consumed by
@@ -384,19 +431,20 @@ def render_headline(units: dict[str, dict[str, list[dict]]]) -> list[dict[str, s
     ]
 
 
-def render_stdout(units: dict[str, dict[str, list[dict]]]) -> str:
+def render_stdout(units: dict[str, dict[str, Any]]) -> str:
     out: list[str] = []
     for scope in SCOPES:
         sc = units[scope]
         out.append(
             f"[{scope}]  sessions={len(sc['session']):,}  requests={len(sc['request']):,}  "
-            f"steps={len(sc['step']):,}"
+            f"human_waits={len(sc['human_wait']):,}  gen_spans={len(sc['gen_observed']):,}  "
+            f"tool_latencies={len(sc['tool_call']):,}  steps={len(sc['step']):,}"
         )
         for gkey, glabel in GRANULARITIES:
-            unit_list = sc[UNIT_KEY_BY_GRAN[gkey]]
-            sh = shares(unit_list, gkey)
+            sh = shares(sc[UNIT_KEY_BY_GRAN[gkey]], gkey) if gkey != "individual" else {}
             out.append(f"  {glabel}:")
             for ckey, clabel, has_share in CATS_BY_GRAN[gkey]:
+                unit_list = unit_list_for(sc, gkey, ckey)
                 s = stats(series(unit_list, gkey, ckey))
                 share = f"  ({sh[ckey] * 100:5.1f}%)" if has_share and ckey in sh else ""
                 out.append(
