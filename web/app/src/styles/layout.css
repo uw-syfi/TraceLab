@@ -128,31 +128,23 @@
   /* ---- overview hero: intro on the left, dataset snapshot on the right ---- */
   .overview-top {
     display: grid;
-    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-    gap: 28px 60px;
-    align-items: stretch;     /* both columns share one row height = equal height */
-    padding: 64px 0 34px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px 40px;
+    align-items: start;       /* top-align: intro heading lines up with "Dataset snapshot" */
+    padding: 64px 0 48px;
   }
-  /* hero loses its standalone padding/clamp; it centres within the shared column height */
-  .overview-top .hero { padding: 0; max-width: 540px; display: flex; flex-direction: column; justify-content: center; }
-  /* snapshot fills the same height as the hero; its KPI rows stretch (and compress) to fit */
-  .snapshot-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .snapshot-col .sec-head { margin: 0 0 14px; }
-  /* snapshot KPIs sit two-up beside the hero (the global grid is four-up), and the two
-     stacked grids split the column height so all four rows fill it evenly */
-  .snapshot-col .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: 1fr 1fr;
-    gap: 14px;
-    flex: 1 1 0;
-    min-height: 0;
-  }
-  /* compact "snapshot" tiles — shorter than the full-page KPIs so the 2×4 matches hero height */
-  .snapshot-col .kpi { padding: 15px 18px; }
-  .snapshot-col .kpi::before { top: 14px; bottom: 14px; }
-  .snapshot-col .kpi .num { font-size: clamp(28px, 2.5vw, 38px); margin-top: 5px; }
+  /* hero: intro text top-aligned; the project links sit a fixed gap below it. */
+  .overview-top .hero { padding: 0; max-width: 700px; }
+  .hero-links { margin-top: 32px; }
+  /* snapshot column: fixed-height KPI tiles sit two-up beside the hero (global grid is four-up).
+     The tiles keep a comfortable fixed size — they are NOT squeezed to the hero height; the hero
+     (shorter) centres beside them via the grid's align-items + the hero's justify-content. */
+  .snapshot-col { min-width: 0; }
+  .snapshot-col .sec-head { margin: 0 0 16px; }
+  .snapshot-col .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .snapshot-col .kpi { min-height: 108px; padding: 18px 20px; }
+  .snapshot-col .kpi .num { font-size: clamp(34px, 3vw, 46px); margin-top: 6px; }
   .snapshot-col .kpi .num small { font-size: var(--fs-sm); }
-  .snapshot-col .kpi .foot { margin-top: 4px; }
 
   /* project links — icon+label chips */
   .proj-links { display: flex; gap: 12px; }

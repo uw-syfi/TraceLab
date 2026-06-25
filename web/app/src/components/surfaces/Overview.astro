@@ -60,6 +60,7 @@ const localizedCard = (title: string, blurb: string) => fcopy.cards[title] ?? { 
         <br />
         {o.lede[1]}
       </p>
+      <ProjectLinks variant="strip" class="hero-links reveal" style="--d:240ms" />
     </div>
 
     <div class="snapshot-col">
@@ -70,20 +71,20 @@ const localizedCard = (title: string, blurb: string) => fcopy.cards[title] ?? { 
       <KpiGrid delay={200}>
         <Kpi label={o.kpis.users} value={intComma(m.scope.distinct_users)} accent="sage" />
         <Kpi label={o.kpis.sessions} value={intComma(m.scope.total_sessions)} accent="sage" />
-        <Kpi label={o.kpis.steps} value={intComma(rounds)} foot={o.kpis.stepsFoot} accent="gold" />
+        <Kpi label={o.kpis.steps} value={intComma(rounds)} accent="gold" />
+        {/* foot hidden for now — restore: <Kpi label={o.kpis.steps} value={intComma(rounds)} foot={o.kpis.stepsFoot} accent="gold" /> */}
         <Kpi label={o.kpis.tools} value={intComma(m.tools.total_tool_calls)} accent="sage" />
       </KpiGrid>
 
       <KpiGrid delay={260} mt>
         <Kpi label={o.kpis.input} value={totalInput.num} unit={totalInput.unit} feature />
-        <Kpi label={o.kpis.cached} value={cached.num} unit={cached.unit} foot={`${cachedShare}% ${o.kpis.cachedFoot}`} accent="terra" />
+        <Kpi label={o.kpis.cached} value={cached.num} unit={cached.unit} accent="terra" />
+        {/* foot hidden for now — restore: <Kpi label={o.kpis.cached} value={cached.num} unit={cached.unit} foot={`${cachedShare}% ${o.kpis.cachedFoot}`} accent="terra" /> */}
         <Kpi label={o.kpis.append} value={newIn.num} unit={newIn.unit} accent="terra" />
         <Kpi label={o.kpis.output} value={totalOutput.num} unit={totalOutput.unit} accent="terra" />
       </KpiGrid>
     </div>
   </div>
-
-  <ProjectLinks variant="strip" class="link-strip reveal" style="--d:320ms" />
 
   <Band delay={360}>
     <Panel title={o.providerSplit} desc={o.providerSplitDesc.replace('{rounds}', intComma(rounds))}>
