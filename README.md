@@ -18,8 +18,8 @@ actually produce in the wild — then explore them in your browser.
 
 [![License: Apache 2.0](https://img.shields.io/badge/code-Apache%202.0-4b2e83.svg)](LICENSE)
 [![Dataset: CC BY 4.0](https://img.shields.io/badge/dataset-CC%20BY%204.0-b7a57a.svg)](LICENSE-DATASET.md)
-[![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
-[![Built with uv](https://img.shields.io/badge/built%20with-uv-7c3aed.svg)](https://github.com/astral-sh/uv)
+[![Paper](https://img.shields.io/badge/paper-PDF-b31b1b.svg?logo=adobeacrobatreader&logoColor=white)](https://tracelab.cs.washington.edu/paper.pdf)
+[![Blog](https://img.shields.io/badge/blog-link-7c3aed.svg)](#)
 [![Dataset](https://img.shields.io/badge/dataset-357K%20rounds%20·%2043%20devs-2ea043.svg)](#-the-dataset)
 
 </div>
