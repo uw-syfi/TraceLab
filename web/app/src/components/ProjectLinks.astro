@@ -2,7 +2,7 @@
 // External project links (GitHub · Paper · Blog · X). Rendered as icon+label chips.
 // Two layouts via `variant`: 'column' (stacked, e.g. beside the hero) or 'strip' (inline row).
 // Edit the URLs in one place below. `paper` is a static asset served from public/ — drop the
-// PDF at web/app/public/paper.pdf and it downloads from /paper.pdf.
+// PDF at web/app/public/paper.pdf; it opens inline in a new tab from /paper.pdf.
 import { useTranslations } from '../i18n';
 
 interface Props {
@@ -33,7 +33,7 @@ const ICONS: Record<string, string> = {
 
 const items = [
   { key: 'github', href: url.github, label: t.github, external: true },
-  { key: 'paper', href: url.paper, label: t.paper, download: true },
+  { key: 'paper', href: url.paper, label: t.paper, external: true },
   { key: 'blog', href: url.blog, label: t.blog, external: true },
   { key: 'twitter', href: url.twitter, label: t.twitter, external: true },
 ];
