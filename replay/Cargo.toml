@@ -3,7 +3,7 @@ name = "tracelab-session-runner"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Session-aware closed-loop workload runner for vLLM"
+description = "Session-aware closed-loop workload runner for inference backends"
 
 [[bin]]
 name = "session_runner"

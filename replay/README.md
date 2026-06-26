@@ -1,6 +1,6 @@
 # Session Runner
 
-`session_runner` is a session-aware closed-loop workload runner for OpenAI-compatible inference servers (vLLM today, SGLang and others via the pluggable backend). It replays trace-derived sessions as ordered chains of rounds instead of independent requests:
+`session_runner` is a session-aware closed-loop workload runner for inference serving backends. It replays trace-derived sessions as ordered chains of rounds instead of independent requests:
 
 ```text
 send round i -> wait for full LLM response -> sleep tool_wait_after_ms -> send round i+1
@@ -28,7 +28,7 @@ Fields:
 - `arrival_time`: synthetic session arrival time in milliseconds. Missing values default to `0`.
 - `prefix_len`: number of prior context tokens kept for this round.
 - `input_len`: number of new synthetic input tokens appended for this round.
-- `output_len`: `max_tokens` sent to vLLM.
+- `output_len`: target generated-token count sent to the selected backend.
 - `tool_wait_after_ms`: sleep after this round completes before the next round in the same session.
 
 Examples live at `examples/session_workload_example.csv` (single session),
@@ -36,7 +36,7 @@ Examples live at `examples/session_workload_example.csv` (single session),
 run), and `examples/multi_session_large.csv` (48 sessions / 303 rounds with cumulative-consistent
 prefixes, for an end-to-end prefix-cache hit-rate measurement). In the large example each round's
 `prefix_len` equals the prior round's full context, so the planned hit rate is the true achievable
-rate and the server-measured aggregate matches it within vLLM's 16-token block alignment.
+rate and the server-measured aggregate should stay close after backend-specific cache block alignment.
 
 ## Text Corpus (`--text-file`)
 
@@ -53,13 +53,19 @@ Then pass `--text-file ./enwik9`. Any other sufficiently large UTF-8 text file w
 
 ## Request Path
 
-The runner targets an OpenAI-compatible completions endpoint:
+The default runner backend targets vLLM's OpenAI-compatible completions endpoint:
 
 ```text
 POST {base_url}/completions
 ```
 
-Pass `--base-url http://HOST:PORT/v1`. The wire protocol is selected with `--backend` (default `openai`, which covers vLLM and SGLang's OpenAI endpoint); the endpoint path, request body, and response parsing all live behind a `Backend` adapter in `src/backend.rs`, so adding a server (e.g. SGLang's native `/generate`) is a new adapter, not a rewrite. The runner submits the exact prompt **token ids** directly (OpenAI's `prompt` accepts an integer array), so there is no client-side decode and the server's prefix-cache keys match the ids we built. With recent vLLM it also sets `return_token_ids` to carry the model's exact output tokens forward across rounds; servers that ignore the flag fall back to re-encoding the output text (a few tokens of drift).
+Pass `--base-url http://HOST:PORT/v1` for `--backend vllm`. The serving engine is selected with `--backend` (default `vllm`); endpoint path, request body, and response parsing all live behind a `Backend` adapter in `src/backend/`, so adding a server is an adapter change rather than a session-runner rewrite. The runner submits exact prompt **token ids** directly when the backend supports them, so there is no client-side decode and the server's prefix-cache keys match the ids we built. Backends must also expose generated token ids during startup preflight, because later rounds carry model output tokens forward as prompt context.
+
+Supported backend selectors:
+
+- `vllm`: vLLM via OpenAI-compatible `/completions`; this is the default.
+- `sglang`: SGLang native `/generate`; pass the SGLang server root, e.g. `--base-url http://HOST:PORT`.
+- `llamacpp`: reserved for the next backend step; currently returns a clear not-implemented error.
 
 ## Build
 
@@ -69,7 +75,7 @@ cargo build --release --manifest-path replay/Cargo.toml --bin session_runner
 
 ## Dry Run
 
-Dry-run mode validates and summarizes the CSV without contacting vLLM:
+Dry-run mode validates and summarizes the CSV without contacting a serving backend:
 
 ```bash
 cargo run --manifest-path replay/Cargo.toml --bin session_runner -- \
@@ -99,6 +105,27 @@ cargo run --release --manifest-path replay/Cargo.toml --bin session_runner -- \
   --log-path /tmp/session_runner.jsonl
 ```
 
+## Run Against SGLang Native
+
+SGLang native mode targets `/generate`, so pass the server root rather than `/v1`:
+
+```bash
+cargo run --release --manifest-path replay/Cargo.toml --bin session_runner -- \
+  --backend sglang \
+  --trace replay/examples/session_workload_example.csv \
+  --text-file /path/to/text-corpus \
+  --tokenizer /path/to/tokenizer.json \
+  --model qwen2.5-0.5b-instruct \
+  --base-url http://127.0.0.1:30000 \
+  --stream-idle-timeout-secs 7200 \
+  --max-model-len 65536 \
+  --max-active-sessions 1 \
+  --summary-path /tmp/session_runner_sglang_summary.json \
+  --log-path /tmp/session_runner_sglang.jsonl
+```
+
+The SGLang adapter uses native `input_ids`, `stream`, `return_logprob`, and `sampling_params` with `max_new_tokens`, `temperature`, and `ignore_eos`. The native SGLang `/generate` request does not send `model`; `--model` remains a shared CLI argument, but the SGLang server model is selected when the server is launched. Cache metrics and generated-token carry-forward are guarded by startup preflight: if SGLang does not report reliable cached prompt tokens or generated token ids, the run fails rather than logging fake hit rates or relying on text re-encoding.
+
 Useful controls:
 
 ```bash
@@ -108,7 +135,7 @@ Useful controls:
 # Bound active closed-loop sessions while still respecting arrival_time.
 --max-active-sessions 128
 
-# Skip rounds that exceed a known model context limit instead of sending them to vLLM.
+# Skip rounds that exceed a known model context limit instead of sending them to the backend.
 --max-model-len 131072 --fail-on-context-overflow
 
 # Write one JSON summary containing workload stats and replay latency stats.
@@ -120,7 +147,7 @@ Useful controls:
 The JSONL log includes per-round planned-vs-server cache fields:
 
 - `planned_prefix_hit_rate`: `prefix_len / (prefix_len + input_len)` from the workload.
-- `server_cached_prompt_tokens`: cached prompt tokens reported by vLLM usage, when available.
+- `server_cached_prompt_tokens`: cached prompt tokens reported by the selected backend, when available.
 - `server_prefix_hit_rate`: `server_cached_prompt_tokens / server_prompt_tokens`, when available.
 - `server_prefix_hit_rate_delta`: server hit rate minus planned hit rate for that round.
 
@@ -147,9 +174,9 @@ Implemented:
 - optional model-context validation and overflow skipping
 - session-internal closed-loop timing
 - `prefix_len + input_len` prompt construction
-- direct token-id prompt submission (no client-side decode) + exact output-id carry-forward via vLLM `return_token_ids` (re-encode fallback)
-- pluggable backend adapter (OpenAI-compatible today; vLLM and SGLang OpenAI endpoints)
-- OpenAI-compatible streaming completions request
+- direct token-id prompt submission (no client-side decode) + exact output-id carry-forward verified by preflight
+- pluggable backend adapter (vLLM OpenAI-compatible `/completions` plus SGLang native `/generate`)
+- streaming generation requests through backend adapters
 - startup prefix-cache preflight that aborts when the server reports no cached tokens
 - TTFT and total latency logging
 - JSON run summary output
@@ -158,7 +185,7 @@ Implemented:
 
 Not implemented yet:
 
-- SGLang native `/generate` backend adapter
+- llama.cpp native `/completion` backend adapter
 - TTFT/TPOT SLO judgment
 - per-token timeline dump
 - raw trace prompt/tool-result text reconstruction
