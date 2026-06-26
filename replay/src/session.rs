@@ -95,7 +95,7 @@ pub(crate) async fn run_session(
         let _ = log_tx.send(log).await;
 
         state.stats.record_result(success);
-        if !success && state.args.stop_session_on_error {
+        if !success {
             break;
         }
 

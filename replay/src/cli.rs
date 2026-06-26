@@ -60,10 +60,6 @@ pub(crate) struct Args {
     #[arg(long, default_value_t = 600)]
     pub(crate) stream_idle_timeout_secs: u64,
 
-    /// Stop a session after the first failed round.
-    #[arg(long, default_value_t = true)]
-    pub(crate) stop_session_on_error: bool,
-
     /// Maximum number of sessions allowed to actively run at once.
     #[arg(long)]
     pub(crate) max_active_sessions: Option<usize>,
