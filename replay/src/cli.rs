@@ -1,17 +1,21 @@
 use clap::{Parser, ValueEnum};
 
-/// Inference-server wire protocol selected with `--backend`.
+/// Inference server selected with `--backend`.
 #[derive(ValueEnum, Clone, Copy, Debug)]
 pub(crate) enum BackendKind {
-    /// OpenAI-compatible `/completions` (vLLM, and SGLang's OpenAI endpoint).
-    Openai,
+    /// vLLM OpenAI-compatible `/completions`.
+    Vllm,
+    /// SGLang native `/generate`.
+    Sglang,
+    /// Reserved for llama.cpp native `/completion`; not implemented yet.
+    Llamacpp,
 }
 
 #[derive(Parser, Debug, Clone)]
 #[command(
     author,
     version,
-    about = "Session-aware closed-loop workload runner for vLLM"
+    about = "Session-aware closed-loop workload runner for inference backends"
 )]
 pub(crate) struct Args {
     /// CSV with session_id/id,round_idx,prefix_len,input_len,output_len,tool_wait_after_ms.
@@ -26,15 +30,16 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) tokenizer: String,
 
-    /// vLLM OpenAI-compatible base URL, normally http://host:port/v1.
+    /// Backend base URL. vLLM normally uses http://host:port/v1; native backends normally use
+    /// the server root.
     #[arg(long, default_value = "http://127.0.0.1:8000/v1")]
     pub(crate) base_url: String,
 
     #[arg(long)]
     pub(crate) model: String,
 
-    /// Inference-server wire protocol. `openai` covers vLLM and SGLang OpenAI endpoints.
-    #[arg(long, value_enum, default_value = "openai")]
+    /// Inference server backend.
+    #[arg(long, value_enum, default_value = "vllm")]
     pub(crate) backend: BackendKind,
 
     #[arg(long, default_value_t = 0.0)]
@@ -63,7 +68,7 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) max_active_sessions: Option<usize>,
 
-    /// Validate and summarize the workload without contacting vLLM.
+    /// Validate and summarize the workload without contacting a serving backend.
     #[arg(long, default_value_t = false)]
     pub(crate) dry_run: bool,
 

@@ -32,7 +32,9 @@ async fn main() -> Result<()> {
         return Err(anyhow!("--max-active-sessions must be greater than 0"));
     }
     if args.fail_on_context_overflow && args.max_model_len.is_none() {
-        return Err(anyhow!("--fail-on-context-overflow requires --max-model-len"));
+        return Err(anyhow!(
+            "--fail-on-context-overflow requires --max-model-len"
+        ));
     }
 
     let sessions = load_sessions(&args.trace, args.max_sessions)?;
@@ -86,6 +88,17 @@ async fn main() -> Result<()> {
     // Probe the TAIL of the pool: session 0 seeds at offset 0, so a head probe would warm its
     // first round's prefix and fabricate a cache hit there.
     let probe_len = token_pool.len().min(512);
+    if token_pool.len() <= probe_len + workload_summary.max_prompt_len() {
+        eprintln!(
+            "warning: token pool ({} tokens) is too small to fully separate the {}-token \
+             preflight probe from the longest {}-token replay prompt; preflight may warm \
+             replay content and distort early prefix-cache measurements. Use a larger \
+             --text-file corpus or --token-pool-limit.",
+            token_pool.len(),
+            probe_len,
+            workload_summary.max_prompt_len(),
+        );
+    }
     client
         .preflight_cache_check(&token_pool[token_pool.len() - probe_len..])
         .await
