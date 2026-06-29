@@ -407,6 +407,20 @@ a donated sanitized trace. A good experiment is **self-contained**: one script, 
 trace. By submitting a contribution you agree to license it under the project's
 [Apache 2.0](LICENSE) (code) / [CC BY 4.0](LICENSE-DATASET.md) (data) terms.
 
+## 📑 Citation
+
+If you use TraceLab — the dataset, the toolkit, or the figures — please cite:
+
+```bibtex
+@misc{zhu2026tracelab,
+  title        = {TraceLab: Characterizing Coding Agent Workloads for LLM Serving},
+  author       = {Kan Zhu and Mathew Jacob and Chenxi Ma and Yi Pan and Stephanie Wang and Arvind Krishnamurthy and Baris Kasikci},
+  year         = {2026},
+  howpublished = {\url{https://tracelab.cs.washington.edu}},
+  note         = {SyFI Lab, University of Washington}
+}
+```
+
 ## 📄 License
 
 - **Code** — [Apache License 2.0](LICENSE)

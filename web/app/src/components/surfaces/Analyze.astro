@@ -42,20 +42,10 @@ const titleStop = locale === 'zh' ? '。' : '.';
     <button class="btn btn-primary" id="ld-btn">{t.localButton}</button>
   </div>
 
-  <div class="dropzone reveal" id="dropzone" style="--d:200ms" tabindex="0" role="button" aria-label={t.dropAria}>
-    <div class="dz-ico" aria-hidden="true">
-      <svg id="dz-svg" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg>
-    </div>
-    <div class="dz-title" id="dz-title">{t.dropTitle}</div>
-    <div class="dz-sub" id="dz-sub">{t.dropSub}</div>
-    <div class="progress"><i id="dz-bar"></i></div>
-  </div>
-  <input type="file" id="file-input" accept=".gz,.tgz,.zip,.tar,.jsonl,.json,.ndjson" hidden />
-
   <!-- "I don't have a file yet" helper: how to bundle the on-disk sessions into one droppable archive,
-       and how to analyze in place when the trace is large or lives on a remote box. Collapsed by default
-       so it never competes with the dropzone; the commands mirror what ingest.py + launch.sh accept. -->
-  <details class="export-help reveal" id="export-help" style="--d:220ms">
+       and how to analyze in place when the trace is large or lives on a remote box. Expanded above
+       the dropzone so first-time users see the packaging command before the upload target. -->
+  <details class="export-help reveal" id="export-help" style="--d:200ms" open>
     <summary>
       <span class="xh-ico" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"></path></svg>
@@ -94,6 +84,16 @@ const titleStop = locale === 'zh' ? '。' : '.';
       </div>
     </div>
   </details>
+
+  <div class="dropzone reveal" id="dropzone" style="--d:220ms" tabindex="0" role="button" aria-label={t.dropAria}>
+    <div class="dz-ico" aria-hidden="true">
+      <svg id="dz-svg" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"></path><path d="M5 20h14"></path></svg>
+    </div>
+    <div class="dz-title" id="dz-title">{t.dropTitle}</div>
+    <div class="dz-sub" id="dz-sub">{t.dropSub}</div>
+    <div class="progress"><i id="dz-bar"></i></div>
+  </div>
+  <input type="file" id="file-input" accept=".gz,.tgz,.zip,.tar,.jsonl,.json,.ndjson" hidden />
 
   <!-- Format-aware ingest result: what was detected + conditional normalized/sanitized downloads. -->
   <div class="ingest-host" id="ingest-result" hidden></div>

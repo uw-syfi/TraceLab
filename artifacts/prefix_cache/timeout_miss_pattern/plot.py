@@ -322,7 +322,7 @@ def plot(output_dir: Path) -> Path:
         color=USER_MARK,
     )
     fig.text(
-        0.350,
+        0.375,
         0.905,
         "Each block is one LLM step (user-initiated step marked).",
         ha="left",
@@ -348,7 +348,7 @@ def plot(output_dir: Path) -> Path:
     fig.text(
         0.039,
         legend_y,
-        "Prefix Token",
+        "Prefix Tokens",
         ha="left",
         va="center",
         fontsize=fs(11.1),
@@ -391,7 +391,7 @@ def plot(output_dir: Path) -> Path:
     fig.text(
         0.335,
         legend_y,
-        "User-initiated Step",
+        "User-Initiated Steps",
         ha="left",
         va="center",
         fontsize=fs(11.1),
@@ -454,11 +454,11 @@ def plot(output_dir: Path) -> Path:
     bracket_y = ymax * 1.03
     tick = ymax * 0.030
     group_bracket(ax, xs[1] - bar_width / 2, xs[first_gap_at - 1] + bar_width / 2, bracket_y, tick,
-                  "Tool loop: mostly hits", USER_MARK)
+                  "Tool-initiated steps: mostly hits", USER_MARK)
     group_bracket(ax, xs[first_gap_at + 1] - bar_width / 2, xs[miss_index - 1] + bar_width / 2, bracket_y, tick,
-                  "Tool loop: mostly hits", USER_MARK)
+                  "Tool-initiated steps: mostly hits", USER_MARK)
     group_bracket(ax, xs[miss_index + 1] - bar_width / 2, xs[last] + bar_width / 2, bracket_y, tick,
-                  "Tool loop again: mostly hits", USER_MARK)
+                  "Tool-initiated steps again: mostly hits", USER_MARK)
 
     # --- idle gaps: the reference figure's representation (a break + a clock) ---
     clock_y = ymax * 0.16

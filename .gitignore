@@ -64,3 +64,4 @@ web/app/public/paper.pdf
 .codex/skills/tracelab-send-to-production/
 # Local-only runbook: self-hosted vLLM on ptc GPU 1 + AI-backend wiring (names internal hosts/keys).
 .codex/skills/serve-vllm-ptc/
+/blog/

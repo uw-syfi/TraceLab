@@ -34,9 +34,11 @@ export const uiCopy = {
       language: 'Language',
       links: 'Project links',
       github: 'GitHub',
-      paper: 'Paper (PDF)',
+      paper: 'Paper',
       blog: 'Blog',
-      twitter: 'Follow on X',
+      twitter: 'Follow',
+      bibtex: 'BibTeX',
+      bibtexCopied: 'Copied!',
     },
     assistant: {
       launcher: 'Ask the data',
@@ -183,7 +185,7 @@ export const uiCopy = {
       exportAnswer: 'Bundle & compress your Claude / Codex sessions →',
       packTitle: 'Pack your local sessions into one archive',
       packDesc:
-        'Claude Code keeps sessions in ~/.claude/projects; Codex keeps them in ~/.codex/sessions. This compresses whichever you have into a single trace.tar.gz in your home folder — then drop that file above.',
+        'Claude Code keeps sessions in ~/.claude/projects; Codex keeps them in ~/.codex/sessions. This compresses whichever you have into a single trace.tar.gz in your home folder — then drop that file below.',
       remoteTitle: 'Trace is huge, or on a remote server?',
       remoteDesc:
         'Skip the download. Clone the toolkit onto that machine and launch it there — it detects this machine’s ~/.claude + ~/.codex and analyzes them in place; nothing is uploaded. Open the URL it prints (forward the port over SSH if the box is remote).',
@@ -632,9 +634,11 @@ export const uiCopy = {
       language: '语言',
       links: '项目链接',
       github: 'GitHub',
-      paper: '论文 (PDF)',
+      paper: '论文',
       blog: '博客',
-      twitter: '关注 X',
+      twitter: '关注',
+      bibtex: 'BibTeX',
+      bibtexCopied: '已复制！',
     },
     assistant: {
       launcher: '询问数据',
@@ -1096,7 +1100,7 @@ export const uiCopy = {
       exportAnswer: '打包并压缩你的 Claude / Codex 会话 →',
       packTitle: '把本机会话打包成一个归档',
       packDesc:
-        'Claude Code 会话位于 ~/.claude/projects；Codex 会话位于 ~/.codex/sessions。这个命令会把你拥有的会话压缩成主目录下的 trace.tar.gz，然后把该文件拖到上方。',
+        'Claude Code 会话位于 ~/.claude/projects；Codex 会话位于 ~/.codex/sessions。这个命令会把你拥有的会话压缩成主目录下的 trace.tar.gz，然后把该文件拖到下方。',
       remoteTitle: '数据很大，或在远程服务器上？',
       remoteDesc:
         '可以跳过下载。把工具克隆到那台机器并在那里启动；它会检测该机器上的 ~/.claude + ~/.codex 并就地分析，不上传任何内容。打开它打印的 URL（如果是远程机器，可通过 SSH 转发端口）。',

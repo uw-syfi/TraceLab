@@ -148,7 +148,8 @@
 
   /* project links — icon+label chips */
   .proj-links { display: flex; gap: 12px; }
-  .proj-links a {
+  .proj-links a,
+  .proj-links .pl-btn {
     display: inline-flex; align-items: center; gap: 11px;
     padding: 14px 22px; border: 1px solid var(--line); border-radius: 13px;
     background: var(--card); color: var(--ink);
@@ -156,15 +157,24 @@
     white-space: nowrap;
     transition: color .25s var(--ease), background .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease), transform .25s var(--ease);
   }
-  .proj-links a:hover { color: var(--terra); border-color: var(--sage-soft); background: var(--card-2); box-shadow: var(--sh-1); transform: translateY(-1px); }
-  .proj-links a:focus-visible { outline: 2px solid var(--terra); outline-offset: 2px; }
+  .proj-links .pl-btn { cursor: pointer; -webkit-appearance: none; appearance: none; }
+  .proj-links a:hover,
+  .proj-links .pl-btn:hover { color: var(--terra); border-color: var(--sage-soft); background: var(--card-2); box-shadow: var(--sh-1); transform: translateY(-1px); }
+  .proj-links a:focus-visible,
+  .proj-links .pl-btn:focus-visible { outline: 2px solid var(--terra); outline-offset: 2px; }
   .proj-links .pl-ico { display: grid; place-items: center; color: var(--muted); transition: color .25s var(--ease); }
   .proj-links .pl-ico svg { width: 20px; height: 20px; display: block; }
-  .proj-links a:hover .pl-ico { color: var(--terra); }
+  .proj-links a:hover .pl-ico,
+  .proj-links .pl-btn:hover .pl-ico { color: var(--terra); }
+  /* copied confirmation — sage accent while the label flashes */
+  .proj-links .pl-btn.copied,
+  .proj-links .pl-btn.copied:hover { color: var(--sage); border-color: var(--sage-soft); }
+  .proj-links .pl-btn.copied .pl-ico { color: var(--sage); }
 
   /* column variant — neat stack (e.g. beside a hero) */
   .proj-links.col { flex-direction: column; align-items: stretch; min-width: 196px; }
-  .proj-links.col a { justify-content: flex-start; }
+  .proj-links.col a,
+  .proj-links.col .pl-btn { justify-content: flex-start; }
 
   /* strip variant — inline row between the hero and the snapshot */
   .proj-links.strip { flex-wrap: wrap; }

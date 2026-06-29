@@ -117,9 +117,9 @@
   .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
   .btn-ghost:hover { background: var(--card-2); transform: translateY(-2px); }
 
-  /* ---- export-help: collapsible "how to bundle / analyze remotely" helper under the dropzone ---- */
+  /* ---- export-help: expanded "how to bundle / analyze remotely" helper above the dropzone ---- */
   .export-help {
-    margin-top: 14px; background: var(--card); border: 1px solid var(--line);
+    margin: 0 0 18px; background: var(--card); border: 1px solid var(--line);
     border-radius: var(--r-lg); box-shadow: var(--sh-1); overflow: hidden;
   }
   .export-help > summary {
@@ -229,4 +229,3 @@
     margin-top: 14px; color: var(--muted); font-size: var(--fs-2xs); line-height: 1.5;
     border-top: 1px solid var(--line); padding-top: 12px;
   }
-
