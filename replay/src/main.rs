@@ -15,7 +15,7 @@ use std::time::Instant;
 use tokio::sync::{mpsc, Semaphore};
 
 use backend::GenerationClient;
-use cli::Args;
+use cli::{Args, BackendKind};
 use record::StepLog;
 use session::{run_session, status_task, AppState, Stats};
 use summary::{write_logs, write_summary_if_requested, ReplaySummary, RunSummary};
@@ -30,6 +30,14 @@ async fn main() -> Result<()> {
 
     if args.max_active_sessions == Some(0) {
         return Err(anyhow!("--max-active-sessions must be greater than 0"));
+    }
+    if args.cache_probe_tokens == Some(0) {
+        return Err(anyhow!("--cache-probe-tokens must be greater than 0"));
+    }
+    if args.extra_body_json.is_some() && args.backend != BackendKind::Chat {
+        return Err(anyhow!(
+            "--extra-body-json is only supported with --backend chat"
+        ));
     }
     if args.fail_on_context_overflow && args.max_model_len.is_none() {
         return Err(anyhow!("--fail-on-context-overflow requires --max-model-len"));
@@ -78,14 +86,24 @@ async fn main() -> Result<()> {
         );
     }
     let total_steps = workload_summary.total_steps();
-
     let client = Arc::new(GenerationClient::new(&args, tokenizer)?);
 
     // Fail fast if the server won't report prefix-cache hits: otherwise every measured hit
     // rate would silently read as zero. Dry-run returns earlier and never reaches here.
     // Probe the TAIL of the pool: session 0 seeds at offset 0, so a head probe would warm its
     // first round's prefix and fabricate a cache hit there.
-    let probe_len = token_pool.len().min(512);
+    let requested_probe_len = args
+        .cache_probe_tokens
+        .unwrap_or_else(|| args.backend.default_cache_probe_tokens());
+    if token_pool.len() < requested_probe_len
+        && (args.cache_probe_tokens.is_some() || args.backend != BackendKind::Openai)
+    {
+        return Err(anyhow!(
+            "cache preflight requires {requested_probe_len} tokens, but the token pool contains only {}",
+            token_pool.len()
+        ));
+    }
+    let probe_len = token_pool.len().min(requested_probe_len);
     client
         .preflight_cache_check(&token_pool[token_pool.len() - probe_len..])
         .await

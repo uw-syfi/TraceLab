@@ -1,17 +1,28 @@
 use clap::{Parser, ValueEnum};
 
 /// Inference-server wire protocol selected with `--backend`.
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BackendKind {
     /// OpenAI-compatible `/completions` (vLLM, and SGLang's OpenAI endpoint).
     Openai,
+    /// OpenAI-compatible `/chat/completions` with cumulative role-based messages.
+    Chat,
+}
+
+impl BackendKind {
+    pub(crate) fn default_cache_probe_tokens(self) -> usize {
+        match self {
+            Self::Openai => 512,
+            Self::Chat => 4096,
+        }
+    }
 }
 
 #[derive(Parser, Debug, Clone)]
 #[command(
     author,
     version,
-    about = "Session-aware closed-loop workload runner for vLLM"
+    about = "Session-aware closed-loop workload runner for OpenAI-compatible inference servers"
 )]
 pub(crate) struct Args {
     /// CSV with session_id/id,round_idx,prefix_len,input_len,output_len,tool_wait_after_ms.
@@ -26,16 +37,33 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) tokenizer: String,
 
-    /// vLLM OpenAI-compatible base URL, normally http://host:port/v1.
+    /// OpenAI-compatible base URL, normally http://host:port/v1.
     #[arg(long, default_value = "http://127.0.0.1:8000/v1")]
     pub(crate) base_url: String,
+
+    /// Exact request endpoint. Overrides --base-url and the backend's default path.
+    #[arg(long)]
+    pub(crate) endpoint_url: Option<String>,
 
     #[arg(long)]
     pub(crate) model: String,
 
-    /// Inference-server wire protocol. `openai` covers vLLM and SGLang OpenAI endpoints.
+    /// Inference-server wire protocol. Use `chat` for role-based messages.
     #[arg(long, value_enum, default_value = "openai")]
     pub(crate) backend: BackendKind,
+
+    /// Name of an environment variable containing a Bearer API key.
+    #[arg(long)]
+    pub(crate) api_key_env: Option<String>,
+
+    /// Token count used by the strict two-request prefix-cache preflight.
+    /// Defaults to 512 for completion and 4096 for chat.
+    #[arg(long)]
+    pub(crate) cache_probe_tokens: Option<usize>,
+
+    /// Provider-specific top-level JSON merged into Chat Completions requests.
+    #[arg(long, value_name = "JSON")]
+    pub(crate) extra_body_json: Option<String>,
 
     #[arg(long, default_value_t = 0.0)]
     pub(crate) temperature: f64,
@@ -63,11 +91,12 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) max_active_sessions: Option<usize>,
 
-    /// Validate and summarize the workload without contacting vLLM.
+    /// Validate and summarize the workload without contacting the inference server.
     #[arg(long, default_value_t = false)]
     pub(crate) dry_run: bool,
 
-    /// Optional model context limit used for workload validation.
+    /// Optional content-token context limit used for workload validation.
+    /// Chat-template overhead is not included.
     #[arg(long)]
     pub(crate) max_model_len: Option<usize>,
 
