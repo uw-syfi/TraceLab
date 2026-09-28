@@ -377,6 +377,14 @@ timing list, and nested tool metadata.
   item), which is how the main thread of Codex CLI 0.147 and later writes it. Automatic-review
   rollouts wrote `user_message` up to CLI 0.156; from 0.158 most carry the review request only as a
   `role = user` `response_item`, which is not read (injected context has the same shape).
+- Codex often writes a round's `token_count` after the tool its model output requested has run.
+  In rollouts that record turn ids, such a tool result is an input of the next round. A result
+  still waiting when the turn id changes (a new turn starts or, where turns interleave, another
+  resumes) is not an input of the round after the change, and neither is one written after a turn
+  starts but before a prompt that arrives before any model output. A round with neither model
+  output nor a prompt keeps the results that arrived since the round before it. The tool record
+  keeps its result and timing either way. Rollouts without turn ids (older CLIs) keep the result
+  in the round that requested it.
 - Private extracted traces include serialized tool `input`; sanitized public traces remove
   `tools[].input` and keep only `input_chars`.
 - `tools[]` includes `tool_name`, `tool_call_id`, `emitted_at`, `input_chars`,
