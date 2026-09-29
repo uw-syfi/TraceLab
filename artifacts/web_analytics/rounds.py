@@ -33,6 +33,12 @@ class RoundRow(TypedDict):
     # human-vs-autonomous split (sessions timeline, autonomy depth, human-in-the-loop stats).
     is_user_input: bool
     tool_calls: int
+    # Subagent hierarchy (None throughout on traces collected before these columns existed, which
+    # the UI shows as "unknown" rather than as main-thread work).
+    thread_kind: Optional[str]
+    parent_session_id: Optional[str]
+    workflow_id: Optional[str]
+    agent_role: Optional[str]
 
 
 # round_pk is unique; event_index = 1 is exactly one row per round, so the LEFT JOIN keeps every
@@ -51,7 +57,8 @@ tool_n AS (
 SELECT r.round_pk, r.provider, r.model, r.session_id, r."user", r.round_index,
        r.prefix_tokens, r.newly_append_tokens, {cache_write_expr},
        r.output_tokens, r.reasoning_output_tokens,
-       r.first_input_event_type, f.ts_us, COALESCE(t.n, 0) AS tool_calls
+       r.first_input_event_type, f.ts_us, COALESCE(t.n, 0) AS tool_calls,
+       {hierarchy_exprs}
 FROM rounds r
 LEFT JOIN first_ev f USING (round_pk)
 LEFT JOIN tool_n  t USING (round_pk)
@@ -76,6 +83,25 @@ def _has_round_column(con, column: str) -> bool:
     )
 
 
+# (column, SQL type). Cast explicitly: a DB built by an older trace_db.py may hold these untyped.
+HIERARCHY_COLUMNS = (
+    ("thread_kind", "VARCHAR"),
+    ("parent_session_id", "VARCHAR"),
+    ("workflow_id", "VARCHAR"),
+    ("agent_role", "VARCHAR"),
+)
+
+
+def hierarchy_select(con, alias: str = "r") -> str:
+    """SELECT expressions for the hierarchy columns, NULL for any column the trace predates."""
+    return ", ".join(
+        f"CAST({alias}.{name} AS {sql_type}) AS {name}"
+        if _has_round_column(con, name)
+        else f"CAST(NULL AS {sql_type}) AS {name}"
+        for name, sql_type in HIERARCHY_COLUMNS
+    )
+
+
 def load_rounds(con) -> list[RoundRow]:
     rows: list[RoundRow] = []
     cache_write_expr = (
@@ -83,7 +109,9 @@ def load_rounds(con) -> list[RoundRow]:
         if _has_round_column(con, "claude_cache_creation_input_tokens")
         else "CAST(NULL AS BIGINT) AS claude_cache_creation_input_tokens"
     )
-    sql = _SQL_TEMPLATE.format(cache_write_expr=cache_write_expr)
+    sql = _SQL_TEMPLATE.format(
+        cache_write_expr=cache_write_expr, hierarchy_exprs=hierarchy_select(con)
+    )
     for (
         round_pk,
         provider,
@@ -99,6 +127,10 @@ def load_rounds(con) -> list[RoundRow]:
         first_input_event_type,
         ts_us,
         tool_calls,
+        thread_kind,
+        parent_session_id,
+        workflow_id,
+        agent_role,
     ) in con.execute(sql).fetchall():
         rows.append(
             {
@@ -116,6 +148,10 @@ def load_rounds(con) -> list[RoundRow]:
                 "first_ts_us": int(ts_us) if ts_us is not None else None,
                 "is_user_input": first_input_event_type == "user_message",
                 "tool_calls": int(tool_calls),
+                "thread_kind": thread_kind,
+                "parent_session_id": parent_session_id,
+                "workflow_id": workflow_id,
+                "agent_role": agent_role,
             }
         )
     return rows

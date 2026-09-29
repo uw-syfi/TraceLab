@@ -93,6 +93,14 @@ Columns currently available:
 - `project` VARCHAR: project pseudonym, often null for Codex rows.
 - `session_id` VARCHAR: session identifier, not globally unique enough to use alone for joins.
 - `round_index` BIGINT: position inside a session.
+- `thread_kind` VARCHAR: `main` / `subagent` / `guardian`; null = unknown (trace predates the field), never assume `main`.
+  This column and the next three exist only in traces collected with them (not in v0.0.2): run `DESCRIBE rounds`
+  first and, if they are missing, treat them as null. Where it is present, a `user_message` in a `subagent` or
+  `guardian` round was written by an agent, not a person: for human-only metrics use `thread_kind = 'main'`, or
+  say that the numbers include agent prompts.
+- `parent_session_id` VARCHAR: for a delegated session, the `session_id` of the session that started it; for an automatic review (`guardian`), the session it reviewed. It equals the round's own `session_id` for Claude inline sidechain rounds (older clients), which are not child sessions: find children with `parent_session_id <> session_id`.
+- `workflow_id` VARCHAR: Claude workflow that launched a subagent; null otherwise.
+- `agent_role` VARCHAR: subagent role (built-in name or `custom_role_N`).
 - `round_id` VARCHAR: source id, not unique.
 - `model` VARCHAR.
 - `input_tokens_total` BIGINT.
@@ -103,12 +111,12 @@ Columns currently available:
 - `claude_cache_read_input_tokens` BIGINT.
 - `output_tokens` BIGINT.
 - `current_input_event_count` BIGINT.
-- `current_user_message_count` BIGINT: count of `user_message` input events in the round; `> 0` means a human message landed in this round.
+- `current_user_message_count` BIGINT: count of `user_message` input events in the round; `> 0` means a user message landed in this round. It was written by a person only in `thread_kind = 'main'` rounds; where the column is absent (v0.0.2) it can also be an agent's prompt, e.g. almost every `model = 'codex-auto-review'` round, and subagent prompts cannot be told apart.
 - `current_tool_result_count` BIGINT.
 - `current_user_message_chars` BIGINT.
 - `current_tool_result_chars` BIGINT.
 - `current_input_chars` BIGINT.
-- `first_input_event_type` VARCHAR: event type of the round's first input event (`user_message` or `tool_result`). `user_message` flags a human-initiated round; this is a cheap proxy — the exact request boundary uses the timing-events trigger (see *Human Input And End-To-End Response Time*).
+- `first_input_event_type` VARCHAR: event type of the round's first input event (`user_message` or `tool_result`). `user_message` flags a user-initiated round (human-initiated only in `thread_kind = 'main'` rounds; without the column, as in v0.0.2, it includes agent prompts such as `codex-auto-review` rounds); this is a cheap proxy — the exact request boundary uses the timing-events trigger (see *Human Input And End-To-End Response Time*).
 - `user` VARCHAR.
 - `store` VARCHAR.
 - `trace_key` VARCHAR: source key, not unique.

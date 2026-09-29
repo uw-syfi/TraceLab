@@ -28,6 +28,7 @@ Common top-level fields:
 - `model`: model reported by the provider trace.
 - `project`, `store`, `user`, `home`, `turn_id`, `cwd`, or `session_file`: private extracted traces may include local context fields. Sanitized traces pseudonymize `project`, `user`, and ids, and remove local path/source fields.
 - `current_input_event_count`, `current_user_message_count`, `current_tool_result_count`, `current_user_message_chars`, `current_tool_result_chars`, `current_input_chars`, and `first_input_event_type`: summaries derived from the row's input-side `timing_events`.
+- `thread_kind` (`main` / `subagent` / `guardian`), `parent_session_id`, `workflow_id` and `agent_role`: the subagent hierarchy. A child session is its own session and names its parent's `session_id`; null means the trace predates the fields (unknown, not `main`). See the README section "Normalized row structure".
 
 ## Token Semantics
 

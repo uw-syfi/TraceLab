@@ -32,6 +32,25 @@ PREFIX_BASE62_RE = re.compile(r"^(call_)([A-Za-z0-9]+)$")
 PUBLIC_EXECUTABLE_RE = re.compile(r"^custom_[1-9][0-9]*$")
 EXECUTABLE_WHITELIST = Path(__file__).resolve().with_name("public_common_executables.txt")
 PUBLIC_TOOL_NAME_RE = re.compile(r"^custom_tool_[1-9][0-9]*$")
+PUBLIC_AGENT_ROLE_RE = re.compile(r"^custom_role_[1-9][0-9]*$")
+# thread_kind is a closed vocabulary; any other value is dropped rather than passed through.
+THREAD_KINDS = frozenset({"main", "subagent", "guardian"})
+# Built-in subagent roles are product vocabulary and stay readable; user-defined agent names are
+# pseudonymized like custom tool names (they can describe the user's work).
+PUBLIC_AGENT_ROLES = frozenset(
+    {
+        "general-purpose",
+        "Explore",
+        "Plan",
+        "claude-code-guide",
+        "statusline-setup",
+        "workflow-subagent",
+        "guardian",
+        # Codex sub-sessions it starts on its own (source.subagent = "review" / "compact").
+        "review",
+        "compact",
+    }
+)
 TOOL_NAME_WHITELIST = Path(__file__).resolve().with_name("public_common_tool_names.txt")
 
 
@@ -150,6 +169,17 @@ class StableIdSanitizer:
             mapping[original] = f"custom_{len(mapping) + 1}"
         return mapping[original]
 
+    def agent_role(self, original: Any) -> Any:
+        """Keep built-in subagent roles; pseudonymize every user-defined agent name."""
+        if not isinstance(original, str):
+            return original
+        if original in PUBLIC_AGENT_ROLES or PUBLIC_AGENT_ROLE_RE.fullmatch(original):
+            return original
+        mapping = self.maps.setdefault("agent_role", {})
+        if original not in mapping:
+            mapping[original] = f"custom_role_{len(mapping) + 1}"
+        return mapping[original]
+
     def tool_name(self, original: str) -> str:
         """Keep standard tool names; pseudonymize every custom/integration-specific name."""
         if original in PUBLIC_TOOL_NAMES or PUBLIC_TOOL_NAME_RE.fullmatch(original):
@@ -230,6 +260,25 @@ def sanitize_row(row: dict[str, Any], ids: StableIdSanitizer) -> dict[str, Any]:
         )
     if "round_id" in original:
         cleaned["round_id"] = ids.round_id(provider, original.get("round_id"))
+    # Subagent hierarchy. The parent goes through the session map itself, so it resolves to exactly
+    # the pseudonym its own rows carry and the parent/child link survives sanitization. Every field
+    # is a string or null; anything else is dropped rather than copied through.
+    hierarchy = {}
+    for field in ("parent_session_id", "thread_kind", "workflow_id", "agent_role"):
+        if field in original:
+            value = original.get(field)
+            hierarchy[field] = value if isinstance(value, str) and value else None
+    if "parent_session_id" in hierarchy:
+        cleaned["parent_session_id"] = ids.session_id(provider, hierarchy["parent_session_id"])
+    if "thread_kind" in hierarchy:
+        kind = hierarchy["thread_kind"]
+        cleaned["thread_kind"] = kind if kind in THREAD_KINDS else None
+    if "workflow_id" in hierarchy:
+        cleaned["workflow_id"] = ids.atomic_id(
+            "workflow_id", hierarchy["workflow_id"], fallback_prefix="wf_"
+        )
+    if "agent_role" in hierarchy:
+        cleaned["agent_role"] = ids.agent_role(hierarchy["agent_role"])
 
     tools = cleaned.get("tools")
     original_tools = original.get("tools")

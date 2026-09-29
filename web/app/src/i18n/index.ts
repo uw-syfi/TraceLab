@@ -208,6 +208,7 @@ export const uiCopy = {
         ['Timing', 'when each step ran and how long tools took'],
         ['Sizes as counts only', 'how large a message or tool input was, never its text'],
         ['Pseudonymous IDs', 'random, stable-within-file ids for session / round / project / user'],
+        ['Agent structure', 'which sessions are subagents of which session, and which are automatic reviews; workflow ids are pseudonymous, built-in agent role names are kept, custom ones are renamed'],
       ],
       stripItems: [
         ['Your prompts & the AI’s replies', 'message text is never captured, only counts'],
@@ -1125,6 +1126,7 @@ export const uiCopy = {
         ['时间信息', '每一步何时运行、工具耗时多久'],
         ['只保留大小计数', '消息或工具输入有多大，但绝不保留文本'],
         ['假名化 ID', '会话 / 轮次 / 项目 / 用户使用文件内稳定的随机 ID'],
+        ['智能体结构', '哪些会话是哪个会话的子智能体，哪些是自动审查；工作流 ID 已假名化，保留内置智能体角色名，自定义角色名会被重命名'],
       ],
       stripItems: [
         ['你的提示词和 AI 回复', '不采集消息文本，只保留计数'],

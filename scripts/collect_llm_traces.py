@@ -86,6 +86,12 @@ def write_jsonl_row(out: TextIO, row: dict[str, Any]) -> None:
     out.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
+def count_round_keys(keys: set[str]) -> int:
+    """Rows behind a dedup key set. The set also holds a POSIX copy of each backslash key from an
+    older Windows run (``load_existing_round_keys``); count that row once."""
+    return len({k.replace("\\", "/") for k in keys})
+
+
 def count_completed_tool_results(round_obj: dict[str, Any]) -> int:
     return sum(1 for tool in round_obj.get("tools", []) if tool.get("result_at") is not None)
 
@@ -141,7 +147,7 @@ def count_claude_store(projects_dir: Path) -> dict[str, Any]:
         jsonl_files += 1
         file_seen: set[str] = set()
         try:
-            session_key = str(path.relative_to(projects_dir).with_suffix(""))
+            session_key = path.relative_to(projects_dir).with_suffix("").as_posix()
         except ValueError:
             session_key = path.stem
         for obj in read_jsonl(path):
@@ -270,7 +276,7 @@ def append_claude_round_trace(
 
     stats: dict[str, Any] = {
         "output": str(output_path),
-        "existing_rounds": len(existing_keys),
+        "existing_rounds": count_round_keys(existing_keys),
         "project_dirs": 0,
         "session_files": 0,
         "candidate_rounds": 0,
@@ -290,7 +296,7 @@ def append_claude_round_trace(
     progress(
         "extract: "
         f"{len(filtered_sources)} Claude project directorie(s), "
-        f"{len(existing_keys)} existing round key(s)",
+        f"{count_round_keys(existing_keys)} existing round key(s)",
         progress_enabled,
     )
 
@@ -316,7 +322,7 @@ def append_claude_round_trace(
             )
             for session_index, session_file in enumerate(session_files, start=1):
                 try:
-                    session_key = str(session_file.relative_to(project_dir).with_suffix(""))
+                    session_key = session_file.relative_to(project_dir).with_suffix("").as_posix()
                     rounds = extract_session_with_key(session_file, project_name, session_key)
                 except Exception as exc:
                     stats["errors"].append(
@@ -352,7 +358,7 @@ def append_claude_round_trace(
                         progress_enabled,
                     )
 
-    stats["final_rounds"] = len(existing_keys)
+    stats["final_rounds"] = count_round_keys(existing_keys)
     progress(
         "extract: "
         f"done candidates={stats['candidate_rounds']} "
@@ -375,7 +381,7 @@ def append_codex_round_trace(
 
     stats: dict[str, Any] = {
         "output": str(output_path),
-        "existing_rounds": len(existing_keys),
+        "existing_rounds": count_round_keys(existing_keys),
         "session_dirs": 0,
         "session_files": 0,
         "candidate_rounds": 0,
@@ -389,7 +395,7 @@ def append_codex_round_trace(
     progress(
         "extract: "
         f"{len(sources)} Codex session directorie(s), "
-        f"{len(existing_keys)} existing round key(s)",
+        f"{count_round_keys(existing_keys)} existing round key(s)",
         progress_enabled,
     )
     with output_path.open("a", encoding="utf-8") as out:
@@ -448,7 +454,7 @@ def append_codex_round_trace(
                         progress_enabled,
                     )
 
-    stats["final_rounds"] = len(existing_keys)
+    stats["final_rounds"] = count_round_keys(existing_keys)
     progress(
         "extract: "
         f"codex done candidates={stats['candidate_rounds']} "

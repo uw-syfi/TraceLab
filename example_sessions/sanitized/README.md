@@ -19,6 +19,10 @@ cache, latency, and tool-use analysis:
 - Pseudonymized relationship ids: `project`, `session_id`, `round_id`,
   `turn_id`, `trace_key`, and `tool_call_id`.
 - Round ordering: `round_index`.
+- Subagent hierarchy: `thread_kind` (closed vocabulary), `parent_session_id`
+  (pseudonymized through the same map as `session_id`), pseudonymized
+  `workflow_id`, and `agent_role` (built-in roles kept, others `custom_role_N`).
+  The example files here were generated before these fields and do not carry them.
 - Token accounting: `input_tokens_total`, `prefix_tokens`,
   `newly_append_tokens`, `output_tokens`, `reasoning_output_tokens`, and the
   Claude-specific `claude_uncached_input_tokens`,

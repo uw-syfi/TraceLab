@@ -246,7 +246,10 @@ joinable through the pseudonymous ids. It removes local context fields such as `
 `input_chars`. Before dropping command inputs, it extracts an ordered executable list, parse
 status/reason, and structural command skeleton. Explicitly reviewed public/common names remain
 visible; all other executable names become stable `custom_N` labels within the sanitized trace.
-Distinct-user counts remain available through pseudonymous `user` values.
+Distinct-user counts remain available through pseudonymous `user` values. The subagent fields are
+mapped too: `parent_session_id` through the same session map (so links hold within one output),
+`workflow_id` to a random pseudonym, custom `agent_role` names to `custom_role_N` (built-in roles
+stay), and `thread_kind` is kept only if it is `main`, `subagent` or `guardian`.
 </details>
 
 <details>
@@ -370,6 +373,28 @@ timing list, and nested tool metadata.
 
 - Top-level fields include provider/session ids, model, input/output token counts,
   cache-prefix split, source store, `timing_events`, and `trace_key`.
+- Subagent hierarchy: `thread_kind` (`main` | `subagent` | `guardian`), `parent_session_id`,
+  `workflow_id`, `agent_role`. A delegated child is its own session; `parent_session_id` is the
+  parent's `session_id` (in sanitized traces the same pseudonym the parent carries).
+  Claude: children are the transcripts under `<session>/subagents/` (workflow-launched ones under
+  `subagents/workflows/<workflow>/`, which sets `workflow_id`); `agent_role` is Claude Code's
+  `attributionAgent`. Older clients wrote sidechain rounds inline in the main transcript: those
+  rounds are `subagent` with `parent_session_id` equal to their own session, a round-level fact,
+  not a child session. Codex: children are rollouts spawned via `thread_spawn`; replayed parent
+  turns keep the parent identity; `workflow_id` is null; the automatic review rollout is
+  `thread_kind = guardian`, `agent_role = guardian`, and its `parent_session_id` is the session
+  it reviewed (Codex's `session_meta.parent_thread_id`; it is not counted as a child of that
+  session); other sub-sessions Codex starts itself (`review`, `compact`) are `subagent` with that
+  role and are not linked to a parent. Sanitized traces keep built-in roles (`general-purpose`, `Explore`, `Plan`,
+  `claude-code-guide`, `statusline-setup`, `workflow-subagent`, `guardian`, `review`, `compact`)
+  and map any other role to `custom_role_N`; task names (Codex `agent_path` / `agent_nickname`)
+  are never extracted. Parent links hold within one sanitized file (one seed). Traces collected
+  before these fields existed have them null: the thread type is **unknown**, not `main`; rows
+  already in a trace file keep that until it is re-collected. To refresh without losing history,
+  collect a fresh snapshot and merge it over the old file with `scripts/merge_round_traces.py`
+  (`--fresh-extract` alone drops rows whose raw sessions are gone). On Windows, merge or
+  re-collect rather than append to a file written before this change: its subagent session ids use
+  backslashes, so a session still running at collection time would appear under both spellings.
 - `timing_events[]` is the ordered trace-observed event list for the round. It may include
   `user_message`, `tool_result`, `reasoning`, `text`, `tool_call`, and Codex
   `usage_report` entries.
