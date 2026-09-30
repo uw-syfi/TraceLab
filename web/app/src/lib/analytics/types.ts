@@ -232,6 +232,41 @@ export interface SessionRow {
   costUsd: number;
   toolCalls: number;
   errors: number;
+  /** Subagent hierarchy. All null on traces collected before these fields existed: the thread type
+   *  is then unknown (not "main"). threadKind: 'main' | 'subagent' | 'guardian' (Codex auto-review). */
+  threadKind?: string | null;
+  agentRole?: string | null;
+  /** Direct subagent sessions launched from this one; null when this session's hierarchy is unknown.
+   *  Parent and workflow come from SessionDetail.topology. */
+  childSessions?: number | null;
+}
+
+/** One subagent session launched from the opened session (SessionTopology.children). */
+export interface SessionTopologyChild {
+  sessionId: string;
+  agentRole: string | null;
+  workflowId: string | null;
+  rounds: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** cached-read share of input (prefix / (prefix + append)); null with no input. */
+  prefixShare: number | null;
+  firstTsUs: number;
+  lastTsUs: number;
+}
+
+/** Where the opened session sits in the subagent tree. */
+export interface SessionTopology {
+  known: boolean;
+  threadKind: string | null;
+  parentSessionId: string | null;
+  agentRole: string | null;
+  workflowId: string | null;
+  children: SessionTopologyChild[];
+  workflows: { workflowId: string | null; agents: number; rounds: number }[];
+  /** Codex automatic reviews of this session (guardian sessions that name it as the session they
+   *  reviewed); kept apart from children, which are delegated work. */
+  reviews?: SessionTopologyChild[];
 }
 
 /** One tool call within a round (for the round-inspector panel). */
@@ -270,6 +305,8 @@ export interface SessionDetail {
   sessionId: string;
   rounds: SessionRoundPoint[];
   tools: SessionToolStat[];
+  /** Absent in mock payloads and from older builders. */
+  topology?: SessionTopology;
 }
 
 /** Per-round RAW message text — the actual input/output, not aggregates. Surfaced in the session
