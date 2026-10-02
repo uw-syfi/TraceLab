@@ -96,7 +96,7 @@ function build(detail: SessionDetail, c: ThemeColors): echarts.EChartsCoreOption
           `${hitPct}% ${ts.cacheHit} · ${secondLabel(r.inferenceS)} · ${decodeLabel(decode)}`,
         ];
         if (r.tools.length) {
-          lines.push(`<span style="opacity:.7">${ts.tools}</span> ${r.tools.map((tool) => `${tool.name} ${tool.ms}ms${tool.error ? ' ⚠' : ''}`).join(', ')}`);
+          lines.push(`<span style="opacity:.7">${ts.tools}</span> ${r.tools.map((tool) => `${echarts.format.encodeHTML(tool.name)} ${tool.ms}ms${tool.error ? ' ⚠' : ''}`).join(', ')}`);
         } else if (!r.isUserInput) {
           lines.push(`<span style="opacity:.7">${ts.noToolCalls}</span>`);
         }

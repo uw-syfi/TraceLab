@@ -320,6 +320,18 @@ def extract_codex_session(
     file_session_meta_id: str | None = None
     parent_session_meta_id: str | None = None
     is_subagent_file = False
+    # Hierarchy of a spawned child, read once from the child's own session_meta. Kept apart from
+    # parent_session_meta_id, which is re-assigned below when the file replays its parent's history.
+    spawn_parent_id: str | None = None
+    spawn_role: str | None = None
+    # Codex's automatic review runs as its own rollout (source.subagent.other == "guardian"). It
+    # is not spawned by the user's thread, but its session_meta names the thread it reviewed
+    # (parent_thread_id); that links the review to the reviewed session. It replays no history.
+    is_guardian_file = False
+    review_parent_id: str | None = None
+    # Other sub-sessions Codex starts on its own (source.subagent = "review" / "compact", or
+    # {"other": <name>}): delegated work with no recorded parent. Holds the variant name.
+    other_subagent_role: str | None = None
     current_turn_id: str | None = None
     current_model: str | None = None
     current_cwd: str | None = None
@@ -376,6 +388,20 @@ def extract_codex_session(
                             if isinstance(parent_id, str) and parent_id:
                                 parent_session_meta_id = parent_id
                                 is_subagent_file = True
+                                spawn_parent_id = parent_id
+                                role = spawn.get("agent_role")
+                                spawn_role = role if isinstance(role, str) and role else None
+                            subagent = source.get("subagent")
+                            other = subagent.get("other") if isinstance(subagent, dict) else subagent
+                            if other == "guardian":
+                                is_guardian_file = True
+                            elif isinstance(other, str) and other:
+                                other_subagent_role = other
+                        if payload.get("thread_source") == "guardian_review":
+                            is_guardian_file = True
+                        reviewed = payload.get("parent_thread_id")
+                        if is_guardian_file and isinstance(reviewed, str) and reviewed:
+                            review_parent_id = reviewed
                     elif is_subagent_file and meta_id != file_session_meta_id:
                         # Subagent files replay parent history after the child
                         # session metadata. Keep both identities: replayed
@@ -685,6 +711,12 @@ def extract_codex_session(
                     elif parent_session_meta_id is not None:
                         round_session_meta_id = parent_session_meta_id
                 session_id = f"codex:{round_session_meta_id}"
+                # Live child turns belong to the spawned child; replayed parent turns keep the parent.
+                is_live_child = bool(
+                    is_subagent_file
+                    and spawn_parent_id is not None
+                    and round_session_meta_id == file_session_meta_id
+                )
                 round_index = session_round_counts[session_id]
                 session_round_counts[session_id] += 1
                 timing_events = [
@@ -701,6 +733,21 @@ def extract_codex_session(
                     "provider": "codex",
                     "session_id": session_id,
                     "session_file": str(session_file),
+                    "thread_kind": (
+                        "subagent" if is_live_child or other_subagent_role
+                        else "guardian" if is_guardian_file else "main"
+                    ),
+                    "parent_session_id": (
+                        f"codex:{spawn_parent_id}" if is_live_child
+                        else f"codex:{review_parent_id}"
+                        if is_guardian_file and review_parent_id and not other_subagent_role
+                        else None
+                    ),
+                    "workflow_id": None,
+                    "agent_role": (  # same precedence as thread_kind above
+                        spawn_role if is_live_child
+                        else other_subagent_role or ("guardian" if is_guardian_file else None)
+                    ),
                     "round_index": round_index,
                     "round_id": f"{turn_id}:{turn_round_index}",
                     "turn_id": current_turn_id,

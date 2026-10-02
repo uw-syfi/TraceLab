@@ -158,9 +158,14 @@ Pricing model + cache-read split: see the single-source [`pricing.json`](../../.
 ## 5. Sessions `[new]`
 
 **List row**: id, provider, primary model, steps, duration, input tokens, cost, tool calls, errors.
-**Filters**: by provider (vendor), sort (steps / duration / cost / recency), text search.
+**Filters**: by provider (vendor), by thread (all / main / subagents / auto-reviews / untagged, shown
+only for traces that carry `thread_kind`; opens on main when a fully tagged trace has both main and
+subagent or auto-review sessions), sort (steps / duration / cost / recency), text search. Subagent / auto-review cards
+carry a pill; parents show how many subagent sessions they started.
 **Drill-down** (`SessionDetail`, fetched on demand): per-round timeline (cached/fresh stacked + output
-line + dataZoom + user-input markers), tool stats (count / p50 / errors per tool).
+line + dataZoom + user-input markers), tool stats (count / p50 / errors per tool), and the session's place
+in the subagent tree (`topology`: parent link (for an auto-review, the session it reviewed), children
+grouped by workflow, and the session's auto-reviews as a group of their own).
 
 ---
 

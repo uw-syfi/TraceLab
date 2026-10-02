@@ -49,6 +49,13 @@ const t = useTranslations(Astro.url).dashboard;
       <button data-prov="claude">Claude</button>
       <button data-prov="codex">Codex</button>
     </div>
+    <div class="seg" id="sess-population" role="group" aria-label={t.populationAria}>
+      <button class="active" data-pop="all">{t.popAll}</button>
+      <button data-pop="main">{t.popMain}</button>
+      <button data-pop="subagent">{t.popSubagent}</button>
+      <button data-pop="guardian" hidden>{t.popGuardian}</button>
+      <button data-pop="unknown" hidden>{t.popUnknown}</button>
+    </div>
     <label class="field"><span>{t.sort}</span>
       <select id="sess-sort">
         <option value="rounds">{t.sortSteps}</option>
@@ -65,6 +72,7 @@ const t = useTranslations(Astro.url).dashboard;
     <div class="panel sess-detail">
       <h3 id="sess-title">—</h3>
       <p class="desc" id="sess-meta">—</p>
+      <div class="sess-topology" id="sess-topology"></div>
       <div class="chart chart--session" id="c-session"></div>
       <div class="round-detail" id="round-detail"></div>
       <div class="sess-tools" id="sess-tools"></div>
@@ -181,6 +189,9 @@ const t = useTranslations(Astro.url).dashboard;
   /* session filter toolbar */
   .sess-toolbar { display: flex; align-items: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
   .seg { display: inline-flex; gap: 4px; background: color-mix(in srgb, var(--card) 60%, transparent); padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
+  .seg[hidden] { display: none; }
+  /* the global .seg button rule (ask-trace.css) sets display, which would override the hidden attribute */
+  .seg button[hidden] { display: none; }
   .seg button {
     font-family: var(--sans); font-size: var(--fs-xs); font-weight: 500; color: var(--muted);
     border: none; background: transparent; padding: 7px 16px; border-radius: 999px; cursor: pointer;
@@ -228,6 +239,23 @@ const t = useTranslations(Astro.url).dashboard;
   .sess-row .pill { flex: none; font-size: var(--fs-2xs); padding: 2px 8px; border-radius: 999px; background: var(--terra-wash); color: var(--on-terra); font-weight: 600; }
   .sess-row .pill.codex { background: var(--sage-wash); color: var(--on-sage); }
   .sess-detail { display: flex; flex-direction: column; }
+  .sess-row .pill.sub { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--ink); }
+  /* the subagent / auto-review pill sits on its own line under the title, so the card keeps main's width */
+  .sess-row .sr-kind { display: flex; margin-top: 4px; }
+
+  /* subagent tree of the opened session: parent link, then one block per launching workflow */
+  .sess-topology { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 14px; }
+  .sess-topology:empty { display: none; }
+  .sess-topology .tp-line { font-size: var(--fs-sm); color: var(--muted); }
+  .sess-topology .tp-group { border: 1px solid var(--line); border-radius: var(--r-md); background: color-mix(in srgb, var(--card-2) 55%, transparent); padding: 10px 14px; }
+  .sess-topology .tp-head { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+  .sess-topology .tp-head:hover { color: var(--ink); }
+  .sess-topology details[open] > .tp-head { margin-bottom: 8px; }
+  .sess-topology .tp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sess-topology .tp-chip, .sess-topology .tp-link { font: inherit; font-size: var(--fs-xs); cursor: pointer; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); padding: 3px 10px; font-variant-numeric: tabular-nums; transition: border-color .25s var(--ease); }
+  .sess-topology .tp-chip:hover, .sess-topology .tp-link:hover { border-color: var(--terra); }
+  .sess-topology .tp-more { font: inherit; font-size: var(--fs-xs); color: var(--muted); padding: 3px 4px; background: none; border: 0; cursor: pointer; align-self: flex-start; }
+  .sess-topology .tp-more:hover { color: var(--ink); text-decoration: underline; }
 
   /* per-round inspector (click a round in the timeline) */
   .round-detail { margin-top: 14px; }
@@ -301,5 +329,6 @@ const t = useTranslations(Astro.url).dashboard;
     .sess-layout, .dist-grid { grid-template-columns: 1fr; }
     .analytics .kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .sess-search { flex: 1; min-width: 0; }
+    #sess-population { flex-wrap: wrap; border-radius: var(--r-md); }
   }
 </style>

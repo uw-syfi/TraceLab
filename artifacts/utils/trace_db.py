@@ -53,6 +53,15 @@ def _ts(expr: str) -> str:
     )
 
 
+# Round columns that can be null on every row of a trace (read_json then infers JSON) and that older
+# traces lack entirely: (column, pinned type).
+_PINNED_OPTIONAL_ROUND_COLUMNS = (
+    ("thread_kind", "VARCHAR"),
+    ("parent_session_id", "VARCHAR"),
+    ("workflow_id", "VARCHAR"),
+    ("agent_role", "VARCHAR"),
+)
+
 # `tool_calls` / `timing_events` are UNNEST'd from each round's struct list. ``read_json`` infers each
 # list's element struct from the keys ACTUALLY present in the trace, so a small or homogeneous export
 # (e.g. a single Claude session whose timing events are all message-type) yields a struct MISSING keys
@@ -207,12 +216,17 @@ def materialize(trace_path, db_path) -> Path:
         # keyword (e.g. 'duckdb'), which would otherwise mis-count distinct users as 1 on these traces.
         raw_types = {row[1]: row[2] for row in con.execute("PRAGMA table_info(_raw)").fetchall()}
         raw_cols = set(raw_types)
+        # Nullable fields newer than older traces get the same pin when present (absent stays absent;
+        # readers null-fill via _has_round_column).
+        pinned = [(c, t) for c, t in _PINNED_OPTIONAL_ROUND_COLUMNS if c in raw_cols]
         exclude = [c for c in ("round_pk", "tools", "timing_events", "reasoning_output_tokens") if c in raw_cols]
+        exclude += [c for c, _ in pinned]
         reason_select = (
             "TRY_CAST(reasoning_output_tokens AS BIGINT) AS reasoning_output_tokens"
             if "reasoning_output_tokens" in raw_cols
             else "CAST(NULL AS BIGINT) AS reasoning_output_tokens"
         )
+        reason_select += "".join(f", TRY_CAST({c} AS {t}) AS {c}" for c, t in pinned)
         user_select = "" if "user" in raw_cols else ', CAST(NULL AS VARCHAR) AS "user"'
         con.execute(
             "CREATE TABLE rounds AS "
@@ -424,6 +438,13 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
             f"{derived[name]} AS {_ident(name)}" for name in missing
         )
         con.execute(f"CREATE TEMP VIEW tool_calls AS SELECT *, {additions} FROM {db}.tool_calls")
+
+    # Round fields newer than a DB read as typed NULLs:
+    # unknown, not zero or "main".
+    missing_round = [(c, t) for c, t in _PINNED_OPTIONAL_ROUND_COLUMNS if not _has_column(con, "rounds", c)]
+    if missing_round:
+        additions = ", ".join(f"CAST(NULL AS {t}) AS {_ident(c)}" for c, t in missing_round)
+        con.execute(f"CREATE TEMP VIEW rounds AS SELECT *, {additions} FROM {db}.rounds")
 
 
 def connect(db_path, *, read_only: bool = True) -> "duckdb.DuckDBPyConnection":

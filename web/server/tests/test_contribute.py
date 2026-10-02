@@ -170,6 +170,22 @@ def test_chunk_assembly_reorders_and_validates():
     assert appmod._process_accept(payload, appmod._parse_and_validate(payload))["accepted"] == 6
 
 
+def test_hierarchy_fields_pass_the_gate_and_are_stored():
+    """Rows carrying the subagent-hierarchy fields pass the privacy gate and are stored as uploaded."""
+    raw = make_raw_session("claude:real-child", 3, 41000)
+    for r in raw:
+        r.update(thread_kind="subagent", parent_session_id="claude:real-parent",
+                 workflow_id="wf-local-1", agent_role="my-private-reviewer")
+    rows = sanitize(raw, "s")
+    assert rows[0]["thread_kind"] == "subagent" and rows[0]["agent_role"] == "custom_role_1"
+    payload = gz(rows)
+    assert appmod._process_accept(payload, appmod._parse_and_validate(payload))["accepted"] == 3
+    path = appmod._store.uploads_dir / f"{hashlib.sha256(payload).hexdigest()}.jsonl.gz"
+    stored = [json.loads(line) for line in gzip.decompress(path.read_bytes()).decode("utf-8").splitlines() if line]
+    for key in ("thread_kind", "parent_session_id", "workflow_id", "agent_role"):
+        assert [r[key] for r in stored] == [r[key] for r in rows]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

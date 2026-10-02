@@ -14,6 +14,7 @@ import type {
   SessionDetail,
   SessionRoundPoint,
   RoundRaw,
+  SessionTopologyChild,
 } from './types';
 import {
   renderCalendar,
@@ -67,7 +68,9 @@ const dur = (sec: number) =>
   : sec < 3600 ? `${Math.round(sec / 60)} min`
   : `${(sec / 3600).toFixed(1)} h`;
 const fmtDur = (s: number) => (s >= 3600 ? `${(s / 3600).toFixed(1)}h` : `${Math.round(s / 60)}m`);
-const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
+// Also escapes quotes: values land in quoted attributes (such as title) as well as in text.
+const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ESC[c]);
 const rt = () => browserCopy().dashboardRuntime;
 const L = (label: string): string => {
   const labels = rt().labels;
@@ -451,6 +454,8 @@ function renderFacts(): void {
 
 // ---- sessions (filter by provider · sort · search) ----
 let provFilter = 'all';
+// Thread population: all | main | subagent | guardian | unknown. Hidden when the trace predates the fields.
+let popFilter = 'all';
 let sortKey = 'rounds';
 let search = '';
 let selectedId: string | null = null;
@@ -466,6 +471,7 @@ function visibleSessions(): SessionRow[] {
   const q = search.trim().toLowerCase();
   return a.sessions
     .filter((s) => provFilter === 'all' || s.provider === provFilter)
+    .filter((s) => popFilter === 'all' || (popFilter === 'unknown' ? s.threadKind == null : s.threadKind === popFilter))
     .filter((s) => !q || s.sessionId.toLowerCase().includes(q) || s.primaryModel.toLowerCase().includes(q))
     .sort(sorters[sortKey] ?? sorters.rounds);
 }
@@ -490,8 +496,15 @@ function sessionCard(s: SessionRow): HTMLButtonElement {
   if (s.sessionId === selectedId) row.classList.add('active');
   row.innerHTML =
     `<div class="sr-id"><span class="sr-name" title="${esc(s.title ?? s.sessionId)}">${esc(s.title ?? s.sessionId)}</span>` +
-    `<span class="pill ${s.provider === 'codex' ? 'codex' : ''}">${s.provider}</span></div>` +
-    `<div class="sr-meta">${esc(template(rt().sessions.meta, { steps: intComma(s.rounds), duration: localDur(s.durationS), cost: fmtUsd(s.costUsd) }))}</div>`;
+    `<span class="pill ${s.provider === 'codex' ? 'codex' : ''}">${esc(s.provider)}</span></div>` +
+    // the subagent / auto-review pill gets a line of its own, so the title keeps the width it has on main
+    (s.threadKind === 'subagent' || s.threadKind === 'guardian'
+      ? `<div class="sr-kind"><span class="pill sub" title="${esc(s.agentRole ?? '')}">${esc(s.threadKind === 'guardian' ? rt().sessions.guardianPill : rt().sessions.subagentPill)}</span></div>`
+      : '') +
+    `<div class="sr-meta">${esc(template(rt().sessions.meta, { steps: intComma(s.rounds), duration: localDur(s.durationS), cost: fmtUsd(s.costUsd) }))}</div>` +
+    (s.childSessions
+      ? `<div class="sr-meta">${esc(s.childSessions === 1 ? rt().sessions.childCountOne : template(rt().sessions.childCount, { count: intComma(s.childSessions) }))}</div>`
+      : '');
   row.addEventListener('click', () => selectSession(s.sessionId, { scroll: true }));
   return row;
 }
@@ -648,6 +661,7 @@ async function selectSession(id: string, opts?: { scroll?: boolean }): Promise<v
       cost: fmtUsd(s.costUsd),
     });
   roundDetailEl.innerHTML = `<div class="rd-hint">${esc(rt().sessions.loadingTimeline)}</div>`;
+  $('sess-topology').innerHTML = '';
   if (opts?.scroll) document.querySelector('.sess-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const detail = await getDetail(id);
@@ -659,6 +673,7 @@ async function selectSession(id: string, opts?: { scroll?: boolean }): Promise<v
     return;
   }
   renderSessionTimeline($('c-session'), detail, (round, i) => renderRoundDetail(round, i, detail));
+  renderTopology(detail, s);
   roundHint();
   toolsEl.innerHTML = '';
   for (const t of detail.tools) {
@@ -667,6 +682,171 @@ async function selectSession(id: string, opts?: { scroll?: boolean }): Promise<v
     chip.textContent = template(rt().sessions.toolChip, { name: t.name, count: intComma(t.count), p50: t.p50Ms, errors: t.errors });
     toolsEl.appendChild(chip);
   }
+}
+
+// ---- subagent topology of the opened session ----
+// A heavy parent can hold dozens of workflows and hundreds of agents: show the first groups and chips,
+// expand the rest on request, so the timeline below stays in reach.
+const TOPO_CHIPS_PER_GROUP = 24;
+const TOPO_GROUPS_SHOWN = 6;
+let topoShown: {
+  detail: SessionDetail;
+  s: SessionRow;
+  allGroups: boolean;
+  fullGroups: Set<string>;
+  openGroups: Set<string> | null; // groups open before the last expand; null = only the largest group opens
+} | null = null;
+
+function renderTopology(detail: SessionDetail, s: SessionRow): void {
+  if (topoShown?.s.sessionId === s.sessionId) Object.assign(topoShown, { detail, s });
+  else topoShown = { detail, s, allGroups: false, fullGroups: new Set(), openGroups: null };
+  const { allGroups, fullGroups, openGroups } = topoShown;
+  const el = $('sess-topology');
+  const c = rt().sessions;
+  const topo = detail.topology;
+  if (!topo || !topo.known) {
+    // An untagged session in a trace that has tags elsewhere: say so instead of implying main-thread
+    // work. A trace with no tags at all hides the thread filter and shows nothing here (as before).
+    el.innerHTML = s.threadKind == null && hierarchyKnown ? `<div class="tp-line">${esc(c.hierarchyUnknown)}</div>` : '';
+    return;
+  }
+  const parts: string[] = [];
+  if (topo.parentSessionId) {
+    // Offer the link only when the parent is part of this trace (a child can be loaded on its own).
+    const parentHere = a.sessions.some((x) => x.sessionId === topo.parentSessionId);
+    const review = topo.threadKind === 'guardian';
+    const lead = review ? c.topoReviewOf : template(c.topoParent, { role: topo.agentRole ?? c.roleUnknown });
+    parts.push(
+      `<div class="tp-line">${esc(lead)} ` +
+        (parentHere
+          ? `<button class="tp-link" data-goto="${esc(topo.parentSessionId)}">` +
+            `${esc(review ? c.topoOpenReviewed : c.topoOpenParent)}</button>`
+          : esc(review ? c.topoReviewedMissing : c.topoParentMissing)) +
+        `</div>`,
+    );
+  }
+  if (topo.children.length) {
+    const n = topo.children.length;
+    parts.push(`<div class="tp-line">${esc(n === 1 ? c.topoChildrenOne : template(c.topoChildren, { count: intComma(n) }))}</div>`);
+    // Workflow ids are pseudonyms; name workflows by the order they started (children are start-sorted).
+    const ordinal = new Map<string, number>();
+    // Children by workflow (null = launched directly), built once instead of filtering per group.
+    const kidsByWorkflow = new Map<string | null, SessionTopologyChild[]>();
+    for (const k of topo.children) {
+      if (k.workflowId && !ordinal.has(k.workflowId)) ordinal.set(k.workflowId, ordinal.size + 1);
+      const list = kidsByWorkflow.get(k.workflowId);
+      if (list) list.push(k);
+      else kidsByWorkflow.set(k.workflowId, [k]);
+    }
+    const groups = allGroups ? topo.workflows : topo.workflows.slice(0, TOPO_GROUPS_SHOWN);
+    groups.forEach((w, gi) => {
+      const group = w.workflowId ? `wf:${w.workflowId}` : 'direct';
+      const kids = kidsByWorkflow.get(w.workflowId) ?? [];
+      const roles = new Set(kids.map((k) => k.agentRole ?? c.roleUnknown));
+      const sharedRole = roles.size === 1 ? [...roles][0] : null;
+      const counts = {
+        agents: w.agents === 1 ? c.agentsOne : template(c.agentsMany, { count: intComma(w.agents) }),
+        steps: intComma(w.rounds),
+      };
+      const head = w.workflowId
+        ? template(c.topoWorkflow, { n: ordinal.get(w.workflowId) ?? '?', ...counts })
+        : template(c.topoDirect, counts);
+      const role = sharedRole ? ` · ${sharedRole}` : '';
+      const full = fullGroups.has(group);
+      const chips = (full ? kids : kids.slice(0, TOPO_CHIPS_PER_GROUP)).map((k) => {
+        const hit = k.prefixShare == null ? '—' : `${Math.round(k.prefixShare * 100)}%`;
+        const label = sharedRole
+          ? template(c.topoAgentShort, { steps: intComma(k.rounds), hit })
+          : template(c.topoAgent, { role: k.agentRole ?? c.roleUnknown, steps: intComma(k.rounds), hit });
+        return `<button class="tp-chip" data-goto="${esc(k.sessionId)}" title="${esc(k.sessionId)}">${esc(label)}</button>`;
+      });
+      if (!full && kids.length > TOPO_CHIPS_PER_GROUP) {
+        chips.push(
+          `<button class="tp-more" data-expand-group="${esc(group)}">` +
+            `${esc(template(c.topoMore, { count: intComma(kids.length - TOPO_CHIPS_PER_GROUP) }))}</button>`,
+        );
+      }
+      // Largest group open at first (and any group the reader expanded); the rest collapsed to one
+      // summary line. After that, groups stay as the reader left them.
+      const open = full || (openGroups ? openGroups.has(group) : gi === 0);
+      parts.push(
+        `<details class="tp-group" data-group="${esc(group)}"${open ? ' open' : ''}>` +
+          `<summary class="tp-head" title="${esc(w.workflowId ?? '')}">` +
+          `${esc(head)}${esc(role)}</summary><div class="tp-chips">${chips.join('')}</div></details>`,
+      );
+    });
+    if (groups.length < topo.workflows.length) {
+      parts.push(
+        `<button class="tp-more" data-expand-groups="1">` +
+          `${esc(template(c.topoAllWorkflows, { count: intComma(topo.workflows.length) }))}</button>`,
+      );
+    }
+  } else if (topo.threadKind === 'main' && !hierarchyMixed) {
+    // In a trace that also holds untagged sessions, a child may be among them (not linked): say nothing.
+    parts.push(`<div class="tp-line">${esc(c.topoNone)}</div>`);
+  } else if (topo.threadKind === 'guardian' && !topo.parentSessionId) {
+    parts.push(`<div class="tp-line">${esc(c.topoGuardian)}</div>`);
+  }
+  const reviews = topo.reviews ?? [];
+  if (reviews.length) {
+    // Automatic reviews are not delegated work: their own group, collapsed when subagent groups exist.
+    const full = fullGroups.has('reviews');
+    const chips = (full ? reviews : reviews.slice(0, TOPO_CHIPS_PER_GROUP)).map((k) => {
+      const hit = k.prefixShare == null ? '—' : `${Math.round(k.prefixShare * 100)}%`;
+      const label = template(c.topoAgentShort, { steps: intComma(k.rounds), hit });
+      return `<button class="tp-chip" data-goto="${esc(k.sessionId)}" title="${esc(k.sessionId)}">${esc(label)}</button>`;
+    });
+    if (!full && reviews.length > TOPO_CHIPS_PER_GROUP) {
+      chips.push(
+        `<button class="tp-more" data-expand-group="reviews">` +
+          `${esc(template(c.topoMore, { count: intComma(reviews.length - TOPO_CHIPS_PER_GROUP) }))}</button>`,
+      );
+    }
+    const head = template(c.topoReviews, {
+      count: intComma(reviews.length),
+      steps: intComma(reviews.reduce((sum, k) => sum + k.rounds, 0)),
+    });
+    const open = full || (openGroups ? openGroups.has('reviews') : !topo.children.length);
+    parts.push(
+      `<details class="tp-group" data-group="reviews"${open ? ' open' : ''}>` +
+        `<summary class="tp-head">${esc(head)}</summary><div class="tp-chips">${chips.join('')}</div></details>`,
+    );
+  }
+  el.innerHTML = parts.join('');
+}
+
+// Whether the loaded trace carries thread tags at all (decided per payload in configurePopulation).
+let hierarchyKnown: boolean | null = null;
+// Whether the trace mixes tagged and untagged sessions (e.g. new rows appended to an older trace file).
+let hierarchyMixed = false;
+
+function configurePopulation(): void {
+  const seg = $('sess-population');
+  hierarchyKnown = a.sessions.some((s) => s.threadKind != null);
+  const hasGuardian = a.sessions.some((s) => s.threadKind === 'guardian');
+  // A trace mixing tagged and untagged sessions: untagged ones get their own button, not "main".
+  const hasUnknown = hierarchyKnown && a.sessions.some((s) => s.threadKind == null);
+  hierarchyMixed = hasUnknown;
+  // A trace with tagged subagents or automatic reviews can hold thousands of such sessions that would bury
+  // the sessions a person started; open on the main thread (each parent's subagents and reviews are one
+  // click away in its topology).
+  // Only when there is a main thread to open on: a child uploaded on its own would otherwise show nothing.
+  // Not when some sessions are untagged: "main" would hide them, and they are often most of the history.
+  const hasSubagents = a.sessions.some((s) => s.threadKind === 'subagent');
+  const hasMain = a.sessions.some((s) => s.threadKind === 'main');
+  popFilter = (hasSubagents || hasGuardian) && hasMain && !hasUnknown ? 'main' : 'all';
+  // A trace with no thread tags (collected before they existed) has nothing to filter by: the control
+  // is hidden and the list looks as it always did.
+  seg.hidden = !hierarchyKnown;
+  seg.querySelectorAll('button').forEach((b) => {
+    const pop = (b as HTMLElement).dataset.pop;
+    b.classList.toggle('active', pop === popFilter);
+    b.setAttribute('aria-pressed', String(pop === popFilter));
+    if (pop === 'main') (b as HTMLButtonElement).hidden = !hasMain;
+    if (pop === 'subagent') (b as HTMLButtonElement).hidden = !hasSubagents;
+    if (pop === 'guardian') (b as HTMLButtonElement).hidden = !hasGuardian;
+    if (pop === 'unknown') (b as HTMLButtonElement).hidden = !hasUnknown;
+  });
 }
 
 // ---- distributions ----
@@ -690,8 +870,9 @@ function renderDistributions(): void {
 function renderAll(): void {
   disposeAll(); // free every mounted ECharts instance before a fresh pass (mountChart re-inits cleanly)
   detailCache.clear();
+  topoShown = null;
   selectedId = null;
-  // reset the session toolbar to defaults so a new trace starts unfiltered
+  // reset the session toolbar to defaults (the thread filter is set per trace in configurePopulation)
   provFilter = 'all';
   sortKey = 'rounds';
   search = '';
@@ -736,6 +917,42 @@ export function initDashboard(): void {
     clearTimeout(statsRt);
     statsRt = window.setTimeout(packStats, 150);
   });
+  $('sess-population').addEventListener('click', (e) => {
+    if (!loaded) return;
+    const btn = (e.target as HTMLElement).closest('button[data-pop]') as HTMLButtonElement | null;
+    if (!btn) return;
+    popFilter = btn.dataset.pop!;
+    $('sess-population').querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-pressed', String(b === btn));
+    });
+    renderSessionList();
+  });
+  $('sess-topology').addEventListener('click', (e) => {
+    if (!loaded) return;
+    const target = e.target as HTMLElement;
+    const more = target.closest('[data-expand-group], [data-expand-groups]') as HTMLElement | null;
+    if (more && topoShown) {
+      if (more.dataset.expandGroups) topoShown.allGroups = true;
+      if (more.dataset.expandGroup) topoShown.fullGroups.add(more.dataset.expandGroup);
+      // Keep the groups the reader opened or closed; the re-render replaces the whole block.
+      const topo = $('sess-topology');
+      topoShown.openGroups = new Set(
+        [...topo.querySelectorAll<HTMLElement>('details.tp-group[open]')].map((d) => d.dataset.group ?? ''),
+      );
+      renderTopology(topoShown.detail, topoShown.s);
+      // The clicked button is gone after the re-render: move focus to the first newly shown item.
+      const next = more.dataset.expandGroup
+        ? topo.querySelectorAll<HTMLElement>(
+            `details.tp-group[data-group="${CSS.escape(more.dataset.expandGroup)}"] .tp-chip`,
+          )[TOPO_CHIPS_PER_GROUP]
+        : topo.querySelectorAll<HTMLElement>('details.tp-group > summary')[TOPO_GROUPS_SHOWN];
+      next?.focus();
+      return;
+    }
+    const btn = target.closest('[data-goto]') as HTMLElement | null;
+    if (btn?.dataset.goto) void selectSession(btn.dataset.goto, { scroll: true });
+  });
   $('sess-provider').addEventListener('click', (e) => {
     if (!loaded) return;
     const btn = (e.target as HTMLElement).closest('button[data-prov]') as HTMLElement | null;
@@ -763,5 +980,6 @@ export function loadDashboard(payload: AnalyticsPayload, src: DashboardSource | 
   a = payload;
   source = src;
   loaded = true;
+  configurePopulation();
   renderAll();
 }

@@ -60,7 +60,8 @@ def stable_round_identity(record: dict[str, Any]) -> RoundIdentity:
             "round is missing non-empty stable identity field(s): "
             + ", ".join(invalid_fields)
         )
-    return provider, session_id, round_id
+    # Older Windows runs wrote subagent session ids with backslashes; they name the same session.
+    return provider, session_id.replace("\\", "/"), round_id
 
 
 def iter_jsonl(path: Path) -> Iterator[tuple[int, dict[str, Any]]]:

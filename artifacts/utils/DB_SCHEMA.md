@@ -42,6 +42,10 @@ never on `round_id`/`trace_key`. To order rounds within a session use
 | `project` | VARCHAR | |
 | `session_id` | VARCHAR | non-unique across `(project, session_file)` |
 | `session_file` | VARCHAR | |
+| `thread_kind` | VARCHAR | `main` / `subagent` / `guardian` (Codex auto-review); null = unknown (older trace), never "main". The four hierarchy columns are pinned to VARCHAR when present and exposed as NULL on older DBs by `connect()` |
+| `parent_session_id` | VARCHAR | parent's `session_id` for a delegated child; for a Codex automatic review (`guardian`), the session it reviewed; equals `session_id` only for Claude inline sidechain rounds (round-level, not a child session) |
+| `workflow_id` | VARCHAR | Claude workflow that launched the child; null otherwise (always null for Codex) |
+| `agent_role` | VARCHAR | Claude `attributionAgent` / Codex `thread_spawn.agent_role` / `guardian` / `review` / `compact`; sanitized: built-ins kept, others `custom_role_N` |
 | `round_index` | BIGINT | position within the session (not unique) |
 | `round_id` | VARCHAR | source id — **non-unique**, do not key on it |
 | `model` | VARCHAR | |
@@ -62,6 +66,11 @@ never on `round_id`/`trace_key`. To order rounds within a session use
 | `first_input_event_type` | VARCHAR | |
 | `home`, `user`, `store` | VARCHAR | provenance |
 | `trace_key` | VARCHAR | source key — **non-unique** |
+
+The four hierarchy columns may be absent (traces predating them); a DB built by an older
+`trace_db.py` may also hold them untyped. Readers go through
+`web_analytics/rounds.py::hierarchy_select()`, which casts each to its type and substitutes a typed
+NULL for a missing column; sessions and topology read only through it.
 
 ### `tool_calls` — one row per tool call (FK `round_pk`)
 

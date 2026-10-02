@@ -273,11 +273,23 @@ def _claude_project_and_key(path: Path) -> tuple[str, str]:
     """
     parts = path.parts
     if "projects" in parts:
-        idx = parts.index("projects")
+        # Prefer Claude's own `.claude/projects/`: an archive of a home directory can hold other
+        # `projects/` folders above it, which would shift the project name and every session key.
+        idx = next(
+            (i for i, p in enumerate(parts) if p == "projects" and i > 0 and parts[i - 1] == ".claude"),
+            parts.index("projects"),
+        )
         if idx + 1 < len(parts):
             project = parts[idx + 1]
             rel = Path(*parts[idx + 2:]) if idx + 2 < len(parts) else Path(path.name)
-            return project, str(rel.with_suffix(""))
+            return project, rel.with_suffix("").as_posix()
+    if "subagents" in parts[:-1]:
+        # A child transcript without a `projects/` segment: key it from its session directory, as the
+        # collector would (<session>/subagents/[workflows/<wf>/]agent-<id>), so the workflow survives.
+        idx = parts.index("subagents")
+        if idx >= 1:
+            project = parts[idx - 2] if idx >= 2 else "project"
+            return project, Path(*parts[idx - 1:]).with_suffix("").as_posix()
     return path.parent.name or "project", path.stem
 
 
@@ -297,6 +309,12 @@ def _extract_one_file(path: Path):
     """
     rs: dict[str, Any] = {}
     ts: dict[str, str] = {}
+    parts = path.parts
+    in_workflow = "subagents" in parts and "workflows" in parts[parts.index("subagents") + 1:]
+    if path.name == "journal.jsonl" and in_workflow:
+        # A Claude Code workflow's run log (started/result records, no model usage) sits next to the
+        # workflow's agent transcripts. Nothing to extract and nothing wrong: skip it quietly.
+        return [], {}, {}, None, "skip"
     try:
         kind = classify_records(_iter_json_records(path.read_bytes(), limit=200))
     except Exception as exc:  # unreadable member — skip, keep going

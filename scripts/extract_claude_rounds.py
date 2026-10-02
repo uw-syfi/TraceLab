@@ -189,6 +189,9 @@ def load_existing_round_keys(path: Path) -> set[str]:
                 keys.add(row["trace_key"])
             elif row.get("session_id") and row.get("round_id"):
                 keys.add(round_key(row))
+    # Session keys are POSIX now; rows appended by an older Windows run carry backslashes in a
+    # subagent's session_id. Match them too, so re-collecting into that file does not duplicate them.
+    keys |= {k.replace("\\", "/") for k in keys if "\\" in k}
     return keys
 
 
@@ -225,6 +228,34 @@ def write_rounds_jsonl(
     }
 
 
+# Subagent hierarchy. Claude Code writes delegated work as separate transcripts under the parent's
+# directory — `<session>/subagents/agent-<id>.jsonl`, or
+# `<session>/subagents/workflows/<wf>/agent-<id>.jsonl` for agents launched by a workflow — and
+# marks their records `isSidechain: true`. Because the parent's own `session_id` is
+# `claude:<session>`, the parent of a child file is known from its path alone; the raw `sessionId`
+# in the child's records names the same parent and is only used as a cross-check.
+def claude_hierarchy_from_key(session_key: str) -> dict[str, Any]:
+    """Hierarchy fields implied by a session file's path relative to its project directory."""
+    parts = [p for p in session_key.replace("\\", "/").split("/") if p]
+    subagents = parts.index("subagents") if "subagents" in parts else -1
+    if subagents < 1 or subagents == len(parts) - 1:
+        return {"thread_kind": "main", "parent_session_id": None, "workflow_id": None}
+    workflow_id = None
+    if "workflows" in parts[subagents + 1:]:
+        index = parts.index("workflows", subagents + 1)
+        if index + 1 < len(parts) - 1:
+            workflow_id = parts[index + 1]
+    # The child's own session_id (its file path) already names the agent, so no separate agent id is
+    # emitted. Claude Code does not nest subagent transcripts: no path holds two `subagents` segments.
+    # The parent is the key up to the session directory that holds `subagents/`: every entry point
+    # builds the main transcript's key with the same prefix, so the link matches its session_id.
+    return {
+        "thread_kind": "subagent",
+        "parent_session_id": "claude:" + "/".join(parts[:subagents]),
+        "workflow_id": workflow_id,
+    }
+
+
 def make_round(
     *,
     project: str,
@@ -239,6 +270,12 @@ def make_round(
         "project": project,
         "session_id": session_id,
         "session_file": str(session_file),
+        # Hierarchy fields are filled once per session file, after extraction (see
+        # extract_session_with_key); defaults describe an ordinary main-thread round.
+        "thread_kind": "main",
+        "parent_session_id": None,
+        "workflow_id": None,
+        "agent_role": None,
         "round_index": None,
         "round_id": msg_id,
         "model": msg.get("model"),
@@ -369,6 +406,13 @@ def extract_session_with_key(
     tool_by_id: dict[str, dict[str, Any]] = {}
     pending_input_events: list[dict[str, Any]] = []
     session_id = f"claude:{session_key}"
+    # Hierarchy signals seen in the records themselves (see claude_hierarchy_from_key).
+    record_role: str | None = None
+    # attributionAgent of each round's own assistant record: an older transcript can hold several
+    # inline sidechains of different roles, so a file-wide value would mislabel all but the first.
+    role_by_msg_id: dict[str, str] = {}
+    record_session_id: str | None = None
+    sidechain_msg_ids: set[str] = set()
     # Opt-in raw capture state (parallel to the round-building state above; never merged into it).
     raw_by_msg_id: dict[str, dict[str, Any]] = {}
     raw_tool_by_id: dict[str, dict[str, Any]] = {}
@@ -384,6 +428,10 @@ def extract_session_with_key(
                 continue
             if not isinstance(record, dict):
                 continue
+            if record_role is None and isinstance(record.get("attributionAgent"), str):
+                record_role = record["attributionAgent"]
+            if record_session_id is None and isinstance(record.get("sessionId"), str):
+                record_session_id = record["sessionId"]
             msg = record.get("message")
             if not isinstance(msg, dict):
                 # Title records carry no `message`. They're local-only (titles are user text), so
@@ -425,6 +473,10 @@ def extract_session_with_key(
                     pending_input_events = []
                     by_msg_id[msg_id] = round_obj
                     rounds.append(round_obj)
+                    if record.get("isSidechain") is True:
+                        sidechain_msg_ids.add(msg_id)
+                    if isinstance(record.get("attributionAgent"), str):
+                        role_by_msg_id[msg_id] = record["attributionAgent"]
                     if raw_sink is not None:
                         # This round consumes whatever input text accrued since the last round.
                         kinds = {item["kind"] for item in pending_raw_in}
@@ -559,8 +611,33 @@ def extract_session_with_key(
                     if raw_sink is not None:
                         pending_raw_in.append({"kind": "user", "text": _raw_text(content)})
 
+    hierarchy = claude_hierarchy_from_key(session_key)
+    key_parts = session_key.replace("\\", "/").split("/")
+    own_root = key_parts[-1]
+    if (
+        hierarchy["thread_kind"] == "main"
+        and rounds
+        and all(r["round_id"] in sidechain_msg_ids for r in rounds)
+        and record_session_id
+        and record_session_id != own_root
+    ):
+        # A child transcript read without its directory (e.g. a single uploaded file): every round is
+        # a sidechain and the records name a different session, which is therefore the parent.
+        parent_key = "/".join(key_parts[:-1] + [record_session_id])
+        hierarchy.update(thread_kind="subagent", parent_session_id=f"claude:{parent_key}")
     for index, round_obj in enumerate(rounds):
         round_obj["round_index"] = index
+        round_obj.update(hierarchy)
+        if hierarchy["thread_kind"] == "main" and round_obj["round_id"] in sidechain_msg_ids:
+            # Older clients wrote sidechain records inline in the main transcript. The round is
+            # subagent work whose parent is this very session; session-level views treat such a
+            # self-reference as round-level detail, never as a child session.
+            round_obj.update(thread_kind="subagent", parent_session_id=session_id)
+        if round_obj["thread_kind"] == "subagent":
+            # The round's own role first; a child file is one agent, so its file-wide role fills gaps.
+            round_obj["agent_role"] = role_by_msg_id.get(round_obj["round_id"]) or (
+                record_role if hierarchy["thread_kind"] == "subagent" else None
+            )
         apply_input_event_summary(round_obj)
         round_obj.pop("_usage_score", None)
         for tool_index, tool in enumerate(round_obj["tools"]):
@@ -606,7 +683,7 @@ def main() -> int:
 
     all_rounds: list[dict[str, Any]] = []
     for session_file in session_files:
-        session_key = str(session_file.relative_to(project_dir).with_suffix(""))
+        session_key = session_file.relative_to(project_dir).with_suffix("").as_posix()
         all_rounds.extend(extract_session_with_key(session_file, project, session_key))
 
     write_stats = write_rounds_jsonl(args.output, all_rounds, append_dedup=args.append_dedup)

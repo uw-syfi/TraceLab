@@ -10,6 +10,12 @@ the session's most common values (sessions are usually single-provider, but a fe
 without re-scanning every timing event. ``title`` stays ``None`` here; conversation titles are a
 LOCAL-only ingest concern (task #17) layered on top, never part of this aggregate.
 
+Subagent hierarchy: every session carries its ``threadKind`` (``main`` / ``subagent`` / ``guardian``),
+its ``agentRole`` when delegated, and ``childSessions``. On a trace collected before these columns
+existed all of them are ``None``: the hierarchy is unknown, which is not the same as "main thread".
+``build_session_detail`` adds the opened session's ``topology`` (its parent, its children, the
+workflows that launched them, and the automatic reviews of it).
+
 ``build_session_detail`` is the on-demand per-round timeline for ONE session (fetched lazily over the
 same QA RPC when a session is opened). It scopes every scan to one ``session_id`` so it stays cheap
 even on a 50k-round trace, and reuses the overview aggregator's generation-time definition
@@ -23,7 +29,7 @@ from collections import Counter
 from typing import Any, Optional
 
 from pricing import price_for, round_cost
-from rounds import RoundRow
+from rounds import RoundRow, _has_round_column, hierarchy_select
 
 # Timing-event classes, matching overview_summary's INPUT/MODEL_OUTPUT sets, so per-round generation
 # time here equals the overview's ``input_to_last_output_span_seconds``.
@@ -44,6 +50,31 @@ def _session_errors(con) -> dict[str, int]:
     return out
 
 
+def _most_common(values) -> Any:
+    counts = Counter(v for v in values if v is not None)
+    return counts.most_common(1)[0][0] if counts else None
+
+
+def session_kind(kinds, self_referenced: bool = False) -> Optional[str]:
+    """One kind per session, by rule rather than majority: a session holding any main-thread round is a
+    main session (older clients wrote subagent work inline in it); otherwise guardian, then subagent.
+    ``self_referenced`` (a round names its own session as parent) marks inline sidechain rounds, which
+    only a main transcript holds, so such a session is main even when every round is a sidechain.
+    None when no round carries a kind (a trace collected before the field existed)."""
+    present = {k for k in kinds if k is not None}
+    if self_referenced and present:
+        return "main"
+    for kind in ("main", "guardian", "subagent"):
+        if kind in present:
+            return kind
+    return None
+
+
+def session_parent(session_id: str, parents) -> Optional[str]:
+    """The session's parent, ignoring self-references (an inline sidechain names its own session)."""
+    return _most_common(p for p in parents if p is not None and p != session_id)
+
+
 def build_sessions(con, rows: list[RoundRow]) -> list[dict[str, Any]]:
     errors_by_session = _session_errors(con)
 
@@ -52,6 +83,21 @@ def build_sessions(con, rows: list[RoundRow]) -> list[dict[str, Any]]:
         sid = r["session_id"]
         if sid:
             groups.setdefault(sid, []).append(r)
+
+    parent_of = {
+        sid: session_parent(sid, (r["parent_session_id"] for r in rs)) for sid, rs in groups.items()
+    }
+    kind_of = {
+        sid: session_kind(
+            (r["thread_kind"] for r in rs), any(r["parent_session_id"] == sid for r in rs)
+        )
+        for sid, rs in groups.items()
+    }
+    # Subagent children only: an automatic review names the session it reviewed, but it is not
+    # delegated work (the session detail lists reviews separately).
+    children_of: Counter[str] = Counter(
+        p for sid, p in parent_of.items() if p is not None and kind_of[sid] != "guardian"
+    )
 
     out: list[dict[str, Any]] = []
     for sid, rs in groups.items():
@@ -95,6 +141,14 @@ def build_sessions(con, rows: list[RoundRow]) -> list[dict[str, Any]]:
             "costUsd": cost_usd,
             "toolCalls": tool_calls,
             "errors": errors_by_session.get(sid, 0),
+            "threadKind": (kind := kind_of[sid]),
+            # Role describes a delegated session (card label); a main session carries none. Parent and
+            # workflow are served per session by build_session_topology, where the UI reads them.
+            "agentRole": (
+                _most_common(r["agent_role"] for r in rs) if kind in ("subagent", "guardian") else None
+            ),
+            # Per session, not per trace: an untagged session in a mixed trace is unknown, not 0.
+            "childSessions": children_of.get(sid, 0) if kind is not None else None,
         })
 
     out.sort(key=lambda s: s["rounds"], reverse=True)
@@ -220,4 +274,93 @@ def build_session_detail(con, session_id: str) -> dict[str, Any]:
     ]
     tools_stats.sort(key=lambda x: x["count"], reverse=True)
 
-    return {"sessionId": session_id, "rounds": rounds_out, "tools": tools_stats}
+    return {
+        "sessionId": session_id,
+        "rounds": rounds_out,
+        "tools": tools_stats,
+        "topology": build_session_topology(con, session_id),
+    }
+
+
+def build_session_topology(con, session_id: str) -> dict[str, Any]:
+    """Where one session sits in the subagent tree: its parent, its direct children, the workflows
+    that launched them, and the automatic reviews of it (Codex ``guardian`` sessions naming it as
+    the reviewed session; kept apart from children, which are delegated work). Reads the hierarchy
+    through ``hierarchy_select`` so a trace carrying only some of the columns degrades to NULLs
+    instead of failing. ``known`` is False when this session's rounds carry no thread kind (an
+    older trace, or an older part of a mixed one)."""
+    empty = {"known": False, "threadKind": None, "parentSessionId": None, "agentRole": None,
+             "workflowId": None, "children": [], "workflows": [], "reviews": []}
+    if not _has_round_column(con, "thread_kind"):
+        return empty
+    hierarchy = f"""
+        WITH h AS (
+            SELECT r.round_pk, r.session_id, r.prefix_tokens, r.newly_append_tokens, r.output_tokens,
+                   {hierarchy_select(con)}
+            FROM rounds r
+        )"""
+    own = con.execute(
+        f"{hierarchy} SELECT thread_kind, parent_session_id, workflow_id, agent_role"
+        " FROM h WHERE session_id = ?",
+        [session_id],
+    ).fetchall()
+    kind = session_kind((row[0] for row in own), any(row[1] == session_id for row in own))
+    if kind is None:
+        return empty
+
+    # Direct children: other sessions whose rounds name this session as parent (self-references are
+    # inline sidechain rounds of this same session, not children).
+    children: list[dict[str, Any]] = []
+    reviews: list[dict[str, Any]] = []
+    rows = con.execute(
+        f"""{hierarchy},
+        first_ev AS (
+            SELECT round_pk, CAST(epoch_us(timestamp) AS BIGINT) AS ts_us
+            FROM timing_events WHERE event_index = 1
+        )
+        SELECT h.session_id, mode(h.agent_role), mode(h.workflow_id),
+               bool_and(coalesce(h.thread_kind = 'guardian', false)),
+               count(*), sum(h.prefix_tokens), sum(h.newly_append_tokens), sum(h.output_tokens),
+               min(f.ts_us), max(f.ts_us)
+        FROM h LEFT JOIN first_ev f USING (round_pk)
+        WHERE h.parent_session_id = ? AND h.session_id <> ?
+        GROUP BY h.session_id
+        """,
+        [session_id, session_id],
+    ).fetchall()
+    for (child_id, role, workflow, is_review, n, prefix, append, output, first_us, last_us) in rows:
+        prefix, append = int(prefix or 0), int(append or 0)
+        (reviews if is_review else children).append({
+            "sessionId": child_id,
+            "agentRole": role,
+            "workflowId": workflow,
+            "rounds": int(n),
+            "inputTokens": prefix + append,
+            "outputTokens": int(output or 0),
+            "prefixShare": prefix / (prefix + append) if prefix + append else None,
+            "firstTsUs": int(first_us) if first_us is not None else 0,
+            "lastTsUs": int(last_us) if last_us is not None else 0,
+        })
+    children.sort(key=lambda c: (c["firstTsUs"], c["sessionId"]))
+    reviews.sort(key=lambda c: (c["firstTsUs"], c["sessionId"]))
+
+    by_workflow: dict[Optional[str], dict[str, Any]] = {}
+    for c in children:
+        w = by_workflow.setdefault(
+            c["workflowId"], {"workflowId": c["workflowId"], "agents": 0, "rounds": 0}
+        )
+        w["agents"] += 1
+        w["rounds"] += c["rounds"]
+    workflows = sorted(by_workflow.values(), key=lambda w: w["rounds"], reverse=True)
+
+    delegated = kind in ("subagent", "guardian")
+    return {
+        "known": True,
+        "threadKind": kind,
+        "parentSessionId": session_parent(session_id, (row[1] for row in own)),
+        "agentRole": _most_common(row[3] for row in own) if delegated else None,
+        "workflowId": _most_common(row[2] for row in own) if kind == "subagent" else None,
+        "children": children,
+        "workflows": workflows,
+        "reviews": reviews,
+    }

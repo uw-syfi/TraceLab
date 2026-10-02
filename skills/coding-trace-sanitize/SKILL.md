@@ -69,6 +69,7 @@ uv run python validators/run_all.py \
 
 - Replaces `project`, `session_id`, `turn_id`, `round_id`, `tool_call_id`, and `trace_key` with stable pseudorandom alternatives while preserving relationships inside the output.
 - Replaces `user`, `user_name`, and `username` values with stable pseudonyms while preserving distinct-user counts and grouping.
+- Subagent hierarchy: maps `parent_session_id` through the same session map, so a child still points at its parent's pseudonym within one output (one seed); replaces `workflow_id` with a stable random pseudonym (`wf_` and 16 hex digits, or a random id of the same shape when the original is a UUID, a long hex string, `msg_` / `toolu_` followed by hex, or `call_` followed by letters and digits); keeps built-in `agent_role` names and renames every other role to `custom_role_N`; keeps `thread_kind` only if it is `main`, `subagent` or `guardian`.
 - Removes sensitive local context keys such as `cwd`, `home`, `host`, `hostname`, `file_path`, `filepath`, `repo_url`, `repository_url`, `session_file`, and `workdir`.
 - Removes keys ending in path-like forms such as `_path`, `_filepath`, or `filepath`.
 - Drops `tools[].input` entirely.

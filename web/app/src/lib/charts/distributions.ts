@@ -125,7 +125,7 @@ function scatter(s: ScatterSpec, c: ThemeColors, name: string): echarts.EChartsC
       ...(baseOption(c).tooltip as object),
       trigger: 'item',
       formatter: (p: any) =>
-        `${p.marker} ${p.seriesName}<br>${browserCopy().charts.distributions.prefix} ${compactNum(p.value[0])} · ${browserCopy().charts.distributions.append} ${compactNum(p.value[1])}`,
+        `${p.marker} ${echarts.format.encodeHTML(p.seriesName)}<br>${browserCopy().charts.distributions.prefix} ${compactNum(p.value[0])} · ${browserCopy().charts.distributions.append} ${compactNum(p.value[1])}`,
     },
     xAxis: { type: s.xLog ? 'log' : 'value', ...axis(c, chartText(s.xLabel)), axisLabel: { color: c.muted, fontFamily: c.font, fontSize: c.fsTick, formatter: compactNum } },
     yAxis: { type: s.yLog ? 'log' : 'value', ...axis(c), axisLabel: { color: c.muted, fontFamily: c.font, fontSize: c.fsTick, formatter: compactNum } },
