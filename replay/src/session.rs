@@ -3,12 +3,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Semaphore};
 
+use crate::backend::{GenerationClient, StepOutcome};
 use crate::cli::Args;
 use crate::record::StepLog;
 use crate::tokens::{PromptBuilder, TokenProvider};
 use crate::trace::SessionStep;
 use crate::util::{prefix_hit_rate, unix_seconds_now};
-use crate::backend::{GenerationClient, StepOutcome};
 
 /// Shared, immutable-per-run state handed to every session task.
 pub(crate) struct AppState {
@@ -95,7 +95,7 @@ pub(crate) async fn run_session(
         let _ = log_tx.send(log).await;
 
         state.stats.record_result(success);
-        if !success && state.args.stop_session_on_error {
+        if !success {
             break;
         }
 
