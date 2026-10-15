@@ -301,6 +301,26 @@ def _fill_raw_result(
         raw_tool["error"] = bool(is_error)
 
 
+def _drop_tool_results(
+    items: list[dict[str, Any]],
+    start: int,
+    kind_key: str,
+    kind: str,
+    removed: list[dict[str, Any]] | None = None,
+) -> int:
+    """Remove tool results from ``items[start:]`` in place; ``items[:start]`` is known to hold none.
+    The removed items are appended, in order, to ``removed`` when it is given.
+
+    Returns the new length: from here on the whole list is known to hold none, so the next call only
+    scans what was appended since (a rollout with many turns stays linear).
+    """
+    tail = items[start:]
+    items[start:] = [item for item in tail if item.get(kind_key) != kind]
+    if removed is not None:
+        removed.extend(item for item in tail if item.get(kind_key) == kind)
+    return len(items)
+
+
 def extract_codex_session(
     session_file: Path,
     *,
@@ -328,8 +348,33 @@ def extract_codex_session(
     session_round_counts: Counter[str] = Counter()
 
     pending_input_events: list[dict[str, Any]] = []
+    # Codex can write a call's token_count AFTER the tool it requested has run. A tool result that
+    # arrives while the current segment already holds model output belongs to the NEXT round, so it
+    # waits here and becomes that round's input once the current round is closed. When the
+    # token_count came first (the order varies per call), the segment is empty and results go
+    # straight to pending_input_events. Only in rollouts that record turn ids: without them a new
+    # request cannot be told apart from a message sent mid-turn, and older CLIs write these records
+    # in a different order, so those rollouts are extracted exactly as before.
+    next_input_events: list[dict[str, Any]] = []
+    # Inputs seen since the last emitted round, wherever they were routed (or later dropped at a
+    # turn boundary). The accounting-replay guard at token_count uses it, so round identity stays as
+    # before.
+    inputs_since_close = 0
+    # How much of each waiting-input list is known to hold no tool result (see _drop_tool_results).
+    clean_pending = clean_next = clean_raw_pending = clean_raw_next = 0
+    # How many results at the head of pending_input_events were carried over from the last round.
+    carried = 0
+    # Results dropped at a turn change that arrived since the last round (not carried over from it).
+    # A round with neither model output nor a prompt gets them back (see token_count).
+    dropped_since_close: list[dict[str, Any]] = []
+    raw_dropped_since_close: list[dict[str, str]] = []
+
     segment_timing_events: list[dict[str, Any]] = []
     segment_tools: list[dict[str, Any]] = []
+
+    def late_result() -> bool:
+        return bool(segment_timing_events) and current_turn_id is not None
+
     tool_by_id: dict[str, dict[str, Any]] = {}
     # Runner process-session id -> originating exec_command tool. Tool dicts remain shared with
     # already-built round objects, so a terminal write_stdin can back-fill its root call later.
@@ -338,6 +383,7 @@ def extract_codex_session(
     # raw_tool_by_id is NOT reset per round (mirrors tool_by_id) so a tool whose output lands in a
     # later segment still back-fills the same dict referenced by the already-emitted raw entry.
     raw_pending_in: list[dict[str, str]] = []
+    raw_next_in: list[dict[str, str]] = []
     raw_segment_out: list[str] = []
     raw_segment_tools: list[dict[str, Any]] = []
     raw_tool_by_id: dict[str, dict[str, Any]] = {}
@@ -390,6 +436,38 @@ def extract_codex_session(
                 current_cwd = payload.get("cwd") or current_cwd
                 continue
 
+            new_turn_id = (
+                payload.get("turn_id")
+                if top_type == "turn_context" or payload_type == "task_started"
+                else None
+            )
+            if new_turn_id and current_turn_id and new_turn_id != current_turn_id:
+                # The turn changes: a new turn starts (or, in a rollout whose turns interleave, another
+                # one resumes). Tool results still waiting to be an input came after the previous
+                # turn's last model call that has its own token_count (a later call without one, such
+                # as an aborted call, merges into the next round, so a result it consumed is dropped
+                # here too). They are context from here on, but they are not the input that triggers
+                # the next turn's prompt round, so they are not counted as inputs. The tool records
+                # keep their results and timing.
+                removed: list[dict[str, Any]] = []
+                clean_pending = _drop_tool_results(
+                    pending_input_events, clean_pending, "event_type", "tool_result", removed
+                )
+                # carried results lead the list, and none was dropped before them (carried > 0 means
+                # no drop since the last round, so clean_pending is 0)
+                dropped_since_close += removed[carried:]
+                clean_next = _drop_tool_results(
+                    next_input_events, clean_next, "event_type", "tool_result"
+                )
+                if raw_sink is not None:
+                    raw_removed: list[dict[str, str]] = []
+                    clean_raw_pending = _drop_tool_results(
+                        raw_pending_in, clean_raw_pending, "kind", "tool", raw_removed
+                    )
+                    raw_dropped_since_close += raw_removed[carried:]
+                    clean_raw_next = _drop_tool_results(raw_next_in, clean_raw_next, "kind", "tool")
+                carried = 0
+
             if top_type == "turn_context":
                 current_turn_id = payload.get("turn_id") or current_turn_id
                 current_model = payload.get("model") or current_model
@@ -425,6 +503,22 @@ def extract_codex_session(
                         if isinstance(part, dict) and isinstance(part.get("text"), str)
                     )
                 )
+                if (
+                    current_turn_id is not None
+                    and not segment_timing_events
+                    and not turn_round_counts[current_turn_id]
+                ):
+                    # A prompt before the turn's first model output: a tool result still waiting
+                    # answers a call of an earlier turn (it arrived after that turn began to end),
+                    # so it does not trigger this request either.
+                    clean_pending = _drop_tool_results(
+                        pending_input_events, clean_pending, "event_type", "tool_result"
+                    )
+                    if raw_sink is not None:
+                        clean_raw_pending = _drop_tool_results(
+                            raw_pending_in, clean_raw_pending, "kind", "tool"
+                        )
+                    carried = 0
                 append_timing_event(
                     pending_input_events,
                     "user_message",
@@ -432,6 +526,7 @@ def extract_codex_session(
                     "event_msg.user_message" if user_item is None else "event_msg.item_completed",
                     content_chars=content_chars(message),
                 )
+                inputs_since_close += 1
                 if raw_sink is not None:
                     raw_pending_in.append({"kind": "user", "text": _raw_text(message)})
                 continue
@@ -547,7 +642,7 @@ def extract_codex_session(
                         observation_source="function_call_output",
                     ):
                         append_timing_event(
-                            pending_input_events,
+                            next_input_events if late_result() else pending_input_events,
                             "tool_result",
                             timestamp,
                             "response_item.function_call_output",
@@ -555,9 +650,12 @@ def extract_codex_session(
                             result_chars=tool.get("result_chars"),
                             is_error=tool.get("is_error"),
                         )
+                        inputs_since_close += 1
                         if raw_sink is not None:
                             _fill_raw_result(raw_tool_by_id, call_id, output, tool.get("is_error"))
-                            raw_pending_in.append({"kind": "tool", "text": _raw_text(output)})
+                            (raw_next_in if late_result() else raw_pending_in).append(
+                                {"kind": "tool", "text": _raw_text(output)}
+                            )
                 continue
 
             if top_type == "response_item" and payload_type == "custom_tool_call_output":
@@ -575,7 +673,7 @@ def extract_codex_session(
                         observation_source="custom_tool_call_output",
                     ):
                         append_timing_event(
-                            pending_input_events,
+                            next_input_events if late_result() else pending_input_events,
                             "tool_result",
                             timestamp,
                             "response_item.custom_tool_call_output",
@@ -583,9 +681,12 @@ def extract_codex_session(
                             result_chars=tool.get("result_chars"),
                             is_error=tool.get("is_error"),
                         )
+                        inputs_since_close += 1
                         if raw_sink is not None:
                             _fill_raw_result(raw_tool_by_id, call_id, output, tool.get("is_error"))
-                            raw_pending_in.append({"kind": "tool", "text": _raw_text(output)})
+                            (raw_next_in if late_result() else raw_pending_in).append(
+                                {"kind": "tool", "text": _raw_text(output)}
+                            )
                 continue
 
             if top_type == "event_msg" and payload_type == "exec_command_end":
@@ -605,7 +706,7 @@ def extract_codex_session(
                         observation_source="exec_command_end",
                     ):
                         append_timing_event(
-                            pending_input_events,
+                            next_input_events if late_result() else pending_input_events,
                             "tool_result",
                             timestamp,
                             "event_msg.exec_command_end",
@@ -613,9 +714,12 @@ def extract_codex_session(
                             result_chars=tool.get("result_chars"),
                             is_error=tool.get("is_error"),
                         )
+                        inputs_since_close += 1
                         if raw_sink is not None:
                             _fill_raw_result(raw_tool_by_id, call_id, output, tool.get("is_error"))
-                            raw_pending_in.append({"kind": "tool", "text": _raw_text(output)})
+                            (raw_next_in if late_result() else raw_pending_in).append(
+                                {"kind": "tool", "text": _raw_text(output)}
+                            )
                 continue
 
             if top_type == "event_msg" and payload_type == "patch_apply_end":
@@ -634,7 +738,7 @@ def extract_codex_session(
                         observation_source="patch_apply_end",
                     ):
                         append_timing_event(
-                            pending_input_events,
+                            next_input_events if late_result() else pending_input_events,
                             "tool_result",
                             timestamp,
                             "event_msg.patch_apply_end",
@@ -642,9 +746,12 @@ def extract_codex_session(
                             result_chars=tool.get("result_chars"),
                             is_error=tool.get("is_error"),
                         )
+                        inputs_since_close += 1
                         if raw_sink is not None:
                             _fill_raw_result(raw_tool_by_id, call_id, output, tool.get("is_error"))
-                            raw_pending_in.append({"kind": "tool", "text": _raw_text(output)})
+                            (raw_next_in if late_result() else raw_pending_in).append(
+                                {"kind": "tool", "text": _raw_text(output)}
+                            )
                 continue
 
             if top_type == "event_msg" and payload_type == "token_count":
@@ -662,18 +769,25 @@ def extract_codex_session(
                     # invocations. Discard their accumulated replay state so it
                     # cannot leak into the first live child round.
                     pending_input_events = []
+                    next_input_events = []
+                    clean_pending = clean_next = clean_raw_pending = clean_raw_next = 0
+                    carried = 0
+                    dropped_since_close = []
+                    raw_dropped_since_close = []
+                    inputs_since_close = 0
                     segment_timing_events = []
                     segment_tools = []
                     tool_by_id.clear()
                     process_roots.clear()
                     if raw_sink is not None:
                         raw_pending_in = []
+                        raw_next_in = []
                         raw_segment_out = []
                         raw_segment_tools = []
                         raw_tool_by_id.clear()
                     continue
                 if (
-                    not pending_input_events
+                    not inputs_since_close
                     and not segment_timing_events
                     and not segment_tools
                 ):
@@ -709,6 +823,19 @@ def extract_codex_session(
                 session_id = f"codex:{round_session_meta_id}"
                 round_index = session_round_counts[session_id]
                 session_round_counts[session_id] += 1
+                if (
+                    dropped_since_close
+                    and not segment_timing_events
+                    and not segment_tools
+                    and all(e["event_type"] != "user_message" for e in pending_input_events)
+                ):
+                    # A round with neither model output nor a prompt: the results dropped at the turn
+                    # change are what triggered it, so it keeps them, as before this change (without
+                    # them its only event would be the token_count, and merge_round_traces.py removes
+                    # such a row as an accounting replay).
+                    pending_input_events = [*dropped_since_close, *pending_input_events]
+                    if raw_sink is not None:
+                        raw_pending_in = [*raw_dropped_since_close, *raw_pending_in]
                 timing_events = [
                     *pending_input_events,
                     *segment_timing_events,
@@ -760,11 +887,20 @@ def extract_codex_session(
                             "tools": list(raw_segment_tools),
                         },
                     )
-                    raw_pending_in = []
+                    raw_pending_in = raw_next_in
+                    raw_next_in = []
+                    clean_raw_pending, clean_raw_next = clean_raw_next, 0
                     raw_segment_out = []
                     raw_segment_tools = []
 
-                pending_input_events = []
+                # tool results that arrived after this round's output are the next round's input
+                pending_input_events = next_input_events
+                next_input_events = []
+                clean_pending, clean_next = clean_next, 0
+                carried = len(pending_input_events)
+                dropped_since_close = []
+                raw_dropped_since_close = []
+                inputs_since_close = 0
                 segment_timing_events = []
                 segment_tools = []
 
