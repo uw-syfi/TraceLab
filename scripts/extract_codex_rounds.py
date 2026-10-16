@@ -319,6 +319,8 @@ def extract_codex_session(
     session_meta_id: str | None = None
     file_session_meta_id: str | None = None
     parent_session_meta_id: str | None = None
+    explicit_parent_session_id: str | None = None
+    seen_session_meta = False
     is_subagent_file = False
     current_turn_id: str | None = None
     current_model: str | None = None
@@ -360,6 +362,27 @@ def extract_codex_session(
 
             if top_type == "session_meta":
                 meta_id = payload.get("id")
+                if not seen_session_meta:
+                    seen_session_meta = True
+                    source = payload.get("source")
+                    sub = source.get("subagent") if isinstance(source, dict) else None
+                    spawn = sub.get("thread_spawn", {}) if isinstance(sub, dict) else {}
+                    parents = []
+                    if isinstance(spawn, dict) and "parent_thread_id" in spawn:
+                        parents.append(spawn["parent_thread_id"])
+                    if isinstance(sub, (dict, str)) and "parent_thread_id" in payload:
+                        parents.append(payload["parent_thread_id"])
+                    if (
+                        isinstance(meta_id, str) and meta_id
+                        and isinstance(spawn, dict)
+                        and parents
+                        and all(
+                            isinstance(parent, str) and parent
+                            and parent == parents[0] and parent != meta_id
+                            for parent in parents
+                        )
+                    ):
+                        explicit_parent_session_id = f"codex:{parents[0]}"
                 if isinstance(meta_id, str) and meta_id:
                     if file_session_meta_id is None:
                         file_session_meta_id = meta_id
@@ -372,7 +395,7 @@ def extract_codex_session(
                                 if isinstance(source.get("subagent"), dict)
                                 else {}
                             )
-                            parent_id = spawn.get("parent_thread_id")
+                            parent_id = spawn.get("parent_thread_id") if isinstance(spawn, dict) else None
                             if isinstance(parent_id, str) and parent_id:
                                 parent_session_meta_id = parent_id
                                 is_subagent_file = True
@@ -722,6 +745,11 @@ def extract_codex_session(
                 round_obj = {
                     "provider": "codex",
                     "session_id": session_id,
+                    "parent_session_id": (
+                        explicit_parent_session_id
+                        if round_session_meta_id == file_session_meta_id else None
+                    ),
+                    "root_session_id": None,  # A single file cannot establish the ultimate root.
                     "session_file": str(session_file),
                     "round_index": round_index,
                     "round_id": f"{turn_id}:{turn_round_index}",

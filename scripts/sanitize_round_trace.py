@@ -222,6 +222,10 @@ def sanitize_row(row: dict[str, Any], ids: StableIdSanitizer) -> dict[str, Any]:
         cleaned["project"] = ids.project(original.get("project"))
     if "session_id" in original:
         cleaned["session_id"] = ids.session_id(provider, original.get("session_id"))
+    for field in ("parent_session_id", "root_session_id"):
+        if field in original:
+            value = original[field]
+            cleaned[field] = ids.session_id(provider, value) if isinstance(value, str) and value else None
     if "turn_id" in original:
         cleaned["turn_id"] = ids.atomic_id(
             "turn_id",
