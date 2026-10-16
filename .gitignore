@@ -72,3 +72,6 @@ web/app/public/paper.pdf
 
 # Local snapshots of the tool-input sampling experiment.
 /artifacts/tool_calls/tool_input_samples.backup-*/
+
+# raw_archive: site-specific host list; copy hosts.example.json to hosts.json
+scripts/raw_archive/hosts.json
