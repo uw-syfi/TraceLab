@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -19,12 +20,50 @@ def parse_ts(value: str | None) -> datetime | None:
         return None
 
 
+# Images count as 0 characters: image blocks, base64 image payloads, and the
+# `<tracelab-image ...>` placeholders that the raw archive (scripts/raw_archive) puts in
+# their place. Original raw and archived raw then give the same counts.
+IMAGE_BLOCK_TYPES = {"image", "input_image"}
+_B64_IMAGE = r"(?:iVBOR|/9j/|R0lGOD|UklGR)[A-Za-z0-9+/]{96,}={0,2}"
+_IMAGE_IN_TEXT_RE = re.compile(
+    r"data:image/[a-zA-Z0-9.+-]+;base64,(?:" + _B64_IMAGE + r"|<tracelab-image [^>]*>)"
+    r"|<tracelab-image [^>]*>"
+)
+_BARE_B64_IMAGE_RE = re.compile(_B64_IMAGE)
+_MAYBE_IMAGE_RE = re.compile(r'base64|<tracelab-image |"(?:input_)?image"|iVBOR|/9j/|R0lGOD|UklGR')
+
+
+def _is_image_block(value: Any) -> bool:
+    return isinstance(value, dict) and value.get("type") in IMAGE_BLOCK_TYPES
+
+
+def _text_without_images(text: str) -> str:
+    if not _MAYBE_IMAGE_RE.search(text):
+        return text
+    if _BARE_B64_IMAGE_RE.fullmatch(text):
+        return ""
+    return _IMAGE_IN_TEXT_RE.sub("", text)
+
+
+def _without_images(value: Any) -> Any:
+    if isinstance(value, str):
+        return _text_without_images(value)
+    if isinstance(value, list):
+        return [_without_images(v) for v in value if not _is_image_block(v)]
+    if isinstance(value, dict):
+        return {k: _without_images(v) for k, v in value.items()}
+    return value
+
+
 def content_chars(value: Any) -> int:
-    if value is None:
+    if value is None or _is_image_block(value):
         return 0
     if isinstance(value, str):
-        return len(value)
-    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+        return len(_text_without_images(value))
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if not _MAYBE_IMAGE_RE.search(text):
+        return len(text)
+    return len(json.dumps(_without_images(value), ensure_ascii=False, separators=(",", ":")))
 
 
 def usage_int(usage: dict[str, Any], key: str) -> int:
