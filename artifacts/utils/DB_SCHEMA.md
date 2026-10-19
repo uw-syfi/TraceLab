@@ -129,6 +129,44 @@ schema deliberately drops — e.g. `claude_long_tool_calls` re-reads the raw `to
 source to fill its `input_preview` column — without a separate `-i`. (A shipped/copied DB whose
 `path` no longer exists falls back gracefully: the consumer checks `exists()` first.)
 
+## v3 additions (planned)
+
+Not built yet; see [`docs/trace_format_v3.md`](../../docs/trace_format_v3.md). On a v2 trace the
+`sessions` table is still built, with the v3 columns null.
+
+### `sessions` — one row per session (PK `session_id`)
+
+| column | type | notes |
+|---|---|---|
+| `session_id` | VARCHAR | PK |
+| `provider`, `user`, `host` | VARCHAR | provenance |
+| `session_type` | VARCHAR | `main` \| `subagent` \| `auto_review` \| `internal_task`; null = unknown |
+| `parent_session_id` | VARCHAR | direct parent; for `auto_review`, the reviewed session |
+| `root_session_id` | VARCHAR | top `main` session of the tree (= `session_id` for a main session) |
+| `nesting_depth` | BIGINT | 0 = main |
+| `parent_tool_call_id` | VARCHAR | tool call in the parent that started this session |
+| `run_mode` | VARCHAR | `blocking` \| `background` \| `teammate` |
+| `copied_parent_history` | BOOLEAN | starts with a copy of the parent's conversation |
+| `agent_type` | VARCHAR | built-in type or `custom_agent_type_N` |
+| `workflow_id` | VARCHAR | Claude Code workflow run |
+| `started_from` | VARCHAR | `terminal` \| `ide` \| `desktop` \| `sdk` \| `script` \| `agent` |
+| `parent_round_pk` | BIGINT | computed: the parent's round containing `parent_tool_call_id` |
+| `first_at`, `last_at` | TIMESTAMP | computed: first / last event of the session |
+| `round_count`, `input_tokens`, `output_tokens` | BIGINT | computed: this session only |
+| `child_count` | BIGINT | computed: direct children |
+
+A whole task is `WHERE root_session_id = X`. Join rounds with `rounds.session_id = sessions.session_id`.
+
+### New columns on existing tables
+
+| table | column | type | notes |
+|---|---|---|---|
+| `tool_calls` | `child_session_id` | VARCHAR | computed: the session this call started |
+| `timing_events` | `from_session_id` | VARCHAR | for `agent_message`: the sending session |
+
+`timing_events.event_type` gains `agent_message` and `system_message`; `user_message` then means text
+a person wrote.
+
 ## Building / using it
 
 ```bash
