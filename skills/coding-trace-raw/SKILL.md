@@ -54,6 +54,7 @@ When interpreting Codex:
 - From Codex CLI 0.147 on, the main thread writes the prompt as `event_msg.item_completed` with an item of type `UserMessage` instead of `event_msg.user_message`; automatic-review rollouts wrote `event_msg.user_message` up to CLI 0.156, and from 0.158 mostly carry the request only as a `role = user` `response_item`, which the extractor does not read (injected context has the same shape). In the rollouts we checked, no rollout writes both prompt records.
 - Pair tool calls by `response_item.payload.type == "function_call"` and later `function_call_output` records with the same call id.
 - Treat `event_msg.token_count` as accounting for the preceding model round. `last_token_usage.input_tokens` already includes cached tokens.
+- A `token_count` is often written after the tool its round requested has already run. That tool output is input to the next model round, not to the round being accounted (the extractor applies this to rollouts that record turn ids).
 - Treat `cached_input_tokens` as prompt-cache hit prefix tokens and `input_tokens - cached_input_tokens` as uncached prompt-side work.
 - Treat `reasoning_output_tokens` as a subset of `output_tokens`, not an additional count.
 
