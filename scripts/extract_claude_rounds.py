@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -377,6 +378,21 @@ def extract_session_with_key(
     tool_by_id: dict[str, dict[str, Any]] = {}
     pending_input_events: list[dict[str, Any]] = []
     session_id = f"claude:{session_key}"
+    parent_session_id = None
+    root_session_id = None
+    match = re.fullmatch(r"([^/]+)/subagents/(agent-[^/]+)", session_key)
+    if match:
+        root_session_id = f"claude:{match[1]}"
+        try:
+            meta = json.loads(session_file.with_suffix(".meta.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError, UnicodeError):
+            meta = None
+        parent = meta.get("parentAgentId") if isinstance(meta, dict) else None
+        if isinstance(parent, str) and re.fullmatch(r"[A-Za-z0-9_-]+", parent):
+            parent = parent if parent.startswith("agent-") else f"agent-{parent}"
+            candidate = f"claude:{match[1]}/subagents/{parent}"
+            if candidate != session_id:
+                parent_session_id = candidate
     # Opt-in raw capture state (parallel to the round-building state above; never merged into it).
     raw_by_msg_id: dict[str, dict[str, Any]] = {}
     raw_tool_by_id: dict[str, dict[str, Any]] = {}
@@ -568,6 +584,8 @@ def extract_session_with_key(
                         pending_raw_in.append({"kind": "user", "text": _raw_text(content)})
 
     for index, round_obj in enumerate(rounds):
+        round_obj["parent_session_id"] = parent_session_id
+        round_obj["root_session_id"] = root_session_id
         round_obj["round_index"] = index
         apply_input_event_summary(round_obj)
         round_obj.pop("_usage_score", None)
