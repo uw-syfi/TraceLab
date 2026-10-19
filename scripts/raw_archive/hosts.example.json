@@ -1,0 +1,8 @@
+{
+ "central": "/srv/tracelab-raw",
+ "hosts": {
+  "archive-host": {"ssh": null, "output": "/srv/tracelab-raw"},
+  "gpu-node-1": {"ssh": "gpu-node-1", "output": "/data/tracelab-raw"},
+  "gpu-node-2": {"ssh": "user@gpu-node-2.example.org", "output": "/mnt/storage/tracelab-raw"}
+ }
+}
