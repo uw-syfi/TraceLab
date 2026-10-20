@@ -4,6 +4,8 @@ use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use tokenizers::Tokenizer;
 
+use crate::backend::{ChatMessage, ChatRole};
+use crate::cli::BackendKind;
 use crate::trace::SessionStep;
 
 /// Cursor over a shared synthetic token pool. Each session seeds at a distinct
@@ -39,6 +41,190 @@ impl TokenProvider {
 pub(crate) struct PromptBuilder {
     token_provider: TokenProvider,
     context_tokens: Vec<u32>,
+}
+
+pub(crate) enum BuiltPrompt {
+    Completion(Vec<u32>),
+    Chat {
+        messages: Vec<ChatMessage>,
+        content_token_len: usize,
+    },
+}
+
+impl BuiltPrompt {
+    pub(crate) fn prompt_len(&self) -> usize {
+        match self {
+            Self::Completion(prompt_ids) => prompt_ids.len(),
+            Self::Chat {
+                content_token_len, ..
+            } => *content_token_len,
+        }
+    }
+}
+
+pub(crate) enum SessionPromptBuilder {
+    Completion(PromptBuilder),
+    Chat(ChatPromptBuilder),
+}
+
+impl SessionPromptBuilder {
+    pub(crate) fn new(
+        backend: BackendKind,
+        token_provider: TokenProvider,
+        tokenizer: Arc<Tokenizer>,
+    ) -> Self {
+        match backend {
+            BackendKind::Openai => Self::Completion(PromptBuilder::new(token_provider)),
+            BackendKind::Chat => Self::Chat(ChatPromptBuilder::new(token_provider, tokenizer)),
+        }
+    }
+
+    pub(crate) fn build_prompt(&mut self, step: &SessionStep) -> BuiltPrompt {
+        match self {
+            Self::Completion(builder) => BuiltPrompt::Completion(builder.build_prompt(step)),
+            Self::Chat(builder) => builder.build_prompt(step),
+        }
+    }
+
+    pub(crate) fn commit_output(
+        &mut self,
+        prompt: BuiltPrompt,
+        output_ids: Vec<u32>,
+        output_text: String,
+    ) {
+        match (self, prompt) {
+            (Self::Completion(builder), BuiltPrompt::Completion(prompt_ids)) => {
+                builder.commit_output(prompt_ids, output_ids)
+            }
+            (Self::Chat(builder), BuiltPrompt::Chat { .. }) => {
+                builder.commit_output(output_ids, output_text)
+            }
+            _ => unreachable!("prompt type must match session backend"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ChatSegment {
+    role: ChatRole,
+    token_ids: Vec<u32>,
+    content: Arc<str>,
+}
+
+pub(crate) struct ChatPromptBuilder {
+    token_provider: TokenProvider,
+    tokenizer: Arc<Tokenizer>,
+    context: Vec<ChatSegment>,
+}
+
+impl ChatPromptBuilder {
+    fn new(token_provider: TokenProvider, tokenizer: Arc<Tokenizer>) -> Self {
+        Self {
+            token_provider,
+            tokenizer,
+            context: Vec::new(),
+        }
+    }
+
+    fn build_prompt(&mut self, step: &SessionStep) -> BuiltPrompt {
+        self.ensure_prefix_len(step.prefix_len);
+        self.truncate_to_prefix(step.prefix_len);
+        let token_ids = self.token_provider.take(step.input_len);
+        let content = self
+            .tokenizer
+            .decode(&token_ids, false)
+            .expect("session token ids must decode with their source tokenizer");
+        self.context.push(ChatSegment {
+            role: ChatRole::User,
+            token_ids,
+            content: content.into(),
+        });
+
+        let messages = self
+            .context
+            .iter()
+            .filter(|segment| {
+                !(segment.role == ChatRole::Assistant
+                    && segment.token_ids.is_empty()
+                    && segment.content.is_empty())
+            })
+            .map(|segment| ChatMessage {
+                role: segment.role,
+                content: segment.content.clone(),
+            })
+            .collect();
+        BuiltPrompt::Chat {
+            messages,
+            content_token_len: step.prefix_len.saturating_add(step.input_len),
+        }
+    }
+
+    fn commit_output(&mut self, output_ids: Vec<u32>, output_text: String) {
+        self.context.push(ChatSegment {
+            role: ChatRole::Assistant,
+            token_ids: output_ids,
+            content: output_text.into(),
+        });
+    }
+
+    fn ensure_prefix_len(&mut self, prefix_len: usize) {
+        let current_len: usize = self
+            .context
+            .iter()
+            .map(|segment| segment.token_ids.len())
+            .sum();
+        if current_len >= prefix_len {
+            return;
+        }
+        let filler = self.token_provider.take(prefix_len - current_len);
+        if let Some(last) = self.context.last_mut() {
+            let filler_content = self
+                .tokenizer
+                .decode(&filler, false)
+                .expect("session token ids must decode with their source tokenizer");
+            last.token_ids.extend(filler);
+            let mut content = String::with_capacity(last.content.len() + filler_content.len());
+            content.push_str(&last.content);
+            content.push_str(&filler_content);
+            last.content = content.into();
+        } else {
+            let content = self
+                .tokenizer
+                .decode(&filler, false)
+                .expect("session token ids must decode with their source tokenizer");
+            self.context.push(ChatSegment {
+                role: ChatRole::System,
+                token_ids: filler,
+                content: content.into(),
+            });
+        }
+    }
+
+    fn truncate_to_prefix(&mut self, prefix_len: usize) {
+        let mut remaining = prefix_len;
+        let mut keep_len = 0;
+        for index in 0..self.context.len() {
+            if remaining == 0 {
+                break;
+            }
+            let segment_len = self.context[index].token_ids.len();
+            if segment_len <= remaining {
+                remaining -= segment_len;
+                keep_len = index + 1;
+            } else {
+                self.context[index].token_ids.truncate(remaining);
+                let content = self
+                    .tokenizer
+                    .decode(&self.context[index].token_ids, false)
+                    .expect("session token ids must decode with their source tokenizer");
+                self.context[index].content = content.into();
+                keep_len = index + 1;
+                remaining = 0;
+            }
+        }
+        debug_assert_eq!(remaining, 0);
+        self.context.truncate(keep_len);
+    }
 }
 
 impl PromptBuilder {

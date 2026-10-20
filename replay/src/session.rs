@@ -3,12 +3,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Semaphore};
 
-use crate::cli::Args;
+use crate::backend::{GenInput, GenerationClient, StepOutcome};
+use crate::cli::{Args, BackendKind};
 use crate::record::StepLog;
-use crate::tokens::{PromptBuilder, TokenProvider};
+use crate::tokens::{BuiltPrompt, SessionPromptBuilder, TokenProvider};
 use crate::trace::SessionStep;
 use crate::util::{prefix_hit_rate, unix_seconds_now};
-use crate::backend::{GenerationClient, StepOutcome};
 
 /// Shared, immutable-per-run state handed to every session task.
 pub(crate) struct AppState {
@@ -71,26 +71,61 @@ pub(crate) async fn run_session(
             return;
         }
     };
-    let mut prompt_builder = PromptBuilder::new(token_provider);
+    let mut prompt_builder =
+        SessionPromptBuilder::new(state.args.backend, token_provider, state.client.tokenizer());
 
     for step in steps {
-        let prompt_ids = prompt_builder.build_prompt(&step);
+        let prompt = match state.args.backend {
+            BackendKind::Openai => prompt_builder.build_prompt(&step),
+            BackendKind::Chat => {
+                tokio::task::block_in_place(|| prompt_builder.build_prompt(&step))
+            }
+        };
+        let prompt_len = prompt.prompt_len();
         let request_id = format!("{}_round_{:06}", session_id, step.round_idx);
         state.stats.record_submit();
-        let outcome = if should_skip_context_overflow(&state.args, prompt_ids.len()) {
+        let outcome = if should_skip_context_overflow(&state.args, prompt_len) {
             StepOutcome {
                 log: context_overflow_log(
                     &step,
                     request_id,
-                    prompt_ids.len(),
+                    prompt_len,
                     state.args.max_model_len,
                 ),
                 output_ids: Vec::new(),
+                output_text: String::new(),
             }
         } else {
-            state.client.run_step(&step, request_id, &prompt_ids).await
+            match &prompt {
+                BuiltPrompt::Completion(prompt_ids) => {
+                    state
+                        .client
+                        .run_step(
+                            &step,
+                            request_id,
+                            GenInput::PromptIds(prompt_ids),
+                            prompt_len,
+                        )
+                        .await
+                }
+                BuiltPrompt::Chat { messages, .. } => {
+                    state
+                        .client
+                        .run_step(
+                            &step,
+                            request_id,
+                            GenInput::ChatMessages(messages),
+                            prompt_len,
+                        )
+                        .await
+                }
+            }
         };
-        let StepOutcome { log, output_ids } = outcome;
+        let StepOutcome {
+            log,
+            output_ids,
+            output_text,
+        } = outcome;
         let success = log.status == "SUCCESS";
         let _ = log_tx.send(log).await;
 
@@ -101,7 +136,7 @@ pub(crate) async fn run_session(
 
         // Carry the model's real output tokens forward (not synthetic) so the previous-output
         // region of the next prefix matches what the server cached and stays cache-hittable.
-        prompt_builder.commit_output(prompt_ids, output_ids);
+        prompt_builder.commit_output(prompt, output_ids, output_text);
 
         if step.tool_wait_after_ms > 0.0 {
             tokio::time::sleep(Duration::from_secs_f64(step.tool_wait_after_ms / 1000.0)).await;

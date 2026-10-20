@@ -34,6 +34,7 @@ pub(crate) struct ReplaySummary {
     measured_cache_steps: usize,
     measured_server_cached_prompt_tokens: usize,
     measured_server_prompt_tokens: usize,
+    comparable_cache_rate_steps: usize,
     planned_prefix_tokens_for_measured_cache_steps: usize,
     planned_prompt_tokens_for_measured_cache_steps: usize,
     planned_prefix_hit_rate_for_measured_cache_steps: Option<f64>,
@@ -70,6 +71,9 @@ impl ReplaySummary {
             self.measured_server_prompt_tokens += prompt;
             self.planned_prefix_tokens_for_measured_cache_steps += record.prefix_len;
             self.planned_prompt_tokens_for_measured_cache_steps += record.prompt_len;
+            if record.server_prefix_hit_rate_delta.is_some() {
+                self.comparable_cache_rate_steps += 1;
+            }
         }
         self.total_duration_ms_sum += record.total_duration_ms;
     }
@@ -117,36 +121,54 @@ fn log_server_prefix_hit_rate(record: &StepLog) {
         record.server_cached_prompt_tokens,
         record.server_prompt_tokens,
     ) {
-        eprintln!(
-            "prefix hit rate | request_id={} planned={:.4} actual={:.4} delta={:+.4} server_cached_prompt_tokens={} server_prompt_tokens={}",
-            record.request_id,
-            record.planned_prefix_hit_rate,
-            actual,
-            actual - record.planned_prefix_hit_rate,
-            cached,
-            prompt,
-        );
+        match record.server_prefix_hit_rate_delta {
+            Some(delta) => eprintln!(
+                "prefix hit rate | request_id={} planned={:.4} actual={:.4} delta={:+.4} server_cached_prompt_tokens={} server_prompt_tokens={}",
+                record.request_id,
+                record.planned_prefix_hit_rate,
+                actual,
+                delta,
+                cached,
+                prompt,
+            ),
+            None => eprintln!(
+                "prefix hit rate | request_id={} planned_content={:.4} actual_server={:.4} delta=unavailable server_cached_prompt_tokens={} server_prompt_tokens={}",
+                record.request_id,
+                record.planned_prefix_hit_rate,
+                actual,
+                cached,
+                prompt,
+            ),
+        }
     }
 }
 
 fn log_server_prefix_hit_rate_summary(summary: &ReplaySummary) {
-    if let (Some(actual), Some(planned)) = (
+    match (
         summary.server_prefix_hit_rate,
         summary.planned_prefix_hit_rate_for_measured_cache_steps,
+        summary.server_prefix_hit_rate_delta,
     ) {
-        eprintln!(
+        (Some(actual), Some(planned), Some(delta)) => eprintln!(
             "prefix hit rate summary | measured_steps={} planned={:.4} actual={:.4} delta={:+.4} server_cached_prompt_tokens={} server_prompt_tokens={}",
             summary.measured_cache_steps,
             planned,
             actual,
-            actual - planned,
+            delta,
             summary.measured_server_cached_prompt_tokens,
             summary.measured_server_prompt_tokens,
-        );
-    } else {
-        eprintln!(
+        ),
+        (Some(actual), planned, None) => eprintln!(
+            "prefix hit rate summary | measured_steps={} planned_content={} actual_server={:.4} delta=unavailable server_cached_prompt_tokens={} server_prompt_tokens={}",
+            summary.measured_cache_steps,
+            planned.map_or_else(|| "unavailable".to_string(), |value| format!("{value:.4}")),
+            actual,
+            summary.measured_server_cached_prompt_tokens,
+            summary.measured_server_prompt_tokens,
+        ),
+        _ => eprintln!(
             "prefix hit rate summary | measured_steps=0 actual unavailable; no server cached prompt token details were reported"
-        );
+        ),
     }
 }
 
@@ -183,12 +205,18 @@ fn finalize_replay_summary(
         summary.measured_server_cached_prompt_tokens,
         summary.measured_server_prompt_tokens,
     );
-    summary.server_prefix_hit_rate_delta = match (
-        summary.server_prefix_hit_rate,
-        summary.planned_prefix_hit_rate_for_measured_cache_steps,
-    ) {
-        (Some(actual), Some(planned)) => Some(actual - planned),
-        _ => None,
+    summary.server_prefix_hit_rate_delta = if summary.measured_cache_steps > 0
+        && summary.comparable_cache_rate_steps == summary.measured_cache_steps
+    {
+        match (
+            summary.server_prefix_hit_rate,
+            summary.planned_prefix_hit_rate_for_measured_cache_steps,
+        ) {
+            (Some(actual), Some(planned)) => Some(actual - planned),
+            _ => None,
+        }
+    } else {
+        None
     };
 
     summary

@@ -115,6 +115,20 @@ Useful controls:
 --summary-path /tmp/session_runner_summary.json
 ```
 
+## Run Against Chat Completions
+
+```bash
+cargo run --release --manifest-path replay/Cargo.toml --bin session_runner -- \
+  --trace replay/examples/multi_session_example.csv \
+  --text-file /path/to/text-corpus \
+  --tokenizer /path/to/tokenizer.json \
+  --backend chat \
+  --base-url https://api.openai.com/v1 \
+  --api-key-env OPENAI_API_KEY \
+  --model gpt-5.4-mini \
+  --log-path /tmp/session_runner_chat.jsonl
+```
+
 ## Prefix-Cache Accounting
 
 The JSONL log includes per-round planned-vs-server cache fields:
@@ -122,7 +136,7 @@ The JSONL log includes per-round planned-vs-server cache fields:
 - `planned_prefix_hit_rate`: `prefix_len / (prefix_len + input_len)` from the workload.
 - `server_cached_prompt_tokens`: cached prompt tokens reported by vLLM usage, when available.
 - `server_prefix_hit_rate`: `server_cached_prompt_tokens / server_prompt_tokens`, when available.
-- `server_prefix_hit_rate_delta`: server hit rate minus planned hit rate for that round.
+- `server_prefix_hit_rate_delta`: server hit rate minus planned hit rate for Completion. For Chat, the planned content rate and the server rate including chat-template tokens use different denominators, so this field is `null`.
 
 The runner always requests streaming usage and treats usage-present-but-cache-detail-absent as zero cached tokens (servers omit `prompt_tokens_details` when nothing was cached). For this to be meaningful, the server must report prompt-token details and have prefix caching enabled. With the Qwen helper script, start vLLM with both:
 
@@ -150,6 +164,7 @@ Implemented:
 - direct token-id prompt submission (no client-side decode) + exact output-id carry-forward via vLLM `return_token_ids` (re-encode fallback)
 - pluggable backend adapter (OpenAI-compatible today; vLLM and SGLang OpenAI endpoints)
 - OpenAI-compatible streaming completions request
+- OpenAI-compatible streaming chat-completions request with cumulative role-based messages
 - startup prefix-cache preflight that aborts when the server reports no cached tokens
 - TTFT and total latency logging
 - JSON run summary output
