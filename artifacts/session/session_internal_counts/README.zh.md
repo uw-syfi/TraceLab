@@ -36,3 +36,7 @@ uv run python artifacts/session/session_internal_counts/analyze.py --db "$TMPDIR
 
 编码会话是持久的，且压倒性地自主（论文的
 `tab:session_internal_counts`）。一个会话平均有 10.1 个请求，但带有一条长尾（p99 = 161），所以人类会一次又一次地回到同一个会话。每个会话中工具触发步骤（avg 69.9）远多于用户触发步骤（avg 9.8），所以一旦一个请求落地，循环就自行运转起来：解决一个请求平均需要 6.7 个工具触发步骤和 8.9 次工具调用。在步骤这一层级，每一轮只发出略多于一次的工具调用（avg 1.1，p50 1，p90 2），所以并行工具调用确实会发生，但属于例外而非常态。
+
+## Shared request ownership update
+
+Request groups use `artifacts/utils/request_timing.py`. Native turn identity owns rows; legacy user-triggered groups remain countable for workload and attributed cost. Missing completion or nonpositive/contradictory timestamps no longer erase those counts. Only native completed lifecycles with consistent timestamps yield response duration. This can increase counts relative to historical tables that dropped groups solely for missing/nonpositive duration. Rebuild generated outputs for the intended capture.

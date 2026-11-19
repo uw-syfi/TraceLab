@@ -30,14 +30,11 @@ uv run python artifacts/session/session_internal_counts/analyze.py --db "$TMPDIR
 
 No figures.
 
-## SyFI result analysis
 
-### session_internal_counts.md
+## Request ownership and current results
 
-Coding sessions are persistent and overwhelmingly autonomous (the paper's
-`tab:session_internal_counts`). A session averages 10.1 requests but with a long tail (p99 = 161),
-so the human keeps coming back to the same session over and over. Per session there are far more
-tool-initiated steps (avg 69.9) than user-initiated ones (avg 9.8), so once a request lands the
-loop runs itself: resolving one request takes 6.7 tool-initiated steps and 8.9 tool calls on
-average. At the step level each round issues just over one tool call (avg 1.1, p50 1, p90 2), so
-parallel tool calling does happen but is the exception, not the norm.
+Request groups now use `artifacts/utils/request_timing.py`, shared with timing and cost. Explicit native turn identity takes priority; legacy user-triggered groups remain countable without verified duration. Counts do not drop a group because timestamps are missing, compressed, or completion is unavailable. This separates workload measurement from response-time coverage. Rebuild the generated table on the intended capture; no undated historical averages are authoritative.
+
+## Request ownership coverage
+
+The shared ownership audit reports recorded rounds that have no resolvable request owner, including their output tokens, tool-call count, known attributed tool work, and native lifecycle markers. Session and step totals retain these rows; request statistics exclude them. Their request identity and completion are not guessed. Count/cost tables include this coverage, and response-time/paper-macro outputs also write `request_ownership_coverage.md`. Session identity is always the pair `(provider, session_id)`.

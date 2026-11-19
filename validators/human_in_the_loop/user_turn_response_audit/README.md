@@ -1,32 +1,5 @@
-# user_turn_response_audit
+# Shared request lifecycle validation
 
-**Question.** Which user-message-triggered rows do *not* become user-turn response-time
-samples, and why? (A coverage/validity audit for the `user_turn_response_time` metric.)
+This validator runs the same request lifecycle and coverage audit as `artifacts/human_in_the_loop/user_turn_decomposition`. Native turn identity and completion evidence determine request duration. Legacy user-triggered groups stay countable but do not receive fabricated completion at the next prompt or EOF.
 
-## Input
-
-`trace/syfi_coding_trace.duckdb` by default; use `--db` for another materialized trace.
-
-## Method / key assumptions
-
-- Walks every row whose trigger is a `user_message` and classifies why it does or does
-  not yield a response-time sample (e.g. no following response-end event, session
-  boundary, stale/resumed trigger).
-- Uses the same trigger/response-end definitions as `user_turn_response_time/` so the
-  audit explains exactly that metric's denominator.
-
-## How to run
-
-```bash
-uv run python validators/human_in_the_loop/user_turn_response_audit/analyze.py
-```
-
-(For a fast check, pass `--db` with a smaller materialized database.)
-
-## Outputs (written here)
-
-- `result_analysis.md` — counts and category breakdown of included/excluded rows.
-
-## Notes
-
-Markdown only (no figures).
+Canonical tool work is attributed internal-else-wall work, including interaction tools. It is not a wall-clock partition or an algebraic explanation of response time. Missing endpoints, anonymous tool observations, and contradictory timestamps remain explicit coverage gaps. The audit emits `result_analysis.md` using the standard `--db`, `--input`, and `--output-dir` CLI.

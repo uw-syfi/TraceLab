@@ -60,3 +60,11 @@ is cheap in aggregate despite its high per-token price because each step emits s
 absolute costs are modest at the median ($0.79/session, $0.34/request, $0.09/step) but carry a heavy
 tail: the average session is $11.8 and p99 reaches **$209**, a few very long sessions driving most of
 the spend. This inverts the usual intuition that generation is the expensive part.
+
+## Shared request ownership update
+
+Request groups use `artifacts/utils/request_timing.py`. Native turn identity owns rows; legacy user-triggered groups remain countable for workload and attributed cost. Missing completion or nonpositive/contradictory timestamps no longer erase those counts. Only native completed lifecycles with consistent timestamps yield response duration. This can increase counts relative to historical tables that dropped groups solely for missing/nonpositive duration. Rebuild generated outputs for the intended capture.
+
+## Request ownership coverage
+
+The shared ownership audit reports recorded rounds that have no resolvable request owner, including their output tokens, tool-call count, known attributed tool work, and native lifecycle markers. Session and step totals retain these rows; request statistics exclude them. Their request identity and completion are not guessed. Count/cost tables include this coverage, and response-time/paper-macro outputs also write `request_ownership_coverage.md`. Session identity is always the pair `(provider, session_id)`.

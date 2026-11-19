@@ -2,40 +2,44 @@
 % edit by hand; re-run on the trace to refresh.
 \begin{table}[t]
 \centering
-\caption{Per-session, per-request, per-step, and individual latency wall-clock time by category. \emph{Human thinking} in the session blocks is the sum of gaps from the previous event to the next user message. The final block reports individual positive human-input waits, observable per-round generation spans, and per-tool effective latencies, matching the CDF/summary distributions. The \emph{human capped (1h)} block re-states the per-session budget with each idle gap clamped to one hour (a prompt-cache TTL horizon), dropping the long abandoned-session tail so the engaged-time split is visible. \emph{\% time} is each category's share of its block total; shares can exceed 100\% only from generation/tool overlap (concurrent tools, generation streaming during a tool call).}
+\caption{Recorded timing components, not a partition of wall-clock compute. Tool work sums positive internal-else-wall latencies; interaction waits are included. N is the distribution sample count; each ratio shows its own eligible N. Observed-span distributions retain recorded captures; wall ratios exclude contradictions and missing coverage. Request wall time requires native completion. Only bounded outstanding intervals are divided by request wall time. N/A means unavailable.}
 \label{tab:timing_distribution}
 \small
 \setlength{\tabcolsep}{4pt}
 \renewcommand{\arraystretch}{1.15}
-\begin{tabular}{l r r r r r}
+\begin{tabular}{l r r r r r r}
 \toprule
-\textbf{Metric} & \textbf{Avg} & \textbf{P50} & \textbf{P90} & \textbf{P99} & \textbf{\% time} \\
+\textbf{Metric} & \textbf{N} & \textbf{Avg} & \textbf{P50} & \textbf{P90} & \textbf{P99} & \textbf{Ratio} \\
 \midrule
-\multicolumn{6}{@{}l}{\emph{Per session}} \\
-\quad Total elapsed & 32.3h & 8.9m & 25.5h & 580.1h &  \\
-\quad Human thinking & 30.6h & 0.0s & 24.4h & 563.4h & 94.8\% \\
-\quad LLM generation & 40.7m & 5.0m & 37.0m & 13.8h & 2.1\% \\
-\quad Tool execution & 58.6m & 25.4s & 29.1m & 14.1h & 3.0\% \\
+\multicolumn{7}{@{}l}{\emph{Per session}} \\
+\quad Observed elapsed span & 531 & 32.5h & 9.1m & 35.3h & 580.1h &  \\
+\quad Input gaps & 531 & 30.4h & 0.0s & 24.4h & 563.4h & 92.4\% (N=512) \\
+\quad Observed response spans & 531 & 40.7m & 5.0m & 37.0m & 13.8h & 2.3\% (N=512) \\
+\quad Attributed tool work & 531 & 58.6m & 25.4s & 29.1m & 14.1h & 8.2\% (N=413) \\
+\quad Interaction-tool waits (included) & 531 & 25.8m & 0.0s & 0.0s & 31.5m &  \\
+\quad Tool-outstanding time & 413 & 37.5m & 17.3s & 8.5m & 2.5h & 8.2\% (N=413) \\
 \addlinespace
-\multicolumn{6}{@{}l}{\emph{Per session, human capped (1h)}} \\
-\quad Total & 4.5h & 8.7m & 7.8h & 86.8h &  \\
-\quad Human thinking & 2.8h & 0.0s & 5.8h & 49.0h & 63.2\% \\
-\quad LLM generation & 40.7m & 5.0m & 37.0m & 13.8h & 15.1\% \\
-\quad Tool execution & 58.6m & 25.4s & 29.1m & 14.1h & 21.7\% \\
+\multicolumn{7}{@{}l}{\emph{Component budget, input gaps capped (1h)}} \\
+\quad Total & 531 & 4.5h & 8.7m & 7.7h & 86.5h &  \\
+\quad Input gaps & 531 & 2.8h & 0.0s & 5.7h & 47.5h & 63.1\% (N=531) \\
+\quad Observed response spans & 531 & 40.7m & 5.0m & 37.0m & 13.8h & 15.1\% (N=531) \\
+\quad Attributed tool work & 531 & 58.6m & 25.4s & 29.1m & 14.1h & 21.8\% (N=531) \\
 \addlinespace
-\multicolumn{6}{@{}l}{\emph{Per request}} \\
-\quad Total (response time) & 5.9m & 1.0m & 10.2m & 1.3h &  \\
-\quad LLM generation & 3.0m & 55.2s & 7.5m & 32.9m & 50.9\% \\
-\quad Tool execution & 4.4m & 1.0s & 2.6m & 51.5m & 73.7\% \\
+\multicolumn{7}{@{}l}{\emph{Per request}} \\
+\quad Native completed response time & 5,783 & 5.5m & 1.0m & 10.3m & 1.3h &  \\
+\quad Attributed response spans & 6,951 & 3.1m & 49.9s & 7.8m & 34.0m &  \\
+\quad Attributed tool work & 6,951 & 4.5m & 1.2s & 2.4m & 56.5m &  \\
+\quad Interaction-tool waits (included) & 6,951 & 2.0m & 0.0s & 0.0s & 0.0s &  \\
+\quad Bounded tool-outstanding time & 5,514 & 2.2m & 1.6s & 1.9m & 41.9m & 43.3\% (N=5,514) \\
 \addlinespace
-\multicolumn{6}{@{}l}{\emph{Per step}} \\
-\quad LLM generation & 12.2s & 6.8s & 26.1s & 1.6m & 41.0\% \\
-\quad Tool execution & 17.6s & 0.2s & 20.0s & 4.0m & 59.0\% \\
+\multicolumn{7}{@{}l}{\emph{Per step}} \\
+\quad Observed response spans & 106,250 & 12.2s & 6.8s & 26.1s & 1.6m & 41.0\% (N=106,250) \\
+\quad Attributed tool work & 106,250 & 17.6s & 0.2s & 20.0s & 4.0m & 59.0\% (N=106,250) \\
 \addlinespace
-\multicolumn{6}{@{}l}{\emph{Per individual latency}} \\
-\quad Human thinking & 1.9h & 2.0m & 50.6m & 33.1h &  \\
-\quad LLM generation & 13.6s & 7.7s & 28.1s & 1.6m &  \\
-\quad Tool execution & 20.1s & 1.0s & 30.0s & 4.2m &  \\
+\multicolumn{7}{@{}l}{\emph{Per individual latency}} \\
+\quad Input gaps & 8,572 & 1.9h & 2.0m & 50.3m & 32.5h &  \\
+\quad Observed response spans & 95,270 & 13.6s & 7.7s & 28.1s & 1.6m &  \\
+\quad Attributed tool work & 92,793 & 20.1s & 1.0s & 30.0s & 4.2m &  \\
 \bottomrule
 \end{tabular}
 \end{table}

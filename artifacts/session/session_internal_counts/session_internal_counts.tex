@@ -12,15 +12,15 @@
 \textbf{Metric} & \textbf{Avg} & \textbf{P25} & \textbf{P50} & \textbf{P90} & \textbf{P99} \\
 \midrule
 \multicolumn{6}{@{}l}{\emph{Per session}} \\
-\quad Requests & 13.3 & 1 & 1 & 28 & 178 \\
+\quad Requests & 13.1 & 1 & 1 & 26 & 187 \\
 \quad User-initiated steps$^{\dagger}$ & 14.8 & 1 & 1 & 39 & 172 \\
 \quad Tool-initiated steps & 184.5 & 10 & 23 & 215 & 4,234 \\
-\quad Tool calls & 264.6 & 19 & 37 & 257 & 6,075 \\
+\quad Tool calls & 266.9 & 20 & 38 & 274 & 6,088 \\
 \addlinespace
 \multicolumn{6}{@{}l}{\emph{Per request}} \\
 \quad User-initiated steps & 0.9 & 1 & 1 & 1 & 1 \\
-\quad Tool-initiated steps & 13.1 & 0 & 3 & 32 & 159 \\
-\quad Tool calls & 19.1 & 0 & 4 & 48 & 217 \\
+\quad Tool-initiated steps & 13.4 & 0 & 2 & 32 & 174 \\
+\quad Tool calls & 19.7 & 0 & 4 & 49 & 246 \\
 \addlinespace
 \multicolumn{6}{@{}l}{\emph{Per step}} \\
 \quad Tool calls & 1.3 & 1 & 1 & 3 & 4 \\
@@ -29,3 +29,5 @@
 \smallskip
 {\footnotesize\raggedright $^{\dagger}$ A \emph{user-initiated step} is a step whose first input event is a user message. This need not equal the number of user messages: (i)~a message the user sends while the agent is still working is delivered together with the next tool result, so that step is counted as tool-initiated; and (ii)~a message that never triggers another model call is not counted as a step at all.\par}
 \end{table}
+
+% Request groups own 100,459 of 106,250 recorded rounds. The 5,791 unowned rounds retain 4,482 tool calls and 1,828.392 seconds of known attributed tool work in session/step totals, but are excluded from request statistics. 33 lifecycle markers lack request ownership. No request or completion is invented for them.

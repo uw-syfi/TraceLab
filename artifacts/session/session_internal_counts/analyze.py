@@ -1,28 +1,10 @@
 #!/usr/bin/env python3
-"""Per-session / per-request / per-step count distributions for the paper's session table.
+"""Per-session, reconstructed-request, and per-round count distributions.
 
-Populates ``tab:session_internal_counts`` (``src/04_SessionContext.tex``): how many
-requests, steps, and tool calls a coding session contains; how many tool-initiated steps and
-tool calls a single request drives; and how many tool calls a single step issues. Reported as
-avg / p25 / p50 / p90 / p99.
-
-Definitions (reused from the canonical experiments so the numbers reconcile):
-
-* A **session** is a non-empty ``session_id`` (the grouping used by ``session_token_steps`` and
-  the overview; 4,265 sessions in the public trace).
-* A **request** is one user turn -- a response-triggering ``user_message`` to the next one in
-  the same session -- replaying the exact turn state machine from
-  ``human_in_the_loop/user_turn_decomposition`` (identical boundaries to
-  ``user_turn_response_time``). Turns with no response-end event or non-positive duration are
-  dropped, matching those experiments.
-* A **step** is one LLM round. ``user-initiated`` / ``tool-initiated`` split on the round's
-  ``first_input_event_type`` (``user_message`` vs ``tool_result``), the same trigger field the
-  loader's ``is_user_input`` uses.
-* **Tool calls** are ``tool_calls`` rows; per session = all of a session's calls, per request =
-  the calls inside one turn, per step = the calls inside one round.
-
-Run with the standard trace-db CLI (``--db`` | ``-i/--input`` | ``-o/--output-dir``).
-"""
+Request ownership comes from request_timing.py, shared with timing and cost.
+Native turn identity takes priority; legacy groups remain countable without a
+measurable duration. Missing completion, zero duration, and compressed timestamps
+do not erase workload counts."""
 
 from __future__ import annotations
 
@@ -67,19 +49,19 @@ def collect(con) -> dict[str, dict[str, list[float]]]:
     ``tool_calls_per_step`` is one value per round.
     """
     # --- per-session step-trigger counts + tool calls (SQL) ---
-    sessions: dict[str, dict[str, Any]] = {}
+    sessions: dict[tuple[str, str], dict[str, Any]] = {}
 
-    def session(sid: str) -> dict[str, Any]:
+    def session(provider: str, sid: str) -> dict[str, Any]:
         return sessions.setdefault(
-            sid,
-            {"provider": None, "user_steps": 0, "tool_steps": 0, "tool_calls": 0, "turns": 0},
+            (provider, sid),
+            {"provider": provider, "user_steps": 0, "tool_steps": 0, "tool_calls": 0, "turns": 0},
         )
 
-    for sid, first_event, count in con.execute(
-        "SELECT session_id, first_input_event_type, count(*) FROM rounds "
-        "WHERE session_id IS NOT NULL AND session_id <> '' GROUP BY 1, 2"
+    for provider, sid, first_event, count in con.execute(
+        "SELECT provider, session_id, first_input_event_type, count(*) FROM rounds "
+        "WHERE session_id IS NOT NULL AND session_id <> '' GROUP BY 1, 2, 3"
     ).fetchall():
-        record = session(sid)
+        record = session(provider, sid)
         if first_event == "user_message":
             record["user_steps"] += count
         elif first_event == "tool_result":
@@ -89,71 +71,45 @@ def collect(con) -> dict[str, dict[str, list[float]]]:
         "SELECT DISTINCT session_id, provider FROM rounds "
         "WHERE session_id IS NOT NULL AND session_id <> ''"
     ).fetchall():
-        session(sid)["provider"] = provider
+        session(provider, sid)
 
-    for sid, calls in con.execute(
-        "SELECT r.session_id, count(*) FROM tool_calls tc JOIN rounds r USING (round_pk) "
-        "WHERE r.session_id IS NOT NULL AND r.session_id <> '' GROUP BY 1"
+    for provider, sid, calls in con.execute(
+        "SELECT r.provider, r.session_id, count(*) FROM tool_calls tc JOIN rounds r USING (round_pk) "
+        "WHERE r.session_id IS NOT NULL AND r.session_id <> '' GROUP BY 1, 2"
     ).fetchall():
-        session(sid)["tool_calls"] = int(calls)
+        session(provider, sid)["tool_calls"] = int(calls)
 
-    # --- per-turn / per-step counts (turn state machine + per-round tool counts) ---
-    events_by_round = DEC.load_timing_events(con)
+    # Request ownership is shared with timing/cost. Legacy groups stay countable without a duration.
+    from request_timing import collect_requests
     tools_by_round = DEC.load_round_tools(con)
-    active: dict[str, dict[str, Any]] = {}
-    per_request: dict[str, dict[str, list[float]]] = {
-        scope: {"tool_calls": [], "tool_steps": [], "user_steps": []} for scope in SCOPES
-    }
-    per_step: dict[str, list[float]] = {scope: [] for scope in SCOPES}
-
-    def close(sid: str) -> None:
-        turn = active.pop(sid, None)
-        if turn is None or turn["end"] is None:
-            return
-        if (turn["end"] - turn["start"]).total_seconds() <= 0:
-            return
-        if sid in sessions:
-            sessions[sid]["turns"] += 1
-        for scope in ("merged", turn["provider"]):
-            bucket = per_request.get(scope)
-            if bucket is not None:
-                bucket["tool_calls"].append(turn["tools"])
-                bucket["tool_steps"].append(turn["tool_steps"])
-                bucket["user_steps"].append(turn["user_steps"])
-
-    for round_pk, provider, sid, first_event in con.execute(
+    requests = collect_requests(con)
+    request_by_round = {rpk: index for index, request in enumerate(requests) for rpk in request.round_pks}
+    request_counts = [{"tool_calls": 0, "tool_steps": 0, "user_steps": 0} for _ in requests]
+    per_request = {scope: {"tool_calls": [], "tool_steps": [], "user_steps": []} for scope in SCOPES}
+    per_step = {scope: [] for scope in SCOPES}
+    for rpk, provider, sid, first_event in con.execute(
         "SELECT round_pk, provider, session_id, first_input_event_type FROM rounds ORDER BY round_pk"
     ).fetchall():
-        # per-step tool calls: one value per round (0 for text-only rounds), all rounds.
-        round_tools = tools_by_round.get(round_pk)
-        n_tools = round_tools.tool_calls if round_tools is not None else 0
-        per_step["merged"].append(n_tools)
-        if provider in per_step:
-            per_step[provider].append(n_tools)
-
-        events = events_by_round.get(round_pk, [])
-        sid = sid if isinstance(sid, str) and sid else None
-        start = DEC.response_trigger_user_message_timestamp(events)
-        if start is not None and sid is not None:
-            close(sid)
-            active[sid] = {
-                "provider": provider, "start": start, "end": None,
-                "tools": 0, "tool_steps": 0, "user_steps": 0,
-            }
-        turn = active.get(sid) if sid is not None else None
-        if turn is None:
+        n_tools = tools_by_round[rpk].tool_calls if rpk in tools_by_round else 0
+        for scope in ("merged", provider):
+            if scope in per_step:
+                per_step[scope].append(n_tools)
+        index = request_by_round.get(rpk)
+        if index is not None:
+            record = request_counts[index]
+            record["tool_calls"] += n_tools
+            record["user_steps"] += first_event == "user_message"
+            record["tool_steps"] += first_event == "tool_result"
+    for request, record in zip(requests, request_counts):
+        if not request.round_pks:
             continue
-        if first_event == "user_message":
-            turn["user_steps"] += 1
-        elif first_event == "tool_result":
-            turn["tool_steps"] += 1
-        response_end = DEC.last_response_end_timestamp(events)
-        if response_end is not None and (turn["end"] is None or response_end > turn["end"]):
-            turn["end"] = response_end
-        if round_tools is not None:
-            turn["tools"] += round_tools.tool_calls
-    for sid in list(active):
-        close(sid)
+        key = (request.provider, request.session_id)
+        if key in sessions:
+            sessions[key]["turns"] += 1
+        for scope in ("merged", request.provider):
+            if scope in per_request:
+                for key, value in record.items():
+                    per_request[scope][key].append(value)
 
     # --- assemble per-scope arrays ---
     out: dict[str, dict[str, list[float]]] = {}
@@ -316,17 +272,20 @@ def main() -> int:
     con = trace_db.open_from_args(args)
     try:
         raw = collect(con)
+        from request_timing import request_ownership_coverage
+        coverage = request_ownership_coverage(con)
     finally:
         con.close()
 
     data = {scope: {key: summarize(vals) for key, vals in metrics.items()} for scope, metrics in raw.items()}
 
+    from request_timing import ownership_coverage_note, render_ownership_coverage
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     tex_path = out_dir / "session_internal_counts.tex"
-    tex_path.write_text(render_tex(data["merged"]), encoding="utf-8")
+    tex_path.write_text(render_tex(data["merged"]) + "\n% " + ownership_coverage_note(coverage) + "\n", encoding="utf-8")
     md_path = out_dir / "session_internal_counts.md"
-    md_path.write_text(render_md(data["merged"]), encoding="utf-8")
+    md_path.write_text(render_md(data["merged"]) + "\n\n" + render_ownership_coverage(coverage), encoding="utf-8")
     headline_path = out_dir / "headline.json"
     headline_path.write_text(json.dumps(render_headline(data["merged"]), indent=2) + "\n", encoding="utf-8")
 

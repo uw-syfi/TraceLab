@@ -39,7 +39,8 @@ def _row(provider, sid, *, events=(), intervals=(), origin="unknown", root="root
         "timing_events": [{"timestamp": _timestamp(t)} for t in events],
         "tools": [{"tool_index": index, "tool_call_id": "duplicate", "tool_name": "Read",
                    "emitted_at": _timestamp(start), "result_at": _timestamp(end),
-                   "tool_internal_latency_ms": 999000, "tool_wall_latency_ms": 999000}
+                   "tool_internal_latency_ms": None,
+                   "tool_wall_latency_ms": round((end - start) * 1000) if isinstance(start, (int, float)) and isinstance(end, (int, float)) else None}
                   for index, (start, end) in enumerate(intervals)],
     }
 
@@ -109,13 +110,13 @@ def test_envelope_retained_rounds_and_same_ids_are_provider_isolated(db_for):
     con.execute("""UPDATE sessions SET session_id = split_part(session_id, ':', 2),
                    resolved_root_session_id = split_part(resolved_root_session_id, ':', 2)""")
     data = timing.collect(con)
-    for provider, elapsed, tools, share in (("claude", 30, 21, 70), ("codex", 10, 1, 10)):
+    for provider, elapsed, tools, outstanding in (("claude", 30, 31, 21), ("codex", 10, 1, 1)):
         assert data[provider]["sessions"] == 1
-        for metric, expected in (("elapsed", elapsed), ("tools", tools), ("share", share)):
+        for metric, expected in (("elapsed", elapsed), ("tools", tools), ("outstanding", outstanding)):
             assert data[provider][metric] == pytest.approx(summarize([expected]))
     md = timing.render_md(data)
-    assert "Eligible sessions" not in md
-    assert "| Claude | 30.00 | 30.00 | 30.00 | 30.00 | 30.00 |" in md
+    assert "Work-ratio eligible" in md
+    assert "| Claude | 1 | 30.00 | 30.00 | 30.00 | 30.00 | 30.00 |" in md
 
 
 def test_missing_invalid_and_zero_timing_keep_distinct_denominators(db_for):
@@ -136,27 +137,24 @@ def test_missing_invalid_and_zero_timing_keep_distinct_denominators(db_for):
     d = data["claude"]
     assert d["sessions"] == 11
     assert d["elapsed"] == pytest.approx(summarize([10, None, 0, None, 4, None] + [15] * 5))
-    assert d["tools"] == pytest.approx(summarize([0, 0, 0, 0, 4, None] + [None] * 5))
-    assert d["share"] == pytest.approx(summarize([0, None, None, None, 100, None] + [None] * 5))
+    assert d["outstanding"] == pytest.approx(summarize([0, 0, 0, 0, 4, None] + [None] * 5))
+    assert d["invalid_endpoints"] == 6
+    assert d["tools"]["n"] == 11  # known positive work remains counted with partial coverage
     md = timing.render_md(data)
-    assert md.count("Subagents:") == 1
-    visible = md.split("## Observed elapsed time (seconds)\n")[1]
-    assert "Subagents: Claude 11; Codex 0." in visible
-    assert "Eligible sessions: Claude 8 (3 excluded); Codex 0 (0 excluded)." in visible
-    assert "Eligible sessions: Claude 5 (6 excluded); Codex 0 (0 excluded)." in visible
-    assert "Eligible sessions: Claude 2 (9 excluded); Codex 0 (0 excluded)." in visible
-    assert "| Codex | N/A | N/A | N/A | N/A | N/A |" in md
-    assert md.count("| Provider | Avg | P25 | P50 | P90 | P99 |") == 3
+    assert "Timing coverage" in md
+    assert "N/A" in md
+    assert "Unknown legacy kinds stay unknown" in md
 
 
-def test_percentages_are_summarized_per_session_not_ratio_of_sums(db_for):
+def test_report_pools_same_definition_ratios_as_overall_sessions(db_for):
     data = timing.collect(db_for(_family(
         _row("claude", "short", events=(10, 0), intervals=((0, 10),)),
         _row("claude", "long", events=(100, 0)),
     )))["claude"]
     assert data["elapsed"] == pytest.approx(summarize([10, 100]))
     assert data["share"] == pytest.approx(summarize([100, 0]))
-    assert data["share"]["avg"] != pytest.approx(100 * 10 / 110)
+    assert data["pooled_share"] == pytest.approx(100 * 10 / 110)
+    assert data["share"]["avg"] != pytest.approx(data["pooled_share"])
 
 
 def test_shared_cohort_uses_root_membership_not_parent_and_ignores_other_sessions(db_for):
@@ -206,8 +204,8 @@ def test_cli_outputs_are_aggregate_only_and_empty_cohorts_are_unavailable(tmp_pa
     ]
     assert "private-session" not in md + json.dumps(headline)
     assert "claude:" not in md + json.dumps(headline)
-    assert md.count("| Provider | Avg | P25 | P50 | P90 | P99 |") == 3
-    assert "## Time with tool calls outstanding (seconds)" in md
-    assert "## Tool share of elapsed time (%)" in md
+    assert md.count("| Provider | N | Avg | P25 | P50 | P90 | P99 |") == 3
+    assert "## Time with tools outstanding (seconds; extra wall metric)" in md
+    assert "## Canonical attributed tool work (seconds)" in md
     assert md in capsys.readouterr().out
     assert db.read_bytes() == before

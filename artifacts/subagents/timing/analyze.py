@@ -35,57 +35,42 @@ def union_duration(intervals) -> int:
 
 
 def collect(con) -> dict:
-    sessions = {
-        (provider, sid): {"bounds": [], "intervals": [], "complete": True}
-        for provider, sid in con.execute(f"""
-            WITH cohort AS ({COHORT_SQL})
-            SELECT provider, session_id FROM cohort WHERE role = 'descendant'
-        """).fetchall()
-    }
-    # Empty/unscoped/legacy cohorts need no timing columns beyond trace_db's compatibility views.
-    if sessions:
-        for provider, sid, first, last in con.execute(f"""
-            WITH cohort AS ({COHORT_SQL})
-            SELECT c.provider, c.session_id, min(epoch_us(t.timestamp)), max(epoch_us(t.timestamp))
-            FROM cohort c
-            JOIN rounds r ON r.provider = c.provider AND r.session_id = c.session_id
-            JOIN timing_events t ON t.round_pk = r.round_pk
-            WHERE c.role = 'descendant' AND isfinite(t.timestamp)
-            GROUP BY c.provider, c.session_id
-        """).fetchall():
-            sessions[provider, sid]["bounds"] = [first, last]
-
-        # Keep tools separate from timing events: joining both child tables would multiply calls.
-        for provider, sid, start, end in con.execute(f"""
-            WITH cohort AS ({COHORT_SQL})
-            SELECT c.provider, c.session_id,
-                   CASE WHEN isfinite(t.emitted_at) THEN epoch_us(t.emitted_at) END,
-                   CASE WHEN isfinite(t.result_at) THEN epoch_us(t.result_at) END
-            FROM cohort c
-            JOIN rounds r ON r.provider = c.provider AND r.session_id = c.session_id
-            JOIN tool_calls t ON t.round_pk = r.round_pk
-            WHERE c.role = 'descendant'
-        """).fetchall():
-            session = sessions[provider, sid]
-            if start is None or end is None or end < start:
-                session["complete"] = False
-            else:
-                session["bounds"].extend((start, end))
-                session["intervals"].append((start, end))
-
-    out = {provider: {"sessions": 0, "elapsed": [], "tools": [], "share": []} for provider, _ in PROVIDERS}
-    for (provider, _), session in sessions.items():
-        bounds = session["bounds"]
-        elapsed = (max(bounds) - min(bounds)) / 1_000_000 if bounds else None
-        tools = union_duration(session["intervals"]) / 1_000_000 if session["complete"] else None
-        share = tools / elapsed * 100 if tools is not None and elapsed is not None and elapsed > 0 else None
-        out[provider]["sessions"] += 1
-        out[provider]["elapsed"].append(elapsed)
-        out[provider]["tools"].append(tools)
-        out[provider]["share"].append(share)
-    for data in out.values():
-        for metric in ("elapsed", "tools", "share"):
-            data[metric] = summarize(data[metric])
+    import request_timing as rt
+    members = con.execute(f"WITH cohort AS ({COHORT_SQL}) SELECT provider, session_id, role FROM cohort").fetchall()
+    measured = rt.collect_session_timing(con) if members else {}
+    out = {}
+    for provider, _ in PROVIDERS:
+        descendants = [measured[p, sid] for p, sid, role in members
+                       if p == provider and role == "descendant" and (p, sid) in measured]
+        mains = [measured[p, sid] for p, sid, role in members
+                 if p == provider and role == "main" and (p, sid) in measured]
+        def metrics(rows):
+            eligible = [r for r in rows if r["wall"] is not None and r["wall"] > 0
+                        and not r["missing_tool_timing"] and not r["invalid_tool_endpoints"]]
+            occupancy = [r for r in rows if r["wall"] is not None and r["wall"] > 0
+                         and r["outstanding"] is not None]
+            def ratio(records, field):
+                total = sum(r["wall"] for r in records)
+                return 100 * sum(r[field] for r in records) / total if total else None
+            return {
+                "sessions": len(rows), "elapsed": summarize([r["observed_wall"] for r in rows]),
+                "tools": summarize([r["tool"] for r in rows]),
+                "outstanding": summarize([r["outstanding"] for r in rows]),
+                "share": summarize([100 * r["tool"] / r["wall"] for r in eligible]),
+                "pooled_share": ratio(eligible, "tool"), "share_sessions": len(eligible),
+                "outstanding_share": ratio(occupancy, "outstanding"), "occupancy_sessions": len(occupancy),
+                "calls": sum(r["tool_calls"] for r in rows),
+                "missing_calls": sum(r["missing_tool_timing"] for r in rows),
+                "anonymous_observations": sum(r["unmeasured_tool_observations"] for r in rows),
+                "invalid_endpoints": sum(r["invalid_tool_endpoints"] for r in rows),
+                "compressed_sessions": sum(r["compressed_timestamps"] for r in rows),
+            }
+        out[provider] = metrics(descendants)
+        out[provider]["groups"] = {"matched mains": metrics(mains)}
+        for kind in ("worker", "guardian", "unknown"):
+            rows = [r for r in descendants if r["session_kind"] == kind]
+            if rows:
+                out[provider]["groups"][kind] = metrics(rows)
     return out
 
 
@@ -94,33 +79,43 @@ def _number(value) -> str:
 
 
 def render_md(data: dict) -> str:
-    blocks = ["# Observed subagent timing\n"]
-    for metric, heading, description in (
-        ("elapsed", "Observed elapsed time (seconds)",
-         "Missing events can shorten the observed span."),
-        ("tools", "Time with tool calls outstanding (seconds)",
-         "Missing or invalid call timestamps make a session's tool time unavailable."),
-        ("share", "Tool share of elapsed time (%)",
-         "Percentage of each subagent's observed time with tools awaiting results. "
-         "Avg averages these percentages, not provider totals. Zero or missing elapsed time has no percentage. "
-         "This does not show whether the model was blocked or how long it spent generating."),
-    ):
-        blocks.append(f"## {heading}\n")
-        if metric == "elapsed":
-            blocks.append("Subagents: " + "; ".join(
-                f"{label} {data[provider]['sessions']:,}" for provider, label in PROVIDERS
-            ) + ". Includes workflow subagents and subagents launched by other subagents; excludes main sessions.\n")
-        blocks.append(description + "\n")
-        if any(data[provider][metric]["n"] != data[provider]["sessions"] for provider, _ in PROVIDERS):
-            blocks.append("Eligible sessions: " + "; ".join(
-                f"{label} {data[provider][metric]['n']:,} "
-                f"({data[provider]['sessions'] - data[provider][metric]['n']:,} excluded)"
-                for provider, label in PROVIDERS
-            ) + ".\n")
-        blocks.append(md_table.gfm_table(["Provider", "Avg", "P25", "P50", "P90", "P99"], [
-            [label] + [_number(data[provider][metric][stat]) for stat in ("avg", "p25", "p50", "p90", "p99")]
-            for provider, label in PROVIDERS
-        ]))
+    blocks = ["# Recorded session timing\n",
+        "Canonical tool work uses the same positive internal-else-wall call durations as the overall session analysis. "
+        "It is attributed work, including interaction tools, not exclusive execution or model-blocked time. "
+        "Tool-outstanding wall time is a separately named interval-union measure.\n",
+        "Subagents: " + "; ".join(f"{label} {data[p]['sessions']:,}" for p, label in PROVIDERS) + ".\n"]
+    for key, heading in (("elapsed", "Observed elapsed span (seconds)"),
+                         ("tools", "Canonical attributed tool work (seconds)"),
+                         ("outstanding", "Time with tools outstanding (seconds; extra wall metric)")):
+        blocks += [f"## {heading}\n", md_table.gfm_table(
+            ["Provider", "N", "Avg", "P25", "P50", "P90", "P99"],
+            [[label, str(data[p][key]["n"])] + [_number(data[p][key][stat]) for stat in ("avg", "p25", "p50", "p90", "p99")]
+             for p, label in PROVIDERS])]
+    blocks += ["## Same-definition pooled ratios and populations\n",
+        "Ratios use sums over eligible sessions, matching the overall session timing table. "
+        "Canonical work / observed span may exceed 100% with parallel work; it is not a wall-clock partition. "
+        "Outstanding / observed span requires complete valid endpoints. "
+        "Positive internal duration with identical endpoints excludes a capture from wall ratios. "
+        "Each distribution shows its own sample N. Observed spans and known canonical work retain finite recorded values, "
+        "while ratios use the explicitly counted complete eligible subset; averages need not describe that subset. "
+        "Unknown legacy kinds stay unknown.\n"]
+    rows = []
+    for p, label in PROVIDERS:
+        for group, metrics in [("all linked subagents", data[p]), *data[p]["groups"].items()]:
+            rows.append([label, group, str(metrics["sessions"]), str(metrics["share_sessions"]),
+                         _number(metrics["pooled_share"]), str(metrics["occupancy_sessions"]),
+                         _number(metrics["outstanding_share"])])
+    blocks.append(md_table.gfm_table(
+        ["Provider", "Population", "Sessions", "Work-ratio eligible", "Work / span (%)",
+         "Wall-ratio eligible", "Outstanding / span (%)"], rows))
+    blocks += ["## Timing coverage\n", md_table.gfm_table(
+        ["Provider", "Recorded calls", "Missing timing/observations", "Anonymous tool observations", "Invalid/missing endpoints", "Compressed sessions"],
+        [[label, str(data[p]["calls"]), str(data[p]["missing_calls"]), str(data[p]["anonymous_observations"]),
+          str(data[p]["invalid_endpoints"]), str(data[p]["compressed_sessions"])] for p, label in PROVIDERS]),
+        "Known positive tool work remains reported when timing is incomplete; unknown durations are not zero measurements. "
+        "Low ratios can reflect fast tools, text-only guardians, and long between-request gaps. "
+        "Missing native web-search starts leave their duration unavailable. "
+        "Observed spans are not verified spawn-to-return times, and the remainder is not measured model compute.\n"]
     return "\n".join(blocks)
 
 

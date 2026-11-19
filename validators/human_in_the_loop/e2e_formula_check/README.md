@@ -1,34 +1,5 @@
-# e2e_formula_check
+# Shared request lifecycle validation
 
-**Question.** Can a user turn's end-to-end response time be reconstructed from a simple
-formula using *average* per-round generation and tool cost? I.e. does
-`e2e ≈ rounds × (avg_generation + avg_tool)` hold?
+This validator runs the same request lifecycle and coverage audit as `artifacts/human_in_the_loop/user_turn_decomposition`. Native turn identity and completion evidence determine request duration. Legacy user-triggered groups stay countable but do not receive fabricated completion at the next prompt or EOF.
 
-## Input
-
-`trace/syfi_coding_trace.duckdb` by default; use `--db` for another materialized trace.
-
-## Method / key assumptions
-
-- Compares observed user-turn response time against a formula built from average
-  per-round generation time and average tool time, to test whether a coarse analytic
-  model is good enough to stand in for the full trace.
-- Same turn / generation / tool definitions as `user_turn_decomposition/`
-  (generation = latest input → last model output; tool = effective tool latency).
-- Reports where the formula over- or under-predicts.
-
-## How to run
-
-```bash
-uv run python validators/human_in_the_loop/e2e_formula_check/analyze.py
-```
-
-(For a fast check, pass `--db` with a smaller materialized database.)
-
-## Outputs (written here)
-
-- `result_analysis.md` — formula-vs-observed comparison.
-
-## Notes
-
-Markdown only (no figures).
+Canonical tool work is attributed internal-else-wall work, including interaction tools. It is not a wall-clock partition or an algebraic explanation of response time. Missing endpoints, anonymous tool observations, and contradictory timestamps remain explicit coverage gaps. The audit emits `result_analysis.md` using the standard `--db`, `--input`, and `--output-dir` CLI.

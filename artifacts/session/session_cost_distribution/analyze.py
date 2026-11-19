@@ -1,31 +1,9 @@
 #!/usr/bin/env python3
-"""Per-session / per-request / per-step token *and* cost distributions for the paper's
-Cost Distribution table (``tab:cost_distribution`` in ``src/04_SessionContext.tex``).
+"""Per-session, reconstructed-request, and per-round token/cost distributions.
 
-For each granularity we break the workload into the three billed categories and report, for
-both the token count and the USD cost, avg / p25 / p50 / p90 / p99:
-
-* **Append tokens** -- ``newly_append_tokens``, billed at the fresh-input/cache-write rates.
-* **Prefix tokens** -- ``prefix_tokens``, billed at the cache-read rate.
-* **Output tokens** -- ``output_tokens`` (reasoning included), billed at the output rate.
-* **Total** -- the sum of the three.
-
-Cost rows also carry each category's **share of total spend** (the same three numbers for any
-grouping, since they are sums over the same priced rounds).
-
-Definitions reuse the canonical experiments so the numbers reconcile:
-
-* **Cost** is computed with the single-source price table ``artifacts/utils/pricing.json`` via
-  ``web_analytics/pricing.py`` (``price_for`` -> per-model exact/family resolve; ``round_cost``
-  -> append at input/cache-write rates, prefix at cache-read rate, output at output rate). Rounds
-  whose model has no price are *unpriced* and excluded; coverage is reported rather than
-  hard-coded.
-* A **request** is one user turn -- the same turn state machine as
-  ``human_in_the_loop/user_turn_decomposition`` (identical to ``user_turn_response_time`` and
-  ``session_internal_counts``). A **step** is one LLM round; a **session** is one ``session_id``.
-
-Run with the standard trace-db CLI (``--db`` | ``-i/--input`` | ``-o/--output-dir``).
-"""
+Request ownership is shared with timing/count analyses through request_timing.py.
+Legacy request groups retain attributed costs without a verified response duration.
+Pricing and session/round billing definitions are unchanged."""
 
 from __future__ import annotations
 
@@ -103,7 +81,10 @@ def _add(acc: dict[str, float], pre, app, out, pc, ac, oc) -> None:
 def collect(con) -> tuple[dict[str, dict[str, list[dict]]], dict[str, int]]:
     """Return ``(units, meta)`` where ``units[scope][granularity]`` is a list of per-unit token/
     cost dicts, and ``meta`` carries priced/unpriced round counts."""
-    events_by_round = DEC.load_timing_events(con)
+    from request_timing import collect_requests
+    requests = collect_requests(con)
+    request_by_round = {rpk: index for index, request in enumerate(requests) for rpk in request.round_pks}
+    request_acc = {index: _unit() for index in range(len(requests))}
     cache_write_expr = (
         "claude_cache_creation_input_tokens"
         if _has_round_column(con, "claude_cache_creation_input_tokens")
@@ -123,27 +104,10 @@ def collect(con) -> tuple[dict[str, dict[str, list[dict]]], dict[str, int]]:
         s: {"session": [], "request": [], "step": []} for s in SCOPES
     }
     sess_acc: dict[str, dict[str, dict]] = {s: {} for s in SCOPES}
-    active: dict[str, dict] = {}
     priced = unpriced = 0
-
-    def close(sid: str) -> None:
-        turn = active.pop(sid, None)
-        if turn is None or turn["end"] is None:
-            return
-        if (turn["end"] - turn["start"]).total_seconds() <= 0:
-            return
-        for scope in ("merged", turn["provider"]):
-            if scope in units:
-                units[scope]["request"].append(turn["acc"])
 
     for rpk, prov, model, sid, pre, app, cache_write, cache_write_1h, out in rows:
         sid = sid if isinstance(sid, str) and sid else None
-        events = events_by_round.get(rpk, [])
-        start = DEC.response_trigger_user_message_timestamp(events)
-        if start is not None and sid is not None:
-            close(sid)
-            active[sid] = {"provider": prov, "start": start, "end": None, "acc": _unit()}
-
         price = pricing.price_for(prov or "", model)
         if price is None:
             unpriced += 1
@@ -165,22 +129,23 @@ def collect(con) -> tuple[dict[str, dict[str, list[dict]]], dict[str, int]]:
             if sid is not None:
                 for scope in ("merged", prov):
                     if scope in sess_acc:
-                        _add(sess_acc[scope].setdefault(sid, _unit()), pre, app, out, pc, ac, oc)
-            turn = active.get(sid) if sid is not None else None
-            if turn is not None:
-                _add(turn["acc"], pre, app, out, pc, ac, oc)
+                        _add(sess_acc[scope].setdefault((prov, sid), _unit()), pre, app, out, pc, ac, oc)
+            index = request_by_round.get(rpk)
+            if index is not None:
+                _add(request_acc[index], pre, app, out, pc, ac, oc)
 
-        turn = active.get(sid) if sid is not None else None
-        if turn is not None:
-            response_end = DEC.last_response_end_timestamp(events)
-            if response_end is not None and (turn["end"] is None or response_end > turn["end"]):
-                turn["end"] = response_end
-    for sid in list(active):
-        close(sid)
+    for index, request in enumerate(requests):
+        if not request.round_pks:
+            continue
+        for scope in ("merged", request.provider):
+            if scope in units:
+                units[scope]["request"].append(request_acc[index])
 
     for scope in SCOPES:
         units[scope]["session"] = list(sess_acc[scope].values())
-    return units, {"priced": priced, "unpriced": unpriced}
+    from request_timing import request_ownership_coverage
+    return units, {"priced": priced, "unpriced": unpriced,
+                   "ownership_coverage": request_ownership_coverage(con, requests=requests)}
 
 
 def series(unit_list: list[dict], category: str, kind: str) -> list[float]:
@@ -278,6 +243,9 @@ def render_tex(units: dict[str, dict[str, list[dict]]], meta: dict[str, int]) ->
             share = "" if ckey == "total" else f"{shares[ckey] * 100:.1f}\\%"
             lines.append(f"\\quad {SHORT_LABEL[ckey]} & {cost_cells(cost)} & {share} \\\\")
     lines += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
+    from request_timing import ownership_coverage_note
+    if meta.get("ownership_coverage"):
+        lines.append("% " + ownership_coverage_note(meta["ownership_coverage"]))
     return "\n".join(lines) + "\n"
 
 
@@ -296,7 +264,9 @@ def render_md(units: dict[str, dict[str, list[dict]]], meta: dict[str, int]) -> 
                 [SHORT_LABEL[ckey], money(cost["avg"]), money(cost["p50"]), money(cost["p90"]), money(cost["p99"]), share]
             )
         sections.append((glabel, rows))
-    return md_table.section_tables(headers, sections, ["l", "r", "r", "r", "r", "r"])
+    from request_timing import render_ownership_coverage
+    return (md_table.section_tables(headers, sections, ["l", "r", "r", "r", "r", "r"])
+            + "\n\n" + render_ownership_coverage(meta["ownership_coverage"]))
 
 
 def render_headline(units: dict[str, dict[str, list[dict]]], meta: dict[str, int]) -> list[dict[str, str]]:
@@ -363,10 +333,11 @@ def main() -> int:
     finally:
         con.close()
 
+    from request_timing import ownership_coverage_note
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     tex_path = out_dir / "session_cost_distribution.tex"
-    tex_path.write_text(render_tex(units, meta), encoding="utf-8")
+    tex_path.write_text(render_tex(units, meta) + "\n% " + ownership_coverage_note(meta["ownership_coverage"]) + "\n", encoding="utf-8")
     md_path = out_dir / "session_cost_distribution.md"
     md_path.write_text(render_md(units, meta), encoding="utf-8")
     headline_path = out_dir / "headline.json"
