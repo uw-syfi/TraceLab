@@ -23,6 +23,7 @@ from typing import Any, Optional
 from _overview import percentile
 from daily import _local
 from rounds import RoundRow
+from tool_metrics import tool_aggregate_sql
 
 
 def _div(a: float, b: float) -> float:
@@ -66,9 +67,10 @@ def _tool_aggregates(con) -> dict[str, Any]:
     reads = 0
     writes = 0
     by_name: Counter[str] = Counter()
+    agg = tool_aggregate_sql()
     for name, n, err_n, rc_sum in con.execute(
-        "SELECT tool_name, count(*) AS n, "
-        "count(*) FILTER (WHERE is_error) AS err_n, "
+        f"SELECT tool_name, {agg['calls']} AS n, "
+        f"{agg['errors']} AS err_n, "
         "COALESCE(sum(result_chars), 0) AS rc_sum "
         "FROM tool_calls GROUP BY tool_name"
     ).fetchall():

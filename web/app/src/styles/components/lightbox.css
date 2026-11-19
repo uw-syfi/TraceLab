@@ -1,4 +1,6 @@
   /* ---- image viewer / lightbox (see components/Lightbox.astro) ---- */
+  /* Raise the viewer's stacking context above the header and assistant. */
+  .shell:has(.lightbox.open) { z-index: 90; }
   .lightbox {
     position: fixed; inset: 0; z-index: 90; display: none;
     align-items: center; justify-content: center;
@@ -9,6 +11,7 @@
 
   .lightbox .lb-img {
     max-width: 92vw; max-height: 86vh; width: auto; height: auto;
+    background: #fff;
     border-radius: 10px; box-shadow: 0 24px 90px rgba(0, 0, 0, 0.55);
     transform: translate(0, 0) scale(1); transform-origin: center center;
     transition: transform .18s var(--ease); will-change: transform;

@@ -309,15 +309,16 @@ def _iter_file(path: Path, chunk: int = 1 << 20) -> Iterator[bytes]:
 
 
 def _roots_signature() -> str:
-    """Cheap content signature: (path, size, mtime) over every *.jsonl under the present roots."""
+    """Cheap signature over session files and sibling parent-evidence metadata."""
     h = hashlib.sha256()
     for _prefix, root in _present_roots():
         for path in _iter_jsonl(root):
-            try:
-                st = path.stat()
-            except OSError:
-                continue
-            h.update(f"{path}:{st.st_size}:{int(st.st_mtime)}\n".encode())
+            for candidate in (path, path.with_suffix(".meta.json")):
+                try:
+                    st = candidate.stat()
+                except OSError:
+                    continue
+                h.update(f"{candidate}:{st.st_size}:{st.st_mtime_ns}\n".encode())
     return h.hexdigest()
 
 

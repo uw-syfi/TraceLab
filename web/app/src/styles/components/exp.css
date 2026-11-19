@@ -201,7 +201,7 @@
      alignment with the images). Wide measure, larger type. */
   .exp-main .readme {
     background: none; border: none; box-shadow: none; padding: 0;
-    max-width: none; font-size: var(--fs-base); line-height: 1.72;
+    max-width: none; font-size: var(--fs-base); line-height: 1.72; overflow-wrap: anywhere;
   }
   .exp-main .readme h2 { font-size: var(--fs-xl); }
   .exp-main .readme h3 { font-size: var(--fs-md); }
@@ -360,6 +360,21 @@
   .readme table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: var(--fs-xs); }
   .readme th, .readme td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
   .readme th { background: var(--card-2); font-weight: 600; }
+  .subagent-tables .subagent-table-scroll { overflow-x: auto; margin-bottom: 24px; }
+  .subagent-tables .subagent-table-scroll:focus-visible { outline: 2px solid var(--terra); outline-offset: 2px; }
+  .subagent-tables table { min-width: 560px; margin-bottom: 0; }
+  .subagent-tables table:has(tbody th[data-provider]) { table-layout: auto; white-space: nowrap; }
+  .subagent-tables table:has(tbody th[data-provider]) th:first-child { width: auto; }
+  .subagent-tables th, .subagent-tables td { vertical-align: top; font-variant-numeric: tabular-nums; }
+  .subagent-tables tbody th { background: none; font-weight: 500; }
+  .subagent-tables th[data-provider="claude"] { color: var(--terra); }
+  .subagent-tables th[data-provider="codex"] { color: var(--sage); }
+  .subagent-tables th code, .subagent-tables h4 code { white-space: pre-wrap; padding: 0; border: 0; background: none; }
+  .subagent-scroll-hint { display: none; }
+  @media (max-width: 600px) {
+    .subagent-scroll-hint { display: block; color: var(--muted); font-size: var(--fs-2xs); margin: 0 0 18px; }
+    .subagent-tables th, .subagent-tables td { padding: 8px 6px; }
+  }
   .readme hr { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 
   /* Personal mode (?personal=1): only the overview shows, so drop the figures/details nav links. */
@@ -369,6 +384,9 @@
 
   /* Medium and narrow screens: collapse the rail above the content, and keep the floating nav as a
      sticky horizontal strip so it never covers the figures. */
+  @media (max-width: 768px) {
+    body:has(.exp-page) nav.tabs { justify-content: flex-start; overflow-x: auto; }
+  }
   @media (max-width: 1280px) {
     .shell:has(.exp-page) { max-width: 1180px; }
     .exp-layout { grid-template-columns: 1fr; gap: 4px; margin-top: 4px; }

@@ -80,6 +80,7 @@ const FIGURES = [
   { exp: 'human_in_the_loop/human_input_wait', file: 'human_input_wait_count_cdf_by_provider.png', dest: 'human_in_the_loop/human_input_wait_count_cdf_by_provider.png' },
   { exp: 'human_in_the_loop/human_input_wait', file: 'human_input_wait_total_cdf_by_provider.png', dest: 'human_in_the_loop/human_input_wait_total_cdf_by_provider.png' },
   { exp: 'session/session_token_steps', glob: /_token_steps\.png$/, dest: 'session/session_token_steps.png' },
+  { exp: 'subagents/tool_usage', file: 'tool_usage.png', dest: 'subagents/tool_usage.png' },
 ];
 
 function resolveFigure(f) {
@@ -119,6 +120,10 @@ const HEADLINE_SLUGS = [
   'session/session_compaction_counts',
   'session/session_cost_distribution',
   'session/session_timing_distribution',
+  'subagents/adoption',
+  'subagents/workload',
+  'subagents/tokens_and_reports',
+  'subagents/timing',
   'prefix_cache/redundant_prefill',
   'prefix_cache/human_idle_cache_counterfactual',
   'llm_generation/token_length_distribution',

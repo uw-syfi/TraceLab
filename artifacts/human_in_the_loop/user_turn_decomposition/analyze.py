@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
-"""Decompose user-turn response time into generation/tool/residual totals.
+"""Audit shared request lifecycle and timing coverage.
 
-Migrated onto the shared DuckDB layer (``artifacts/utils/trace_db.py``): instead of re-parsing the
-normalized JSONL line by line, this reads round scalars + per-round timing events + per-round tool
-latencies from the trace DB and replays the same stateful per-session decomposition over rounds in
-ingestion order (``round_pk`` == file order). The result is byte-identical to the pre-DuckDB path.
-
-This experiment is registered with ``style="direct"`` in ``run_all.py``. DB-backed direct-style
-experiments receive ``--db`` directly, and a direct run defaults to the released DuckDB. The
-standard ``--db | -i/--input | -o`` CLI is available; explicit JSONL input is a compatibility path.
-"""
+Native completion determines response duration. Canonical attributed tool work is
+not a wall-clock partition. Small per-round loading helpers serve count consumers."""
 
 from __future__ import annotations
 
 import argparse
-import math
 import sys
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -28,6 +19,7 @@ REPO_ROOT = EXP_DIR.parents[2]  # experiment -> category -> artifacts -> repo ro
 sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 
 import trace_db  # noqa: E402
+from timing import effective_tool_seconds
 
 OUT_MD = EXP_DIR / "result_analysis.md"
 
@@ -130,110 +122,6 @@ class RoundTools:
     tool_wall_seconds: float = 0.0
 
 
-@dataclass
-class ActiveTurn:
-    provider: str
-    start_at: datetime
-    end_at: datetime | None = None
-    last_model_output_at: datetime | None = None
-    usage_report_at: datetime | None = None
-    generation_seconds: float = 0.0
-    tool_effective_seconds: float = 0.0
-    tool_wall_seconds: float = 0.0
-    rows: int = 0
-    tool_calls: int = 0
-
-
-@dataclass
-class ProviderStats:
-    turns: int = 0
-    dropped_no_end: int = 0
-    dropped_nonpositive: int = 0
-    rows: int = 0
-    tool_calls: int = 0
-    e2e_seconds: float = 0.0
-    generation_seconds: float = 0.0
-    tool_effective_seconds: float = 0.0
-    tool_wall_seconds: float = 0.0
-    final_response_end_extra_seconds: float = 0.0
-    usage_report_after_model_output_seconds: float = 0.0
-    turns_with_usage_report_after_output: int = 0
-    residual_effective_seconds: float = 0.0
-    residual_wall_seconds: float = 0.0
-    negative_residual_effective_turns: int = 0
-    negative_residual_wall_turns: int = 0
-    residual_effective_samples: list[float] = field(default_factory=list)
-    residual_wall_samples: list[float] = field(default_factory=list)
-
-    def add_turn(self, turn: ActiveTurn) -> None:
-        if turn.end_at is None:
-            self.dropped_no_end += 1
-            return
-        e2e = (turn.end_at - turn.start_at).total_seconds()
-        if e2e <= 0:
-            self.dropped_nonpositive += 1
-            return
-        final_extra = 0.0
-        if turn.last_model_output_at is not None and turn.end_at > turn.last_model_output_at:
-            final_extra = (turn.end_at - turn.last_model_output_at).total_seconds()
-        usage_extra = 0.0
-        if (
-            turn.usage_report_at is not None
-            and turn.last_model_output_at is not None
-            and turn.usage_report_at > turn.last_model_output_at
-        ):
-            usage_extra = (turn.usage_report_at - turn.last_model_output_at).total_seconds()
-        residual_effective = e2e - turn.generation_seconds - turn.tool_effective_seconds
-        residual_wall = e2e - turn.generation_seconds - turn.tool_wall_seconds
-
-        self.turns += 1
-        self.rows += turn.rows
-        self.tool_calls += turn.tool_calls
-        self.e2e_seconds += e2e
-        self.generation_seconds += turn.generation_seconds
-        self.tool_effective_seconds += turn.tool_effective_seconds
-        self.tool_wall_seconds += turn.tool_wall_seconds
-        self.final_response_end_extra_seconds += final_extra
-        self.residual_effective_seconds += residual_effective
-        self.residual_wall_seconds += residual_wall
-        self.usage_report_after_model_output_seconds += usage_extra
-        if usage_extra > 0:
-            self.turns_with_usage_report_after_output += 1
-        self.residual_effective_samples.append(residual_effective)
-        self.residual_wall_samples.append(residual_wall)
-        if residual_effective < 0:
-            self.negative_residual_effective_turns += 1
-        if residual_wall < 0:
-            self.negative_residual_wall_turns += 1
-
-
-def percentile(values: list[float], q: float) -> float | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    if len(ordered) == 1:
-        return ordered[0]
-    pos = (len(ordered) - 1) * q
-    lo = math.floor(pos)
-    hi = math.ceil(pos)
-    if lo == hi:
-        return ordered[lo]
-    frac = pos - lo
-    return ordered[lo] * (1 - frac) + ordered[hi] * frac
-
-
-def hours(seconds: float) -> float:
-    return seconds / 3600
-
-
-def fmt_h(seconds: float) -> str:
-    return f"{hours(seconds):,.1f}h"
-
-
-def fmt_s(seconds: float | None) -> str:
-    return "" if seconds is None else f"{seconds:,.1f}s"
-
-
 def load_timing_events(
     con: "duckdb.DuckDBPyConnection",
 ) -> dict[int, list[tuple[str | None, datetime | None]]]:
@@ -270,12 +158,7 @@ def load_round_tools(con: "duckdb.DuckDBPyConnection") -> dict[int, RoundTools]:
         agg = aggregates.setdefault(round_pk, RoundTools())
         agg.tool_calls += 1
         # Effective tool latency: internal if present, else wall (seconds).
-        if internal_ms is not None:
-            effective = internal_ms / 1000
-        elif wall_ms is not None:
-            effective = wall_ms / 1000
-        else:
-            effective = None
+        effective = effective_tool_seconds(internal_ms, wall_ms)
         if effective is not None and effective > 0:
             agg.tool_effective_seconds += effective
         if wall_ms is not None:
@@ -286,169 +169,19 @@ def load_round_tools(con: "duckdb.DuckDBPyConnection") -> dict[int, RoundTools]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    # Direct runs default to the released DuckDB; an explicit -i/--input remains a compatibility
-    # path that the shared layer materializes before querying.
-    trace_db.add_db_args(parser, default_output_dir=EXP_DIR)
+    import request_timing as rt
+    parser = argparse.ArgumentParser(description=__doc__)
+    trace_db.add_db_args(parser, default_output_dir=Path(__file__).resolve().parent)
     args = parser.parse_args()
     con = trace_db.open_from_args(args)
-
-    events_by_round = load_timing_events(con)
-    tools_by_round = load_round_tools(con)
-
-    active_by_session: dict[str, ActiveTurn] = {}
-    stats: defaultdict[str, ProviderStats] = defaultdict(ProviderStats)
-    user_triggered: Counter[str] = Counter()
-
-    def add_to_all(turn: ActiveTurn) -> None:
-        stats[turn.provider].add_turn(turn)
-        stats["all"].add_turn(turn)
-
-    def close_turn(session_id: str) -> None:
-        turn = active_by_session.pop(session_id, None)
-        if turn is not None:
-            add_to_all(turn)
-
-    # Single pass over rounds in ingestion order (round_pk == file order), reproducing the old
-    # line-by-line loader's per-session state machine exactly.
-    for round_pk, provider_value, session_id_value in con.execute(
-        "SELECT round_pk, provider, session_id FROM rounds ORDER BY round_pk"
-    ).fetchall():
-        events = events_by_round.get(round_pk, [])
-        provider = str(provider_value) if provider_value else "<unknown-provider>"
-        session_id = session_id_value if isinstance(session_id_value, str) else None
-
-        user_start_at = response_trigger_user_message_timestamp(events)
-        if user_start_at is not None and session_id is not None:
-            close_turn(session_id)
-            user_triggered[provider] += 1
-            active_by_session[session_id] = ActiveTurn(
-                provider=provider,
-                start_at=user_start_at,
-            )
-
-        turn = active_by_session.get(session_id) if session_id is not None else None
-        if turn is None:
-            continue
-        turn.rows += 1
-        generation = input_to_last_output_span_seconds(events)
-        if generation is not None:
-            turn.generation_seconds += generation
-        model_output_at = last_model_output_timestamp(events)
-        if model_output_at is not None and (
-            turn.last_model_output_at is None
-            or model_output_at > turn.last_model_output_at
-        ):
-            turn.last_model_output_at = model_output_at
-        response_end_at = last_response_end_timestamp(events)
-        if response_end_at is not None and (
-            turn.end_at is None or response_end_at > turn.end_at
-        ):
-            turn.end_at = response_end_at
-        usage_report_at = timestamps_for(events, USAGE_REPORT_EVENT_TYPES)
-        if usage_report_at:
-            last_usage_report_at = max(usage_report_at)
-            if (
-                turn.usage_report_at is None
-                or last_usage_report_at > turn.usage_report_at
-            ):
-                turn.usage_report_at = last_usage_report_at
-
-        round_tools = tools_by_round.get(round_pk)
-        if round_tools is not None:
-            turn.tool_calls += round_tools.tool_calls
-            turn.tool_effective_seconds += round_tools.tool_effective_seconds
-            turn.tool_wall_seconds += round_tools.tool_wall_seconds
-
-    for session_id in list(active_by_session):
-        close_turn(session_id)
-
-    out_md = Path(getattr(args, "output_dir", None) or EXP_DIR) / "result_analysis.md"
-    input_label = (
-        str(Path(args.input).resolve()) if args.input is not None else str(args.db)
-    )
-
-    providers = ["all", *sorted(provider for provider in stats if provider != "all")]
-    lines = [
-        "# User Turn Decomposition Audit",
-        "",
-        f"Input: `{input_label}`",
-        "",
-        "This audit uses the same user-turn response-time definition as the summary:",
-        "response-triggering `user_message` to the last response-end event before the next same-session response-triggering `user_message`.",
-        "Response-end events are model output events (`reasoning`, `text`, or `tool_call`); Codex `usage_report` is tracked separately and is not part of e2e response time.",
-        "",
-        "The residual is a subtraction diagnostic, not a semantic state:",
-        "`e2e - generation - tool_latency`. It is reported both with effective tool latency and wall tool latency.",
-        "",
-        "## Provider Totals",
-        "",
-        "| provider | response-triggering user rows | sampled turns | e2e | generation | tool effective | tool wall | residual effective | residual wall | usage-report-after-output | turns with usage gap |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
-    ]
-    for provider in providers:
-        item = stats[provider]
-        started = sum(user_triggered.values()) if provider == "all" else user_triggered[provider]
-        lines.append(
-            f"| {provider} | {started:,} | {item.turns:,} | {fmt_h(item.e2e_seconds)} | "
-            f"{fmt_h(item.generation_seconds)} | {fmt_h(item.tool_effective_seconds)} | "
-            f"{fmt_h(item.tool_wall_seconds)} | {fmt_h(item.residual_effective_seconds)} | "
-            f"{fmt_h(item.residual_wall_seconds)} | "
-            f"{fmt_h(item.usage_report_after_model_output_seconds)} | "
-            f"{item.turns_with_usage_report_after_output:,} |"
-        )
-
-    lines.extend(
-        [
-            "",
-            "## Per-Turn Residual Distribution",
-            "",
-            "| provider | residual kind | p25 | p50 | p90 | avg | negative turns |",
-            "|---|---|---:|---:|---:|---:|---:|",
-        ]
-    )
-    for provider in providers:
-        item = stats[provider]
-        avg_eff = (
-            item.residual_effective_seconds / item.turns if item.turns else None
-        )
-        avg_wall = item.residual_wall_seconds / item.turns if item.turns else None
-        lines.append(
-            f"| {provider} | effective | "
-            f"{fmt_s(percentile(item.residual_effective_samples, 0.25))} | "
-            f"{fmt_s(percentile(item.residual_effective_samples, 0.50))} | "
-            f"{fmt_s(percentile(item.residual_effective_samples, 0.90))} | "
-            f"{fmt_s(avg_eff)} | {item.negative_residual_effective_turns:,} |"
-        )
-        lines.append(
-            f"| {provider} | wall | "
-            f"{fmt_s(percentile(item.residual_wall_samples, 0.25))} | "
-            f"{fmt_s(percentile(item.residual_wall_samples, 0.50))} | "
-            f"{fmt_s(percentile(item.residual_wall_samples, 0.90))} | "
-            f"{fmt_s(avg_wall)} | {item.negative_residual_wall_turns:,} |"
-        )
-
-    lines.extend(
-        [
-            "",
-            "## Dropped Turns",
-            "",
-            "| provider | no response end | nonpositive duration |",
-            "|---|---:|---:|",
-        ]
-    )
-    for provider in providers:
-        item = stats[provider]
-        lines.append(
-            f"| {provider} | {item.dropped_no_end:,} | {item.dropped_nonpositive:,} |"
-        )
-
-    out_md.parent.mkdir(parents=True, exist_ok=True)
-    out_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(out_md)
+    try:
+        report = rt.render_request_audit(con)
+    finally:
+        con.close()
+    output = Path(args.output_dir) / "result_analysis.md"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(report, encoding="utf-8")
+    print(output)
     return 0
 
 

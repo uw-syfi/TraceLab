@@ -17,6 +17,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from trace_privacy import LineageMarkerValidator
+
 
 RoundIdentity = tuple[str, str, str]
 
@@ -91,8 +93,10 @@ def merge_round_traces(input_paths: list[Path], output_path: Path) -> dict[str, 
     owner_by_identity: dict[RoundIdentity, tuple[int, int]] = {}
     input_rows = [0] * len(input_paths)
     excluded_by_input: list[dict[str, int]] = [{} for _ in input_paths]
+    markers = LineageMarkerValidator()
     for input_index, input_path in enumerate(input_paths):
         for line_number, record in iter_jsonl(input_path):
+            markers.add(record)
             input_rows[input_index] += 1
             exclusion_reason = round_exclusion_reason(record)
             if exclusion_reason is not None:

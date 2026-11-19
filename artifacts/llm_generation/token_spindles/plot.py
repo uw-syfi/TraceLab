@@ -22,6 +22,7 @@ import sys  # noqa: E402
 sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 import png_sidecar  # noqa: E402
 import trace_db  # noqa: E402
+from token_policies import should_subtract_previous_output as _should_subtract_previous_output  # noqa: E402
 
 EXP_DIR = SCRIPT_DIR
 RESULTS_MD = SCRIPT_DIR / "result_analysis.md"
@@ -61,9 +62,7 @@ def output_proxy(row: dict[str, Any]) -> int:
 
 
 def should_subtract_previous_output(previous: dict[str, Any]) -> bool:
-    if previous["provider"] == "claude":
-        return True
-    return previous["provider"] == "codex" and previous.get("model") == "gpt-5.5"
+    return _should_subtract_previous_output(previous, "claude-and-gpt55")
 
 
 def load_pairs(con) -> tuple[list[PairValues], list[float], dict[str, int]]:
@@ -419,7 +418,7 @@ def main() -> int:
     )
     png_sidecar.make_self_contained(
         output_dir,
-        code_files=[Path(__file__)],
+        code_files=[Path(__file__), *png_sidecar.util_code_files()],
         readme_path=SCRIPT_DIR / "README.md",
     )
     print(RESULTS_MD)

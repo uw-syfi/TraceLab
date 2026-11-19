@@ -9,6 +9,7 @@ import TermStrip from '../TermStrip.astro';
 import { experiments, type Experiment } from '../../lib/experiments';
 import { gallerySectionKey } from '../../lib/figures';
 import { parseExperimentReadme, analysisForFigure } from '../../lib/readme';
+import { rehypeSubagentTables, subagentTableBody } from '../../lib/subagentTables';
 import { localeFromUrl, useTranslations } from '../../i18n';
 
 // Shared experiment-detail surface for both /exp/<slug> (English) and /zh/exp/<slug> (Chinese).
@@ -43,7 +44,12 @@ function readReadme(rel: string): string {
 const parsed = parseExperimentReadme(readReadme(exp.readme));
 
 // syntaxHighlight off so the warm .readme pre styling applies (no cold shiki theme).
+const isSubagent = exp.category === 'subagents';
 const processor = await createMarkdownProcessor({ syntaxHighlight: false });
+const tableProcessor = isSubagent ? await createMarkdownProcessor({
+  syntaxHighlight: false,
+  rehypePlugins: [[rehypeSubagentTables, { slug: exp.slug }]],
+}) : processor;
 const renderMd = async (md: string) => (md ? (await processor.render(md)).code : '');
 
 const overviewHtml = await renderMd(parsed.overviewMd);
@@ -66,7 +72,7 @@ const tables = (
     (exp.tables ?? []).map(async (t) => ({
       ...t,
       caption: locCaption(t.caption),
-      html: await renderMd(readReadme(t.src)),
+      html: (await tableProcessor.render(isSubagent ? subagentTableBody(readReadme(t.src)) : readReadme(t.src))).code,
       analysisHtml: await renderMd(analysisForFigure(parsed, t.src)),
     })),
   )
@@ -75,11 +81,12 @@ const tables = (
 const sec = T.figures.sections as Record<string, { title: string }>;
 const categoryLabels: Record<string, string> = {
   session: sec.session?.title ?? 'Session',
+  subagents: sec.subagents?.title ?? 'Subagents',
   llm_generation: sec.llm_generation?.title ?? 'LLM generation',
   tool_calls: sec.tool_calls?.title ?? 'Tool calls',
   prefix_cache: sec.prefix_cache?.title ?? 'Prefix cache',
 };
-const categoryOrder = ['session', 'llm_generation', 'tool_calls', 'prefix_cache'];
+const categoryOrder = ['session', 'subagents', 'llm_generation', 'tool_calls', 'prefix_cache'];
 const experimentGroups = categoryOrder
   .map((category) => ({
     category,
@@ -224,10 +231,11 @@ const analyzeHref = `${base}/#analyze`;
               <span class="eyebrow">{ui.tables}</span>
               {tables.length > 1 && <span class="sec-count">{tables.length}</span>}
             </header>
+            {isSubagent && <p class="subagent-scroll-hint">{zh ? '窄屏上可横向滚动表格，查看所有列。' : 'On narrow screens, scroll tables sideways to see all columns.'}</p>}
             <div class="exp-tables">
               {tables.map((tbl, i) => (
                 <figure class="exp-table">
-                  <div class="readme exp-table-body" set:html={tbl.html} />
+                  <div class:list={['readme exp-table-body', { 'subagent-tables': isSubagent }]} set:html={tbl.html} />
                   <figcaption><span class="fig-n">{ui.tableLabel}&nbsp;{i + 1}</span>{tbl.caption}</figcaption>
                   {tbl.analysisHtml && <div class="fig-analysis readme" set:html={tbl.analysisHtml} />}
                 </figure>

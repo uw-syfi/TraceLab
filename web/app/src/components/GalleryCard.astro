@@ -2,6 +2,7 @@
 import { sageCategories } from '../lib/figures';
 import { motifFor, motifSvg } from '../lib/figureMotif';
 import { localeFromUrl } from '../i18n';
+import { subagentHeadlineRows } from '../lib/headlines';
 
 interface StatLine {
   label: string;
@@ -21,6 +22,10 @@ interface Props {
 }
 const { category, displayCategory = category, title, blurb, variant, src, statLines = [], slug, delay = 0, readMore = 'Read more' } = Astro.props;
 const tagCls = sageCategories.has(category) ? 'tag sage' : 'tag';
+const comparison = category === 'subagents' && variant === 'stat' ? subagentHeadlineRows(statLines) : [];
+const comparisonLabel = comparison.length
+  ? `${title}. ${comparison.map((row) => `${row.measure}: Claude ${row.values[0].value}; Codex ${row.values[1].value}`).join('. ')}`
+  : undefined;
 
 // Figure cards show a themed motif preview (inferred from the real figure filename/metadata); the
 // real chart lives on the detail page. Stat cards keep their summary-number canvas.
@@ -34,10 +39,22 @@ const Tag = slug ? 'a' : 'article';
 const href = slug ? `${base}/exp/${slug}` : undefined;
 ---
 
-<Tag class={`fig reveal${slug ? ' fig-link' : ''}`} style={`--d:${delay}ms`} href={href}>
-  <div class={`canvas${variant === 'figure' ? ' canvas--motif' : ''}`} data-motif={motifKey}>
+<Tag class={`fig reveal${slug ? ' fig-link' : ''}`} style={`--d:${delay}ms`} href={href} aria-label={comparisonLabel}>
+  <div class={`canvas${variant === 'figure' ? ' canvas--motif' : ''}${comparison.length ? ' canvas--comparison' : ''}`} data-motif={motifKey}>
     {variant === 'figure' ? (
       <Fragment set:html={motifHtml} />
+    ) : comparison.length ? (
+      <table class="subagent-preview">
+        <thead><tr><th scope="col">Measure</th><th scope="col">Claude</th><th scope="col">Codex</th></tr></thead>
+        <tbody>
+          {comparison.map((row) => (
+            <tr>
+              <th scope="row" title={row.measure}>{row.label}</th>
+              {row.values.map((value) => <td class="num" title={value.value}>{value.display}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     ) : (
       <div class="stat-canvas">
         {statLines.map((s) => (

@@ -29,6 +29,7 @@ from style import (
 )  # noqa: E402
 import trace_db  # noqa: E402
 import png_sidecar  # noqa: E402
+from tool_metrics import tool_aggregate_sql  # noqa: E402
 
 DEFAULT_TOP_TOOLS = 30
 DEFAULT_MIN_TOOL_CALLS = 20  # tools with fewer provider-local calls collapse into "Other"
@@ -86,6 +87,7 @@ def _tool_time_query(plot_name_expr: str, *, by_provider: bool) -> str:
     # GROUP BY the plot-name expression itself (not a positional alias): with by_provider the
     # provider column shifts the positions, so reference the expression directly.
     group_by = f"r.provider, {plot_name_expr}" if by_provider else plot_name_expr
+    agg = tool_aggregate_sql()
     return f"""
         WITH ordered AS (
             SELECT
@@ -98,11 +100,11 @@ def _tool_time_query(plot_name_expr: str, *, by_provider: bool) -> str:
             FROM tool_calls tc
         )
         SELECT {provider_select}{plot_name_expr}                      AS plot_name,
-               count(*)                                               AS calls,
-               count(*) FILTER (WHERE eff IS NOT NULL AND eff > 0)    AS latency_count,
-               count(*) FILTER (WHERE eff IS NULL)                    AS missing_latency,
-               count(*) FILTER (WHERE is_error)                       AS error_calls,
-               sum(CASE WHEN eff IS NOT NULL AND eff > 0 THEN eff ELSE 0 END) AS latency_sum,
+               {agg['calls']}                                         AS calls,
+               {agg['positive_latency_calls']}                        AS latency_count,
+               {agg['missing_latency_calls']}                         AS missing_latency,
+               {agg['errors']}                                        AS error_calls,
+               {agg['latency_sum_zero']}                               AS latency_sum,
                min(call_ord)                                          AS first_seen
         FROM ordered {provider_join}
         GROUP BY {group_by}

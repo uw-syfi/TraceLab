@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any, TextIO
 
 from extract_codex_rounds import extract_codex_session
-from extract_claude_rounds import extract_session_with_key, load_existing_round_keys, round_key
+from extract_claude_rounds import extract_session_with_key, load_existing_round_keys, resolve_parent_links, round_key
+from trace_privacy import LineageMarkerValidator
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -257,6 +260,17 @@ def strip_sets(value: Any) -> Any:
     return value
 
 
+def _raw_append_markers(output_path: Path) -> LineageMarkerValidator:
+    markers = LineageMarkerValidator()
+    markers.add({})  # Collection produces unmarked private rows, never scoped sanitized rows.
+    if output_path.exists():
+        with output_path.open("r", encoding="utf-8") as existing:
+            for line in existing:
+                if line.strip():
+                    markers.add(json.loads(line))
+    return markers
+
+
 def append_claude_round_trace(
     *,
     output_path: Path,
@@ -265,6 +279,7 @@ def append_claude_round_trace(
     progress_enabled: bool,
 ) -> dict[str, Any]:
     progress(f"extract: loading existing dedup keys from {output_path}", progress_enabled)
+    markers = _raw_append_markers(output_path)
     existing_keys = load_existing_round_keys(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -272,6 +287,7 @@ def append_claude_round_trace(
         "output": str(output_path),
         "existing_rounds": len(existing_keys),
         "project_dirs": 0,
+        "coverage_diagnostics": {},
         "session_files": 0,
         "candidate_rounds": 0,
         "written_rounds": 0,
@@ -294,7 +310,8 @@ def append_claude_round_trace(
         progress_enabled,
     )
 
-    with output_path.open("a", encoding="utf-8") as out:
+    # Validate the entire collection before appending any bytes to an existing trace.
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as out:
         for project_index, source in enumerate(filtered_sources, start=1):
             project_dir = source["project_dir"]
             project_name = project_dir.name
@@ -314,15 +331,25 @@ def append_claude_round_trace(
                 f"{len(session_files)} session file(s)",
                 progress_enabled,
             )
-            for session_index, session_file in enumerate(session_files, start=1):
+            extracted = []
+            for session_file in session_files:
                 try:
                     session_key = str(session_file.relative_to(project_dir).with_suffix(""))
-                    rounds = extract_session_with_key(session_file, project_name, session_key)
+                    rounds = extract_session_with_key(
+                        session_file, project_name, session_key,
+                        project_layout=project_dir.parent.name == "projects",
+                        diagnostics_sink=stats["coverage_diagnostics"],
+                    )
                 except Exception as exc:
                     stats["errors"].append(
                         {"session_file": str(session_file), "error": f"{type(exc).__name__}: {exc}"}
                     )
                     continue
+                extracted.append((session_file, rounds))
+            resolve_parent_links(extracted)
+            for session_index, (session_file, rounds) in enumerate(extracted, start=1):
+                for round_obj in rounds:
+                    markers.add(round_obj)
                 stats["candidate_rounds"] += len(rounds)
                 for round_obj in rounds:
                     round_obj["home"] = source["home"]
@@ -351,6 +378,9 @@ def append_claude_round_trace(
                         f"dupes={stats['skipped_duplicate_rounds']}",
                         progress_enabled,
                     )
+        out.seek(0)
+        with output_path.open("a", encoding="utf-8") as destination:
+            shutil.copyfileobj(out, destination)
 
     stats["final_rounds"] = len(existing_keys)
     progress(
@@ -370,6 +400,7 @@ def append_codex_round_trace(
     progress_enabled: bool,
 ) -> dict[str, Any]:
     progress(f"extract: loading existing dedup keys from {output_path}", progress_enabled)
+    markers = _raw_append_markers(output_path)
     existing_keys = load_existing_round_keys(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -377,6 +408,7 @@ def append_codex_round_trace(
         "output": str(output_path),
         "existing_rounds": len(existing_keys),
         "session_dirs": 0,
+        "coverage_diagnostics": {},
         "session_files": 0,
         "candidate_rounds": 0,
         "written_rounds": 0,
@@ -392,7 +424,7 @@ def append_codex_round_trace(
         f"{len(existing_keys)} existing round key(s)",
         progress_enabled,
     )
-    with output_path.open("a", encoding="utf-8") as out:
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as out:
         for source_index, source in enumerate(sources, start=1):
             sessions_dir = source["sessions_dir"]
             stats["session_dirs"] += 1
@@ -412,12 +444,14 @@ def append_codex_round_trace(
             )
             for session_index, session_file in enumerate(session_files, start=1):
                 try:
-                    rounds = extract_codex_session(session_file)
+                    rounds = extract_codex_session(session_file, diagnostics_sink=stats["coverage_diagnostics"])
                 except Exception as exc:
                     stats["errors"].append(
                         {"session_file": str(session_file), "error": f"{type(exc).__name__}: {exc}"}
                     )
                     continue
+                for round_obj in rounds:
+                    markers.add(round_obj)
                 stats["candidate_rounds"] += len(rounds)
                 for round_obj in rounds:
                     round_obj["home"] = source["home"]
@@ -447,6 +481,9 @@ def append_codex_round_trace(
                         f"dupes={stats['skipped_duplicate_rounds']}",
                         progress_enabled,
                     )
+        out.seek(0)
+        with output_path.open("a", encoding="utf-8") as destination:
+            shutil.copyfileobj(out, destination)
 
     stats["final_rounds"] = len(existing_keys)
     progress(

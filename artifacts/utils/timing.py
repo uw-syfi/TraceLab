@@ -160,7 +160,8 @@ def human_waits_from_event_pairs(
         (carry forward as the next round's ``previous_event_at``).
     """
     items = sorted(
-        ((ts, et) for et, ts in event_pairs if ts is not None),
+        # The start marker describes the incoming prompt; it must not reset its preceding gap.
+        ((ts, et) for et, ts in event_pairs if ts is not None and et != "request_start"),
         key=lambda pair: pair[0],
     )
     waits: list[float] = []
@@ -188,3 +189,24 @@ def human_input_wait_seconds_for_row(
             if isinstance(event, dict):
                 pairs.append((event.get("event_type"), parse_ts(event.get("timestamp"))))
     return human_waits_from_event_pairs(pairs, previous_event_at)
+
+
+def effective_tool_seconds(internal_ms, wall_ms) -> float | None:
+    """Canonical recorded tool work: internal timing when present, otherwise wall timing."""
+    value = internal_ms if internal_ms is not None else wall_ms
+    return None if value is None else max(0.0, float(value) / 1000)
+
+
+def union_seconds(intervals) -> float:
+    """Wall time covered by valid integer-microsecond intervals; overlap counts once."""
+    ordered = sorted((a, b) for a, b in intervals if a is not None and b is not None and b >= a)
+    if not ordered:
+        return 0.0
+    start, end = ordered[0]
+    total = 0
+    for a, b in ordered[1:]:
+        if a > end:
+            total += end - start
+            start = a
+        end = max(end, b)
+    return (total + end - start) / 1_000_000

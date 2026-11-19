@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Per user-initiated turn end-to-end response time summary, by provider.
 
-Response time = response-triggering user_message -> last response-end event before the
-next response-triggering user_message. See README.md for the exact definition.
+Response time requires a recorded request start and native completion. Legacy, open,
+aborted, invalid, and compressed captures have no response duration.
 """
 
 from __future__ import annotations
@@ -81,93 +81,19 @@ def _last_response_end_timestamp(
     return max(timestamps) if timestamps else None
 
 
-def load_user_turn_response_seconds_by_provider(
-    con: "duckdb.DuckDBPyConnection",
-) -> dict[str, list[float]]:
-    """``{"all": [...], provider: [...]}`` — per-session user-turn response times.
-
-    Stateful, single-pass over rounds in ingestion order (``round_pk`` == file order), reproducing
-    the old single-pass loader's user-turn state machine exactly. State is
-    ``current_user_turn_by_session`` mapping ``session_id -> {provider, start_at, last_output_at}``.
-
-    ``close_user_turn(session_id)`` pops the session's open turn; if it exists with both ``start_at``
-    and ``last_output_at`` set and ``dur = (last_output_at - start_at).total_seconds() > 0``, that
-    duration is appended to ``"all"`` and to the turn's provider bucket.
-
-    For each round in order:
-      1. ``start`` = response-trigger user_message timestamp (None if absent). If ``start`` is not
-         None and the session_id is a str, close any open turn for that session, then open a fresh
-         turn ``{provider, start_at: start, last_output_at: None}``.
-      2. ``resp_end`` = last response-end (model-output) timestamp for the round. If the session_id
-         is a str and ``resp_end`` is not None, and the session has an open turn, advance its
-         ``last_output_at`` when it is unset or ``resp_end`` is strictly later.
-    After all rounds, ``close_user_turn`` is called for every still-open session (end-of-stream
-    flush) in dict-insertion order, matching the loader's ``for session_id in list(...)`` flush.
-    The full list is kept per provider — no sampling — so the CDF/percentiles are exact.
-    """
-    # Per-round timing events (epoch-microsecond ints, rebuilt to naive datetimes). Event order
-    # within a round is irrelevant: the per-round helpers only use min/max over the typed lists.
-    events_by_round: dict[int, list[tuple[str | None, datetime | None]]] = {}
-    for round_pk, event_type, ts_us in con.execute(
-        "SELECT round_pk, event_type, CAST(epoch_us(timestamp) AS BIGINT) AS ts_us "
-        "FROM timing_events ORDER BY round_pk, event_index"
-    ).fetchall():
-        events_by_round.setdefault(round_pk, []).append(
-            (event_type, _epoch_us_to_datetime(ts_us))
-        )
-
-    by_provider: dict[str, list[float]] = {"all": []}
-    current_user_turn_by_session: dict[str, dict[str, Any]] = {}
-
-    def close_user_turn(session_id: str) -> None:
-        state = current_user_turn_by_session.pop(session_id, None)
-        if not state:
-            return
-        start_at = state.get("start_at")
-        last_output_at = state.get("last_output_at")
-        provider = state.get("provider")
-        if not isinstance(start_at, datetime) or not isinstance(last_output_at, datetime):
-            return
-        if not isinstance(provider, str):
-            provider = "<unknown-provider>"
-        duration_seconds = (last_output_at - start_at).total_seconds()
-        if duration_seconds <= 0:
-            return
-        by_provider["all"].append(duration_seconds)
-        by_provider.setdefault(provider, []).append(duration_seconds)
-
-    # Per-round (session_id, provider) in ingestion order so the stateful walk and the per-provider
-    # append order match the old line-by-line loader exactly.
-    for round_pk, session_id, provider in con.execute(
-        "SELECT round_pk, session_id, provider FROM rounds ORDER BY round_pk"
-    ).fetchall():
-        events = events_by_round.get(round_pk, [])
-        # Matches the loader's `str(row.get("provider") or "<unknown-provider>")` (line 152).
-        provider_key = str(provider) if provider else "<unknown-provider>"
-
-        start = _response_trigger_user_message_timestamp(events)
-        if start is not None and isinstance(session_id, str):
-            close_user_turn(session_id)
-            current_user_turn_by_session[session_id] = {
-                "provider": provider_key,
-                "start_at": start,
-                "last_output_at": None,
-            }
-
-        resp_end = _last_response_end_timestamp(events)
-        if isinstance(session_id, str) and resp_end is not None:
-            user_turn = current_user_turn_by_session.get(session_id)
-            if user_turn is not None:
-                current_last_output_at = user_turn.get("last_output_at")
-                if (
-                    not isinstance(current_last_output_at, datetime)
-                    or resp_end > current_last_output_at
-                ):
-                    user_turn["last_output_at"] = resp_end
-
-    # End-of-stream flush, dict-insertion order (matches the loader's final close loop).
-    for session_id in list(current_user_turn_by_session):
-        close_user_turn(session_id)
+def load_user_turn_response_seconds_by_provider(con):
+    """Native completed lifecycle durations only; legacy/open/aborted captures stay unavailable."""
+    import request_timing as rt
+    events = rt.load_events(con)
+    tools = rt.load_tools(con)
+    by_provider = {"all": []}
+    for request in rt.collect_requests(con, events):
+        duration = request.elapsed_seconds
+        measured = rt.timing_summary(request.round_pks, events, tools)
+        if duration is None or measured["compressed_timestamps"]:
+            continue
+        by_provider["all"].append(duration)
+        by_provider.setdefault(request.provider, []).append(duration)
     return by_provider
 
 
@@ -242,7 +168,15 @@ def main() -> int:
     args = parser.parse_args()
 
     con = trace_db.open_from_args(args)
-    response_seconds_by_provider = load_user_turn_response_seconds_by_provider(con)
+    from request_timing import request_ownership_coverage, render_ownership_coverage
+    try:
+        response_seconds_by_provider = load_user_turn_response_seconds_by_provider(con)
+        coverage = request_ownership_coverage(con)
+    finally:
+        con.close()
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    (Path(args.output_dir) / "request_ownership_coverage.md").write_text(
+        render_ownership_coverage(coverage) + "\n", encoding="utf-8")
     write_user_turn_response_time_summary(
         response_seconds_by_provider, args.output_dir
     )

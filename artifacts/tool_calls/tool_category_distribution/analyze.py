@@ -31,6 +31,7 @@ REPO_ROOT = SCRIPT_DIR.parents[2]  # experiment -> category -> artifacts -> repo
 sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 import trace_db  # noqa: E402
 import png_sidecar  # noqa: E402
+from tool_metrics import tool_aggregate_sql  # noqa: E402
 
 CATEGORY_ORDER = [
     "execute_command",
@@ -189,10 +190,7 @@ PLANNING_CONTROL_TOOLS = {
 # Effective tool latency precedence, expressed in SQL: internal then wall (the legacy `latency_ms`
 # fallback is not present in the normalized tool_calls schema, so it never fired). NULL when neither
 # is present, which maps to the Python `tool_latency_ms(...) is None` "missing" branch.
-_LAT_SQL = (
-    "CASE WHEN tc.tool_internal_latency_ms IS NOT NULL THEN tc.tool_internal_latency_ms "
-    "WHEN tc.tool_wall_latency_ms IS NOT NULL THEN tc.tool_wall_latency_ms END"
-)
+_LAT_SQL = trace_db.EFFECTIVE_TOOL_LATENCY_MS_SQL
 # provider / tool_name normalization, matching the old Python loader exactly:
 #   provider: "<unknown-provider>" when null/empty (not stripped).
 #   tool_name: trim, and "<unknown-tool>" when null/blank.
@@ -308,17 +306,17 @@ def load_tool_aggregates(con) -> dict[tuple[str, str], ToolAgg]:
     The grouping keys are the normalized provider/tool_name (matching the old Python loader); the
     coarse category is derived later in Python so the tool→category map stays verbatim.
     """
+    agg = tool_aggregate_sql(latency=f"({_LAT_SQL})", error="tc.is_error")
     rows = con.execute(
         f"""
         SELECT {_PROVIDER_SQL}                                        AS provider,
                {_TOOL_NAME_SQL}                                       AS tool_name,
-               count(*)                                               AS calls,
-               count(*) FILTER (WHERE tc.is_error IS TRUE)            AS error_calls,
-               count(*) FILTER (WHERE {_LAT_SQL} IS NOT NULL AND {_LAT_SQL} > 0)  AS valid_calls,
-               count(*) FILTER (WHERE {_LAT_SQL} IS NULL)             AS missing_calls,
-               count(*) FILTER (WHERE {_LAT_SQL} IS NOT NULL AND {_LAT_SQL} <= 0) AS nonpos_calls,
-               COALESCE(SUM(CASE WHEN {_LAT_SQL} IS NOT NULL AND {_LAT_SQL} > 0
-                                 THEN {_LAT_SQL} END), 0)             AS total_latency_ms
+               {agg['calls']}                                         AS calls,
+               {agg['errors']}                                        AS error_calls,
+               {agg['positive_latency_calls']}                        AS valid_calls,
+               {agg['missing_latency_calls']}                         AS missing_calls,
+               {agg['nonpositive_latency_calls']}                     AS nonpos_calls,
+               COALESCE({agg['latency_sum']}, 0)                       AS total_latency_ms
         FROM tool_calls tc JOIN rounds r USING (round_pk)
         GROUP BY 1, 2
         """
@@ -633,8 +631,8 @@ def plot_long_tail_imbalance(rows: list[dict[str, Any]], output_dir: Path) -> Pa
     )
 
     left_label_x = 0.018
-    bar_x = 0.125
-    bar_w = 0.855
+    bar_x = 0.18
+    bar_w = 0.80
     bar_h = 0.175
     row_specs = [
         ("Share of\ntool calls", "call_share", 0.62),

@@ -15,10 +15,13 @@ from extract_claude_rounds import (
     append_timing_event,
     apply_input_event_summary,
     content_chars,
+    coverage_count,
+    make_timing_event,
     parse_ts,
     round_key,
     write_rounds_jsonl,
 )
+from trace_privacy import is_codex_thread_id
 
 
 EXIT_CODE_RE = re.compile(r"(?:Exit code|Process exited with code)[: ]+(-?\d+)")
@@ -126,6 +129,23 @@ def process_session_from_input(input_value: Any) -> str | None:
     return str(parsed["session_id"])
 
 
+def completed_wait_sessions(output: Any) -> list[str] | None:
+    """Legacy Codex wait status (fe439afb81c1ba9999a29e9e996ac6fca561ae4a), not mailbox readiness."""
+    parsed = tool_input_dict(output)
+    if parsed is None or not isinstance(parsed.get("timed_out"), bool):
+        return None
+    statuses = parsed.get("status")
+    if not isinstance(statuses, dict):
+        return None
+    session_ids = []
+    for child_id, status in statuses.items():
+        if isinstance(status, dict) and isinstance(status.get("completed"), str):
+            if len(status) != 1 or not is_codex_thread_id(child_id):
+                return None
+            session_ids.append(f"codex:{child_id}")
+    return session_ids or None
+
+
 def command_observation(
     output: Any,
     tool_name: str | None,
@@ -185,6 +205,8 @@ def add_tool(
         "tool_wall_latency_ms": None,
         "tool_internal_latency_ms": None,
         "is_error": None,
+        "report_source": None,
+        "report_session_ids": None,
     }
     if tool_name in PROCESS_CONTINUATION_TOOLS:
         process_session_id = process_session_from_input(input_value)
@@ -207,6 +229,16 @@ def apply_tool_output(
     explicit_exit_code: int | None = None,
     observation_source: str,
 ) -> bool:
+    if tool.get("tool_name") == "wait":
+        # Any repeated output makes receipt/consumption ambiguous, even without timestamps.
+        session_ids = (
+            completed_wait_sessions(output)
+            if tool.get("result_chars") is None
+            and observation_source == "function_call_output" and is_error is not True
+            else None
+        )
+        tool["report_source"] = "codex_wait_completed" if session_ids else None
+        tool["report_session_ids"] = session_ids
     first_result = tool.get("result_at") is None
     if first_result:
         tool["result_at"] = timestamp
@@ -321,11 +353,42 @@ def _drop_tool_results(
     return len(items)
 
 
+def _session_origin(payload: dict[str, Any]) -> str:
+    source = payload.get("source")
+    sub = source.get("subagent") if isinstance(source, dict) else None
+    if (
+        isinstance(sub, str) and sub in {"review", "compact", "memory_consolidation"}
+        or isinstance(sub, dict) and (
+            isinstance(sub.get("thread_spawn"), dict) or isinstance(sub.get("other"), str)
+        )
+    ):
+        return "codex_subagent_source"
+    # Native Codex hierarchy only: entry sources do not rule out external orchestrators.
+    if (
+        isinstance(source, str) and source in {"cli", "vscode", "exec"}
+        and "parent_thread_id" not in payload and "subagent" not in payload
+    ):
+        return "codex_top_level_source"
+    return "unknown"
+
+
+def _session_kind(payload: dict[str, Any]) -> str:
+    origin = _session_origin(payload)
+    source = payload.get("source")
+    sub = source.get("subagent") if isinstance(source, dict) else None
+    if isinstance(sub, dict) and sub.get("other") == "guardian":
+        return "guardian"
+    if isinstance(sub, dict) and isinstance(sub.get("thread_spawn"), dict):
+        return "worker"
+    return "main" if origin == "codex_top_level_source" else "unknown"
+
+
 def extract_codex_session(
     session_file: Path,
     *,
     raw_sink: dict[str, Any] | None = None,
     title_sink: dict[str, str] | None = None,
+    diagnostics_sink: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Extract one Codex session's rounds.
 
@@ -339,7 +402,12 @@ def extract_codex_session(
     session_meta_id: str | None = None
     file_session_meta_id: str | None = None
     parent_session_meta_id: str | None = None
+    explicit_parent_session_id: str | None = None
+    seen_session_meta = False
     is_subagent_file = False
+    origins_by_session: dict[str, set[str]] = {}
+    contradictory_origin_sessions: set[str] = set()
+    kinds_by_session: dict[str, set[str]] = {}
     current_turn_id: str | None = None
     current_model: str | None = None
     current_cwd: str | None = None
@@ -387,6 +455,19 @@ def extract_codex_session(
     raw_segment_out: list[str] = []
     raw_segment_tools: list[dict[str, Any]] = []
     raw_tool_by_id: dict[str, dict[str, Any]] = {}
+    lifecycle: list[tuple[str, str | None, dict[str, Any]]] = []
+    native_web: dict[tuple[str, str], dict[str, Any]] = {}
+    anonymous_web: list[tuple[str, str | None, dict[str, Any]]] = []
+    seen_observations: set[str] = set()
+
+    def observed_session_id(turn_id: str | None) -> str:
+        identity = session_meta_id or session_file.stem
+        if is_subagent_file:
+            if isinstance(turn_id, str) and isinstance(file_session_meta_id, str) and turn_id >= file_session_meta_id:
+                identity = file_session_meta_id
+            elif parent_session_meta_id is not None:
+                identity = parent_session_meta_id
+        return f"codex:{identity}"
 
     with session_file.open("r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -395,17 +476,54 @@ def extract_codex_session(
             try:
                 record = json.loads(line)
             except json.JSONDecodeError:
+                coverage_count(diagnostics_sink, "malformed_json_records")
                 continue
             if not isinstance(record, dict):
+                coverage_count(diagnostics_sink, "non_object_records")
                 continue
 
             timestamp = record.get("timestamp")
             payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
             payload_type = payload.get("type")
             top_type = record.get("type")
+            if top_type in {"session_meta", "turn_context", "response_item", "event_msg"} and not isinstance(record.get("payload"), dict):
+                coverage_count(diagnostics_sink, "incomplete_records")
+            if top_type == "turn_context" and payload.get("turn_id") is not None and not isinstance(payload["turn_id"], str):
+                coverage_count(diagnostics_sink, "incomplete_records")
+                continue
 
             if top_type == "session_meta":
                 meta_id = payload.get("id")
+                origin = _session_origin(payload)
+                if isinstance(meta_id, str) and meta_id:
+                    kind = _session_kind(payload)
+                    if kind != "unknown":
+                        kinds_by_session.setdefault(f"codex:{meta_id}", set()).add(kind)
+                    if origin != "unknown":
+                        origins_by_session.setdefault(f"codex:{meta_id}", set()).add(origin)
+                    elif "parent_thread_id" in payload or "subagent" in payload:
+                        contradictory_origin_sessions.add(f"codex:{meta_id}")
+                if not seen_session_meta:
+                    seen_session_meta = True
+                    source = payload.get("source")
+                    sub = source.get("subagent") if isinstance(source, dict) else None
+                    spawn = sub.get("thread_spawn", {}) if isinstance(sub, dict) else {}
+                    parents = []
+                    if isinstance(spawn, dict) and "parent_thread_id" in spawn:
+                        parents.append(spawn["parent_thread_id"])
+                    if isinstance(sub, (dict, str)) and "parent_thread_id" in payload:
+                        parents.append(payload["parent_thread_id"])
+                    if (
+                        isinstance(meta_id, str) and meta_id
+                        and isinstance(spawn, dict)
+                        and parents
+                        and all(
+                            isinstance(parent, str) and parent
+                            and parent == parents[0] and parent != meta_id
+                            for parent in parents
+                        )
+                    ):
+                        explicit_parent_session_id = f"codex:{parents[0]}"
                 if isinstance(meta_id, str) and meta_id:
                     if file_session_meta_id is None:
                         file_session_meta_id = meta_id
@@ -418,7 +536,7 @@ def extract_codex_session(
                                 if isinstance(source.get("subagent"), dict)
                                 else {}
                             )
-                            parent_id = spawn.get("parent_thread_id")
+                            parent_id = spawn.get("parent_thread_id") if isinstance(spawn, dict) else None
                             if isinstance(parent_id, str) and parent_id:
                                 parent_session_meta_id = parent_id
                                 is_subagent_file = True
@@ -434,6 +552,61 @@ def extract_codex_session(
                 if session_meta_id is None and isinstance(meta_id, str) and meta_id:
                     session_meta_id = meta_id
                 current_cwd = payload.get("cwd") or current_cwd
+                continue
+
+            if top_type == "event_msg" and payload_type in {"task_started", "task_complete", "turn_aborted"}:
+                native_turn = payload.get("turn_id")
+                if native_turn is not None and not isinstance(native_turn, str):
+                    coverage_count(diagnostics_sink, "incomplete_lifecycle_records")
+                    continue
+                marker_turn = native_turn or current_turn_id
+                if isinstance(timestamp, str) and parse_ts(timestamp) is not None:
+                    kind = {"task_started": "request_start", "task_complete": "request_end",
+                            "turn_aborted": "request_aborted"}[payload_type]
+                    event = make_timing_event(kind, timestamp, f"event_msg.{payload_type}", turn_id=marker_turn)
+                    signature = json.dumps([observed_session_id(marker_turn), event], sort_keys=True)
+                    if signature not in seen_observations:
+                        seen_observations.add(signature)
+                        lifecycle.append((observed_session_id(marker_turn), marker_turn, event))
+                else:
+                    coverage_count(diagnostics_sink, "lifecycle_missing_timestamp")
+
+            native_web_type = (
+                payload_type if top_type == "event_msg" and payload_type in {"web_search_begin", "web_search_end"}
+                else "web_search_call" if top_type == "response_item" and payload_type == "web_search_call"
+                else None
+            )
+            if native_web_type is not None:
+                sid = observed_session_id(current_turn_id)
+                # Native web search runs inside a model call, not as the next call's input.
+                # A response-item id is not proved equivalent to the runner's call_id.
+                call_id = payload.get("call_id")
+                valid_time = timestamp if isinstance(timestamp, str) and parse_ts(timestamp) is not None else None
+                status = payload.get("status")
+                finished = native_web_type == "web_search_end" or status == "completed"
+                event = make_timing_event("web_search_observation", valid_time,
+                                          f"{top_type}.{native_web_type}")
+                signature = json.dumps([sid, current_turn_id, payload, timestamp], sort_keys=True)
+                if signature in seen_observations:
+                    coverage_count(diagnostics_sink, "duplicate_web_search_observations")
+                    continue
+                seen_observations.add(signature)
+                if isinstance(call_id, str) and call_id:
+                    item = native_web.setdefault((sid, call_id), {
+                        "turn_id": current_turn_id, "start": None, "end": None,
+                        "end_priority": 0, "events": [],
+                    })
+                    event["tool_call_id"] = call_id
+                    item["events"].append(event)
+                    if native_web_type == "web_search_begin" and item["start"] is None:
+                        item["start"] = valid_time
+                    priority = 2 if native_web_type == "web_search_end" else 1
+                    if finished and priority > item["end_priority"]:
+                        item["end"], item["end_priority"] = valid_time, priority
+                else:
+                    # Anonymous parallel/completed representations cannot establish another call.
+                    anonymous_web.append((sid, current_turn_id, event))
+                    coverage_count(diagnostics_sink, "web_search_observations_without_call_id")
                 continue
 
             new_turn_id = (
@@ -632,7 +805,8 @@ def extract_codex_session(
                 tool = tool_by_id.get(call_id) if isinstance(call_id, str) else None
                 if tool is not None:
                     output = payload.get("output")
-                    is_error = infer_error_from_output(output)
+                    # A report may quote command failures; its prose is not tool-error evidence.
+                    is_error = None if tool.get("tool_name") == "wait" else infer_error_from_output(output)
                     if apply_tool_output(
                         tool,
                         timestamp,
@@ -663,7 +837,7 @@ def extract_codex_session(
                 tool = tool_by_id.get(call_id) if isinstance(call_id, str) else None
                 if tool is not None:
                     output = payload.get("output")
-                    is_error = infer_error_from_output(output)
+                    is_error = None if tool.get("tool_name") == "wait" else infer_error_from_output(output)
                     if apply_tool_output(
                         tool,
                         timestamp,
@@ -849,6 +1023,11 @@ def extract_codex_session(
                 round_obj = {
                     "provider": "codex",
                     "session_id": session_id,
+                    "parent_session_id": (
+                        explicit_parent_session_id
+                        if round_session_meta_id == file_session_meta_id else None
+                    ),
+                    "root_session_id": None,  # A single file cannot establish the ultimate root.
                     "session_file": str(session_file),
                     "round_index": round_index,
                     "round_id": f"{turn_id}:{turn_round_index}",
@@ -904,6 +1083,83 @@ def extract_codex_session(
                 segment_timing_events = []
                 segment_tools = []
 
+    # Reconcile all metadata, including evidence arriving after a session's first round.
+    requests: dict[tuple[str, str | None], list[dict[str, Any]]] = {}
+    for round_obj in rounds:
+        origins = origins_by_session.get(round_obj["session_id"], set())
+        round_obj["session_origin"] = (
+            next(iter(origins))
+            if len(origins) == 1 and round_obj["session_id"] not in contradictory_origin_sessions
+            else "unknown"
+        )
+        kinds = kinds_by_session.get(round_obj["session_id"], set())
+        round_obj["session_kind"] = (
+            next(iter(kinds)) if len(kinds) == 1
+            and len(origins) == 1 and round_obj["session_id"] not in contradictory_origin_sessions else "unknown"
+        )
+        requests.setdefault((round_obj["session_id"], round_obj.get("turn_id")), []).append(round_obj)
+
+    def owner(sid: str, turn: str | None, event: dict[str, Any], *, first: bool = False):
+        candidates = requests.get((sid, turn), [])
+        if not candidates:
+            return None
+        if turn is not None:
+            return candidates[0] if first else candidates[-1]
+        # shortcut: old logs without turn IDs use native chronology, never a synthetic request ID.
+        when = parse_ts(event.get("timestamp"))
+        for row in (candidates if first else reversed(candidates)):
+            times = [parse_ts(e.get("timestamp")) for e in row["timing_events"]
+                     if e.get("event_type") in {"reasoning", "text", "tool_call", "usage_report"}]
+            times = [t for t in times if t is not None]
+            if when is not None and times and (max(times) >= when if first else min(times) <= when):
+                return row
+        return None
+
+    for sid, turn, event in lifecycle:
+        row = owner(sid, turn, event, first=event["event_type"] == "request_start")
+        if row is None:
+            coverage_count(diagnostics_sink, "unattached_lifecycle_events")
+        else:
+            row["timing_events"].append(event)
+
+    def web_owner(sid: str, turn: str | None, event: dict[str, Any]):
+        candidates = requests.get((sid, turn), [])
+        when = parse_ts(event.get("timestamp"))
+        for row in candidates:
+            if when is not None and any(
+                e.get("event_type") == "usage_report" and (at := parse_ts(e.get("timestamp"))) is not None and at >= when
+                for e in row["timing_events"]
+            ):
+                return row
+        # An observation can outlive its last usage report; preserve coverage without a new round.
+        return candidates[-1] if candidates else None
+
+    for (sid, call_id), item in native_web.items():
+        events = item["events"]
+        row = web_owner(sid, item["turn_id"], events[0])
+        if row is None:
+            coverage_count(diagnostics_sink, "unattached_web_search_calls")
+            continue
+        tool = tool_by_id.get(call_id)
+        if tool is None:
+            tool = add_tool(tools=row["tools"], tool_by_id=tool_by_id, call_id=call_id,
+                            tool_name="web_search", emitted_at=item["start"], input_value=None,
+                            process_roots=process_roots)
+            tool["input_chars"] = None
+            tool["result_at"] = item["end"]
+            tool["tool_wall_latency_ms"] = timestamp_delta_ms(item["start"], item["end"])
+        if item["start"] is None:
+            coverage_count(diagnostics_sink, "web_search_calls_missing_start")
+        row["timing_events"].extend(events)
+    for sid, turn, event in anonymous_web:
+        row = web_owner(sid, turn, event)
+        if row is None:
+            coverage_count(diagnostics_sink, "unattached_web_search_observations")
+        else:
+            row["timing_events"].append(event)
+    coverage_count(diagnostics_sink, "unaccounted_output_records", len(segment_timing_events))
+    coverage_count(diagnostics_sink, "unaccounted_tool_calls", len(segment_tools))
+
     # Private extraction-only runner ids/provenance must not enter the normalized schema.
     for tool in tool_by_id.values():
         tool.pop("_process_session_id", None)
@@ -930,8 +1186,9 @@ def main() -> int:
 
     session_files = sorted(args.sessions_dir.rglob("*.jsonl"))
     all_rounds: list[dict[str, Any]] = []
+    diagnostics: dict[str, int] = {}
     for session_file in session_files:
-        all_rounds.extend(extract_codex_session(session_file))
+        all_rounds.extend(extract_codex_session(session_file, diagnostics_sink=diagnostics))
 
     stats = write_rounds_jsonl(args.output, all_rounds, append_dedup=args.append_dedup)
     tool_calls = sum(len(r["tools"]) for r in all_rounds)
@@ -942,6 +1199,7 @@ def main() -> int:
     print(f"tool_results={tool_results}")
     print(f"written_rounds={stats['written_rounds']}")
     print(f"skipped_duplicate_rounds={stats['skipped_duplicate_rounds']}")
+    print(f"coverage_diagnostics={json.dumps(diagnostics, sort_keys=True)}")
     print(f"output={args.output}")
     return 0
 

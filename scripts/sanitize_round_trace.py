@@ -8,16 +8,22 @@ import json
 import random
 import re
 import secrets
+import shutil
 import sys
+import tempfile
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, TextIO
+from uuid import uuid4
 
 # Privacy rules (which keys are sensitive) live in trace_privacy so the sanitizer and the
 # contribute gate share one definition. The script dir is on sys.path when run directly; add it
 # explicitly so the import also works when imported as a module.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from trace_privacy import SENSITIVE_KEYS, USER_KEYS, is_sensitive_key  # noqa: E402,F401
+from trace_privacy import (  # noqa: E402,F401
+    SENSITIVE_KEYS, USER_KEYS, LineageMarkerValidator, is_sensitive_key, row_has_leak,
+)
 from executable_facts import COMMAND_TOOL_NAMES, extract_executable_facts  # noqa: E402
 
 
@@ -59,10 +65,15 @@ SKELETON_RESERVED = frozenset(
 
 
 class StableIdSanitizer:
-    def __init__(self, seed: str):
+    def __init__(self, seed: str, *, already_sanitized: bool = False):
         self.random = random.Random(seed)
         self.maps: dict[str, dict[str, str]] = {}
         self.used: dict[str, set[str]] = {}
+        self.identity_scope_id = str(uuid4())
+        self.input_markers = LineageMarkerValidator()
+        self.input_is_private: bool | None = None
+        # Caller attestation for an established sanitized batch, never inferred from row contents.
+        self.already_sanitized = already_sanitized
 
     def rand_hex(self, length: int) -> str:
         return "".join(self.random.choice("0123456789abcdef") for _ in range(length))
@@ -210,18 +221,57 @@ def sanitize_value(value: Any, ids: StableIdSanitizer) -> Any:
     return value
 
 
+def validate_sanitization_batch(
+    rows: Iterable[dict[str, Any]], *, already_sanitized: bool = False,
+) -> bool:
+    """Return whether private fields establish scope eligibility, NOT whether to sanitize."""
+    markers = LineageMarkerValidator()
+    private: set[bool] = set()
+    for row in rows:
+        markers.add(row)
+        has_private_fields = row_has_leak(row)
+        if already_sanitized and (has_private_fields or not all(key in row for key in (
+            "provider", "session_id", "round_index", "input_tokens_total",
+        ))):
+            raise ValueError("already-sanitized input must contain normalized rounds without private fields")
+        private.add(has_private_fields)
+    if len(private) > 1:
+        raise ValueError("cannot mix private and ambiguous/already-sanitized rounds")
+    is_private = True in private
+    if markers.scope is not None and is_private:
+        raise ValueError("identity_scope_id is only valid on already-sanitized rounds")
+    return is_private
+
+
 def sanitize_row(row: dict[str, Any], ids: StableIdSanitizer) -> dict[str, Any]:
+    is_private = validate_sanitization_batch([row], already_sanitized=ids.already_sanitized)
+    ids.input_markers.add(row)
+    if ids.input_is_private is not None and ids.input_is_private != is_private:
+        raise ValueError("cannot mix private and ambiguous/already-sanitized rounds")
+    ids.input_is_private = is_private
+    if ids.already_sanitized:
+        return dict(row)
     original = row
     cleaned = sanitize_value(row, ids)
     if not isinstance(cleaned, dict):
         raise TypeError("sanitized row is not an object")
 
     provider = str(original.get("provider") or cleaned.get("provider") or "unknown")
+    cleaned["session_origin"] = original.get("session_origin", "unknown")
+    if is_private:
+        cleaned["identity_scope_id"] = ids.identity_scope_id
+    else:
+        # Ambiguous input still needs privacy transforms, but cannot certify a legacy namespace.
+        cleaned.pop("identity_scope_id", None)
 
     if "project" in original:
         cleaned["project"] = ids.project(original.get("project"))
     if "session_id" in original:
         cleaned["session_id"] = ids.session_id(provider, original.get("session_id"))
+    for field in ("parent_session_id", "root_session_id"):
+        if field in original:
+            value = original[field]
+            cleaned[field] = ids.session_id(provider, value) if isinstance(value, str) and value else None
     if "turn_id" in original:
         cleaned["turn_id"] = ids.atomic_id(
             "turn_id",
@@ -243,6 +293,10 @@ def sanitize_row(row: dict[str, Any], ids: StableIdSanitizer) -> dict[str, Any]:
             )
             if isinstance(original_tool_name, str):
                 tool["tool_name"] = ids.tool_name(original_tool_name)
+            if isinstance(original_tool, dict) and original_tool.get("report_session_ids") is not None:
+                tool["report_session_ids"] = [
+                    ids.session_id(provider, sid) for sid in original_tool["report_session_ids"]
+                ]
             if isinstance(original_tool, dict) and "tool_call_id" in original_tool:
                 tool["tool_call_id"] = ids.atomic_id(
                     "tool_call_id",
@@ -310,6 +364,8 @@ def sanitize_row(row: dict[str, Any], ids: StableIdSanitizer) -> dict[str, Any]:
             original_event = (
                 original_timing_events[index] if index < len(original_timing_events) else {}
             )
+            if isinstance(original_event, dict) and "turn_id" in original_event:
+                event["turn_id"] = ids.atomic_id("turn_id", original_event["turn_id"], fallback_prefix="turn_")
             if isinstance(original_event, dict) and "tool_call_id" in original_event:
                 event["tool_call_id"] = ids.atomic_id(
                     "tool_call_id",
@@ -345,6 +401,20 @@ def open_output(path: str | None) -> tuple[TextIO, bool]:
     return output_path.open("w", encoding="utf-8"), True
 
 
+def read_rows(path: Path) -> Iterable[dict[str, Any]]:
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        for line_no, line in enumerate(fh, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{line_no}: invalid JSONL row: {exc}") from exc
+            if not isinstance(row, dict):
+                raise ValueError(f"{path}:{line_no}: expected JSON object row")
+            yield row
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path, help="Normalized round-trace JSONL input.")
@@ -367,42 +437,41 @@ def main() -> int:
             "preserved within the output."
         ),
     )
+    parser.add_argument(
+        "--already-sanitized",
+        action="store_true",
+        help="Pass through an established already-sanitized batch; caller attests identifiers are safe.",
+    )
     args = parser.parse_args()
 
     seed = secrets.token_hex(16) if args.random_seed else args.seed
-    ids = StableIdSanitizer(seed)
+    ids = StableIdSanitizer(seed, already_sanitized=args.already_sanitized)
     rows = 0
     tools = 0
     executable_statuses: Counter[str] = Counter()
 
-    out, should_close = open_output(args.output)
-    try:
-        with args.input.open("r", encoding="utf-8", errors="replace") as fh:
-            for line_no, line in enumerate(fh, start=1):
-                if not line.strip():
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise SystemExit(f"{args.input}:{line_no}: invalid JSONL row: {exc}") from exc
-                if not isinstance(row, dict):
-                    raise SystemExit(f"{args.input}:{line_no}: expected JSON object row")
-                sanitized = sanitize_row(row, ids)
-                rows += 1
-                row_tools = sanitized.get("tools")
-                if isinstance(row_tools, list):
-                    tools += len(row_tools)
-                    executable_statuses.update(
-                        str(tool["executable_parse_status"])
-                        for tool in row_tools
-                        if isinstance(tool, dict) and "executable_parse_status" in tool
-                    )
-                out.write(
-                    json.dumps(sanitized, ensure_ascii=False, separators=(",", ":")) + "\n"
+    validate_sanitization_batch(read_rows(args.input), already_sanitized=args.already_sanitized)
+    # Stage on disk so large batches cannot exhaust memory or truncate a good output on failure.
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as staged:
+        for row in read_rows(args.input):
+            sanitized = sanitize_row(row, ids)
+            rows += 1
+            row_tools = sanitized.get("tools")
+            if isinstance(row_tools, list):
+                tools += len(row_tools)
+                executable_statuses.update(
+                    str(tool["executable_parse_status"])
+                    for tool in row_tools
+                    if isinstance(tool, dict) and "executable_parse_status" in tool
                 )
-    finally:
-        if should_close:
-            out.close()
+            staged.write(json.dumps(sanitized, ensure_ascii=False, separators=(",", ":")) + "\n")
+        staged.seek(0)
+        out, should_close = open_output(args.output)
+        try:
+            shutil.copyfileobj(staged, out)
+        finally:
+            if should_close:
+                out.close()
 
     print(
         "sanitized "

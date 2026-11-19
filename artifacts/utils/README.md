@@ -59,6 +59,11 @@ dependencies; the composed modules import only from base ones.
 - **`formatters.py`** — token log-axis (`format_token_label`, `apply_binary_token_axis`),
   latency/duration/count/hours tick formatters, and the bin/threshold generators
   (`fine_latency_bin_edges`, `kv_cache_timeout_thresholds_seconds`, …) + their constants.
+- **`token_policies.py`** — shared provider/model eligibility for prior-output subtraction.
+  Adjusted append, token spindles, and report-context changes keep their own formulas.
+- **`tool_metrics.py`** — shared SQL aggregates for call counts, known/unknown outcomes,
+  and positive/missing/nonpositive effective latency. Callers choose their cohort,
+  grouping, name normalization, error-rate denominator, and empty-sum behavior.
 
 **Composed (Layer 1):**
 
@@ -77,6 +82,8 @@ dependencies; the composed modules import only from base ones.
 
 **Standalone:**
 
+- **`subagent_cohorts.py`** — shared SQL for matched main/descendant families and
+  percentile summaries that distinguish empty samples from measured zeros.
 - **`png_sidecar.py`** — fuses an experiment's README, source CSV data, and plotting
   code into its PNGs as compressed text chunks, so each figure is self-contained.
   `make_self_contained(out_dir, code_files=[Path(__file__), *png_sidecar.util_code_files()],
@@ -93,6 +100,9 @@ These are the definitions every experiment README points back to:
 
 - **effective tool latency** = `tool_internal_latency_ms` when present, else
   `tool_wall_latency_ms` (= `result_at − emitted_at`).
+- **time with tool calls outstanding** = the union of recorded `emitted_at` → `result_at`
+  intervals; concurrent intervals count once. This wall time differs from summed effective
+  latencies, which count each call separately and may use internal durations.
 - **Codex command wall time** = initial `exec_command.emitted_at` → the first linked result whose
   `command_status` is `finished` (the terminal `write_stdin` for a continued command).
 - **Codex command tool-call sum** = effective latency of the initial `exec_command` plus every

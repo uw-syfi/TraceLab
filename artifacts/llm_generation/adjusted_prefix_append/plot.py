@@ -27,6 +27,7 @@ from formatters import (
     token_axis_values,
 )  # noqa: E402
 import trace_db  # noqa: E402
+from token_policies import should_subtract_previous_output  # noqa: E402
 
 import matplotlib.pyplot as plt
 
@@ -55,16 +56,6 @@ def output_proxy(
     if mode == "visible-for-codex" and provider == "codex":
         return max(0, output_value - coerce_int(reasoning_output_tokens))
     return output_value
-
-
-def should_subtract_previous_output(previous: dict[str, Any], policy: str) -> bool:
-    if policy == "all":
-        return True
-    if policy == "claude-and-gpt55":
-        if previous["provider"] == "claude":
-            return True
-        return previous["provider"] == "codex" and previous.get("model") == "gpt-5.5"
-    raise ValueError(f"Unsupported subtract policy: {policy}")
 
 
 def percentile(values: list[float], quantile: float) -> float | None:

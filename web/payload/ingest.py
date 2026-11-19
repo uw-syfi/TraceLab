@@ -24,7 +24,7 @@ Container detection (magic bytes):
     otherwise        -> plain text (.jsonl / .json)
 
 Per-file classification (scan the first records, strongest signal wins):
-    round  = dict carrying all of REQUIRED_KEYS  (then leak-scan: normalized vs sanitized)
+    round  = dict carrying all of REQUIRED_KEYS  (sanitized passthrough requires caller attestation)
     claude = raw Claude session record (a `message` object + assistant/user `type`/`uuid`)
     codex  = raw Codex session record (a `payload` object + a session/turn/response `type`)
 """
@@ -50,10 +50,11 @@ for _cand in (_HERE / "normalize", _HERE.parent.parent / "scripts"):
     if (_cand / "extract_claude_rounds.py").exists() and str(_cand) not in sys.path:
         sys.path.insert(0, str(_cand))
 
-from extract_claude_rounds import extract_session_with_key, write_rounds_jsonl  # noqa: E402
+from extract_claude_rounds import extract_session_with_key, resolve_parent_links, write_rounds_jsonl  # noqa: E402
 from extract_codex_rounds import extract_codex_session  # noqa: E402
-from sanitize_round_trace import DEFAULT_SEED, StableIdSanitizer, sanitize_row  # noqa: E402
-from trace_privacy import row_has_leak  # noqa: E402
+from sanitize_round_trace import (  # noqa: E402
+    DEFAULT_SEED, StableIdSanitizer, sanitize_row, validate_sanitization_batch,
+)
 
 # Must match web/server/app.py::REQUIRED_KEYS — the structural fingerprint of a normalized round row.
 REQUIRED_KEYS = ("provider", "session_id", "round_index", "input_tokens_total")
@@ -265,20 +266,23 @@ def _sniff_and_collect(
 # ---------------------------------------------------------------------------
 # Raw -> normalized routing (reuses the canonical extractors verbatim)
 # ---------------------------------------------------------------------------
-def _claude_project_and_key(path: Path) -> tuple[str, str]:
+def _claude_project_and_key(path: Path) -> tuple[str, str, bool]:
     """Mirror extract_claude_rounds.main()'s project/session_key derivation from a member path.
 
     CLI uses project = <projects-dir-name>, key = path-relative-to-project (suffix stripped). Under an
     archive we recover the same shape: the segment after `projects/`, else the parent dir name.
+    The third result says whether a projects/<project>/<file> layout was retained.
     """
     parts = path.parts
     if "projects" in parts:
         idx = parts.index("projects")
-        if idx + 1 < len(parts):
+        if idx + 2 < len(parts):
             project = parts[idx + 1]
-            rel = Path(*parts[idx + 2:]) if idx + 2 < len(parts) else Path(path.name)
-            return project, str(rel.with_suffix(""))
-    return path.parent.name or "project", path.stem
+            rel = Path(*parts[idx + 2:])
+            return project, str(rel.with_suffix("")), True
+    if path.parent.name == "subagents" and path.stem.startswith("agent-"):
+        return path.parents[2].name, str(Path(*path.parts[-3:]).with_suffix("")), False
+    return path.parent.name or "project", path.stem, False
 
 
 # Parallelize per-file extraction only when there are enough files to amortize pool startup + IPC.
@@ -297,26 +301,31 @@ def _extract_one_file(path: Path):
     """
     rs: dict[str, Any] = {}
     ts: dict[str, str] = {}
+    diagnostics: dict[str, int] = {}
     try:
         kind = classify_records(_iter_json_records(path.read_bytes(), limit=200))
     except Exception as exc:  # unreadable member — skip, keep going
-        return [], {}, {}, f"could not read {path.name}: {type(exc).__name__}", "skip"
+        return [], {}, {}, f"could not read {path.name}: {type(exc).__name__}", "skip", diagnostics
     if kind == "round":
         rows = [r for r in _iter_json_records(path.read_bytes()) if _looks_round(r)]
-        return rows, {}, {}, None, "round"
+        return rows, {}, {}, None, "round", diagnostics
     if kind == "claude":
-        project, key = _claude_project_and_key(path)
-        rows = list(extract_session_with_key(path, project, key, raw_sink=rs, title_sink=ts))
+        project, key, project_layout = _claude_project_and_key(path)
+        rows = list(extract_session_with_key(
+            path, project, key, raw_sink=rs, title_sink=ts,
+            project_layout=project_layout,
+            diagnostics_sink=diagnostics,
+        ))
     elif kind == "codex":
-        rows = list(extract_codex_session(path, raw_sink=rs, title_sink=ts))
+        rows = list(extract_codex_session(path, raw_sink=rs, title_sink=ts, diagnostics_sink=diagnostics))
     else:
-        return [], {}, {}, f"unrecognized file (no sessions or round rows): {path.name}", "skip"
+        return [], {}, {}, f"unrecognized file (no sessions or round rows): {path.name}", "skip", diagnostics
     rs = {k: _clip_raw(v) for k, v in rs.items()}  # clip in-worker; trace_key keys unchanged
-    return rows, rs, ts, None, kind
+    return rows, rs, ts, None, kind, diagnostics
 
 
 def _extract_normalized(
-    files, warnings, note, *, raw_sink=None, title_sink=None, jobs: int = 1
+    files, warnings, note, *, raw_sink=None, title_sink=None, jobs: int = 1, diagnostics_sink=None
 ) -> tuple[list[dict], bool]:
     """Classify each file and collect normalized rows. Returns (rows, extracted_any_raw).
 
@@ -338,9 +347,14 @@ def _extract_normalized(
     if title_sink is None:
         title_sink = {}
     ordered = sorted(files)
+    claude_sessions = []
 
     def _merge(result) -> tuple[list[dict], str]:
-        rows_i, rs, ts, warning, kind = result
+        rows_i, rs, ts, warning, kind, diagnostics = result
+        if diagnostics_sink is not None and diagnostics:
+            totals = diagnostics_sink.setdefault(kind, {})
+            for key, value in diagnostics.items():
+                totals[key] = totals.get(key, 0) + value
         if warning:
             warnings.append(warning)
         for k, v in rs.items():
@@ -371,8 +385,10 @@ def _extract_normalized(
     rows: list[dict] = []
     extracted_raw = False
     if results is not None:  # parallel: reassemble in the sorted order imap preserved
-        for result in results:
+        for path, result in zip(ordered, results):
             rows_i, kind = _merge(result)
+            if kind == "claude":
+                claude_sessions.append((path, rows_i))
             rows.extend(rows_i)
             extracted_raw = extracted_raw or kind in ("claude", "codex")
     else:  # serial (Pyodide, small inputs, or fallback)
@@ -384,8 +400,11 @@ def _extract_normalized(
                 note(f"Extracting {kind.capitalize()} sessions")
                 announced.add(kind)
             rows_i, _ = _merge(result)
+            if kind == "claude":
+                claude_sessions.append((path, rows_i))
             rows.extend(rows_i)
             extracted_raw = extracted_raw or kind in ("claude", "codex")
+    resolve_parent_links(claude_sessions)
     return rows, extracted_raw
 
 
@@ -437,6 +456,7 @@ def prepare(
     trusted: bool = False,
     jobs: int = 1,
     files=None,
+    already_sanitized: bool = False,
 ) -> dict[str, Any]:
     """Normalize + sanitize whatever is at ``input_path``, writing artifacts into ``work_dir``.
 
@@ -453,6 +473,9 @@ def prepare(
     stays single-threaded). ``files`` (a list of on-disk jsonl paths) bypasses ``_sniff_and_collect``
     entirely — the sidecar already has the trace unpacked on disk, so it skips the tar round-trip and
     hands the real paths straight in. Both keep the output byte-identical to the default path.
+
+    ``already_sanitized`` explicitly attests that the entire input is an established sanitized batch.
+    Never infer it from uploaded markers or ``trusted``; by default all input is sanitized again.
 
     Always writes a valid ``sanitized.jsonl`` (+ ``.gz``) — the canonical artifact every downstream
     consumer (Analyze figures, the assistant's QA, Contribute) uses. Writes ``normalized.jsonl.gz``
@@ -483,20 +506,27 @@ def prepare(
     # extract from raw sessions; NEVER merged into normalized/sanitized rows (see below).
     raw_sink: dict[str, Any] = {}
     title_sink: dict[str, str] = {}
+    coverage_diagnostics: dict[str, dict[str, int]] = {}
     normalized_rows, extracted_raw = _extract_normalized(
-        candidate_files, warnings, note, raw_sink=raw_sink, title_sink=title_sink, jobs=jobs
+        candidate_files, warnings, note, raw_sink=raw_sink, title_sink=title_sink, jobs=jobs,
+        diagnostics_sink=coverage_diagnostics,
     )
     if not normalized_rows:
         raise IngestError(
             "Couldn't find any Claude/Codex sessions or round-trace rows in this upload."
         )
 
+    try:
+        validate_sanitization_batch(normalized_rows, already_sanitized=already_sanitized)
+    except ValueError as exc:
+        raise IngestError(str(exc)) from exc
+
     if extracted_raw:
         kind = "raw"
-    elif any(row_has_leak(r) for r in normalized_rows):
-        kind = "normalized"
-    else:
+    elif already_sanitized:
         kind = "sanitized"
+    else:
+        kind = "normalized"
 
     # Normalize: run the canonical writer so trace_key assignment + dedup match the CLI byte-for-byte.
     # written_sink hands back the exact rows it wrote (deduped, trace_key-stamped) so we skip re-parsing
@@ -576,6 +606,7 @@ def prepare(
         "tools": tools,
         "produced": produced,
         "warnings": warnings,
+        "coverage_diagnostics": coverage_diagnostics,
         "rawAvailable": raw_available,
         "titles": titles_by_session,
         "files": {

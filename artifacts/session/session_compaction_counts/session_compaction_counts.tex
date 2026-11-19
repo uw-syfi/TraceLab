@@ -11,19 +11,19 @@
 \toprule
 \textbf{Metric} & \textbf{Claude} & \textbf{Codex} \\
 \midrule
-Sessions & 5,319 & 2,739 \\
-Major reductions ($\geq$64k drop) & 669 & 2,081 \\
-\quad of which compactions & 536 (80.1\%) & 1,984 (95.3\%) \\
-Sessions with $\geq$1 compaction & 235 (4.4\%) & 477 (17.4\%) \\
+Sessions & 170 & 361 \\
+Major reductions ($\geq$64k drop) & 65 & 733 \\
+\quad of which compactions & 14 (21.5\%) & 665 (90.7\%) \\
+Sessions with $\geq$1 compaction & 2 (1.2\%) & 71 (19.7\%) \\
 \addlinespace
 \multicolumn{3}{@{}l}{\emph{Compactions per session}} \\
-\quad Avg (all sessions) & 0.101 & 0.724 \\
-\quad Avg (sessions with $\geq$1) & 2.28 & 4.16 \\
-\quad P90 / P99 (sessions with $\geq$1) & 5 / 12 & 7 / 37 \\
+\quad Avg (all sessions) & 0.082 & 1.842 \\
+\quad Avg (sessions with $\geq$1) & 7.00 & 9.37 \\
+\quad P90 / P99 (sessions with $\geq$1) & 10 / 11 & 29 / 86 \\
 \addlinespace
 \multicolumn{3}{@{}l}{\emph{Trigger}} \\
-\quad User-initiated & 177 (33.0\%) & 347 (17.5\%) \\
-\quad Tool-initiated & 359 (67.0\%) & 1,637 (82.5\%) \\
+\quad User-initiated & 14 (100.0\%) & 81 (12.2\%) \\
+\quad Tool-initiated & 0 (0.0\%) & 584 (87.8\%) \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -4,6 +4,7 @@
 //
 // Order follows the TraceLab paper: Session → LLM generation → Tool calls → Prefix cache. This
 // drives the detail page's experiment-nav grouping and the prev/next navigation.
+// Subagents extends Session before LLM generation; existing paper entries keep their order.
 
 export interface ExperimentFigure {
   src: string;
@@ -118,6 +119,84 @@ export const experiments: Experiment[] = [
       { src: '/figures/human_in_the_loop/human_input_wait_cdf.png', caption: 'Human input wait CDF.' },
       { src: '/figures/human_in_the_loop/human_input_wait_count_cdf_by_provider.png', caption: 'Human wait count CDF by provider.' },
       { src: '/figures/human_in_the_loop/human_input_wait_total_cdf_by_provider.png', caption: 'Human wait total-time CDF by provider.' },
+    ],
+  },
+
+  // ----- Subagents (provider comparisons and measured coverage) -----
+  {
+    slug: 'subagents/adoption',
+    category: 'subagents',
+    title: 'Subagent adoption',
+    blurb: 'How often main sessions have linked subagents, how many, and what the recorded links reveal.',
+    readme: 'artifacts/subagents/adoption/README.md',
+    figures: [],
+    tables: [
+      {
+        src: 'artifacts/subagents/adoption/adoption.md',
+        caption: 'Session counts, family size, and depth, with missing links shown for Claude and Codex.',
+      },
+    ],
+  },
+  {
+    slug: 'subagents/workload',
+    category: 'subagents',
+    title: 'Subagent workload',
+    blurb: 'Recorded rounds and tool calls across all sessions, delegating mains, and linked subagents.',
+    readme: 'artifacts/subagents/workload/README.md',
+    figures: [],
+    tables: [
+      {
+        src: 'artifacts/subagents/workload/workload.md',
+        caption: 'Session populations, mean and median workloads, zero-call rounds, and outlier concentration. Main counts exclude child rounds.',
+      },
+    ],
+  },
+  {
+    slug: 'subagents/tokens_and_reports',
+    category: 'subagents',
+    title: 'Subagent tokens and reports',
+    blurb: 'Recorded tokens in main sessions and linked subagents, plus input changes around possible or completed subagent replies.',
+    readme: 'artifacts/subagents/tokens_and_reports/README.md',
+    figures: [],
+    tables: [
+      {
+        src: 'artifacts/subagents/tokens_and_reports/tokens_and_reports.md',
+        caption: 'Token totals, first and peak input, and input changes around subagent replies. Claude shows possible replies; Codex shows completed replies recorded by wait. Neither measures report-body tokens.',
+      },
+    ],
+  },
+  {
+    slug: 'subagents/tool_usage',
+    category: 'subagents',
+    title: 'Subagent tool usage',
+    blurb: 'Tools used by main sessions and linked subagents, with errors, missing outcomes, and summed call time.',
+    readme: 'artifacts/subagents/tool_usage/README.md',
+    figures: [
+      {
+        src: '/figures/subagents/tool_usage.png',
+        caption: 'Main and linked-subagent tool use: tools ranked by calls on the left and summed positive call time on the right. Omitted shares are shown; time is not elapsed runtime.',
+      },
+    ],
+    tables: [
+      {
+        src: 'artifacts/subagents/tool_usage/tool_usage.md',
+        caption: 'Main-session and subagent summaries: call counts, errors among known outcomes, outcome and timing coverage, distinct tools per session, and summed positive call time.',
+      },
+    ],
+  },
+
+  {
+    slug: 'subagents/timing',
+    category: 'subagents',
+    title: 'Subagent timing',
+    blurb: 'Recorded elapsed time and the share spent with tool calls outstanding.',
+    readme: 'artifacts/subagents/timing/README.md',
+    figures: [],
+    tables: [
+      {
+        src: 'artifacts/subagents/timing/timing.md',
+        caption: 'Elapsed time, time with tool calls outstanding, and per-subagent tool share, by provider.',
+      },
     ],
   },
 

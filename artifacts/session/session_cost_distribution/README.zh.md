@@ -46,3 +46,7 @@ uv run python artifacts/session/session_cost_distribution/analyze.py            
 
 对一个编码智能体而言，账单是由重新读取上下文主导的，而不是由生成主导（论文的
 `tab:cost_distribution`）。即便缓存**前缀 token 的计费费率大约只有新鲜输入费率的十分之一**，它们仍占总支出的 **58.6%**——纯属体量，因为不断累积的上下文在每个步骤上都被重放——相比之下追加/新鲜输入为 **30.5%**，而输出仅为 **11.0%**。尽管输出的每 token 价格很高，但它在总量上很便宜，因为每个步骤发出的 token 太少。绝对成本在中位数处是适度的（$0.79/会话，$0.34/请求，$0.09/步骤），但带有沉重的尾部：平均每个会话为 $11.8，p99 达到 **$209**，少数极长的会话驱动了大部分支出。这与「生成才是昂贵部分」的通常直觉恰好相反。
+
+## Shared request ownership update
+
+Request groups use `artifacts/utils/request_timing.py`. Native turn identity owns rows; legacy user-triggered groups remain countable for workload and attributed cost. Missing completion or nonpositive/contradictory timestamps no longer erase those counts. Only native completed lifecycles with consistent timestamps yield response duration. This can increase counts relative to historical tables that dropped groups solely for missing/nonpositive duration. Rebuild generated outputs for the intended capture.

@@ -1,6 +1,7 @@
 // Single source of truth for the Overview gallery. `overviewFigureSections` is an EXPLICIT, ordered
 // manifest: sections in display order, each listing its cards in display order. This mirrors the
 // TraceLab paper's layout (Session → LLM generation → Tool calls → Prefix cache, §4–§7).
+// Subagents extends Session before LLM generation without changing the existing paper order.
 //
 // Within each section, cards are ordered to match the paper's float sequence (the `\input` order in
 // src/0{4,5,6,7}_*.tex) FIRST, then the non-paper "good to have" extras (CDFs, scatters) AFTER. So
@@ -115,6 +116,49 @@ export const overviewFigureSections: FigureSection[] = [
         variant: 'figure',
         src: '/figures/human_in_the_loop/human_input_wait_total_cdf_by_provider.png',
         slug: 'human_in_the_loop/human_input_wait',
+      },
+    ],
+  },
+  {
+    key: 'subagents',
+    title: 'Subagents',
+    description: 'Compare recorded subagent use, workload, tokens, tools, and timing in Claude and Codex, with missing data kept visible.',
+    figures: [
+      {
+        category: 'subagents',
+        title: 'Subagent adoption',
+        blurb: 'How often main sessions have linked subagents, how many, and what the recorded links reveal.',
+        variant: 'stat',
+        slug: 'subagents/adoption',
+      },
+      {
+        category: 'subagents',
+        title: 'Subagent workload',
+        blurb: 'Recorded rounds and tool calls in main sessions and their subagents.',
+        variant: 'stat',
+        slug: 'subagents/workload',
+      },
+      {
+        category: 'subagents',
+        title: 'Subagent tokens and reports',
+        blurb: 'Recorded tokens in main sessions and linked subagents, plus input changes around possible or completed subagent replies.',
+        variant: 'stat',
+        slug: 'subagents/tokens_and_reports',
+      },
+      {
+        category: 'subagents',
+        title: 'Subagent tool usage',
+        blurb: 'Tools used by main sessions and linked subagents, with errors, missing outcomes, and summed call time.',
+        variant: 'figure',
+        src: '/figures/subagents/tool_usage.png',
+        slug: 'subagents/tool_usage',
+      },
+      {
+        category: 'subagents',
+        title: 'Subagent timing',
+        blurb: 'Recorded elapsed time and the share spent with tool calls outstanding.',
+        variant: 'stat',
+        slug: 'subagents/timing',
       },
     ],
   },

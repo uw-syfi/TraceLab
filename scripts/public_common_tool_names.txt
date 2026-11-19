@@ -82,4 +82,5 @@ view_image
 wait
 wait_agent
 wait_threads
+web_search
 write_stdin

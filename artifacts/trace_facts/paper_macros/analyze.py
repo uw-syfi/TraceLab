@@ -131,76 +131,31 @@ def compute_step_medians(con) -> dict[str, dict[str, float]]:
     return out
 
 
-def compute_turn_metrics(con) -> dict[str, dict[str, float]]:
-    """Per-request (user-turn) metrics, replaying the canonical user-turn state machine.
-
-    A turn opens on a response-triggering ``user_message`` and runs until the next one in the
-    same session; it is dropped if it has no response-end event or non-positive duration -- the
-    exact drop rule shared by ``user_turn_decomposition`` and ``user_turn_response_time``. For
-    each kept turn we record steps (rounds), tool calls, and end-to-end seconds.
-    """
-    events_by_round = DEC.load_timing_events(con)
-    tools_by_round = DEC.load_round_tools(con)
-
-    active: dict[str, dict[str, Any]] = {}
-    samples: dict[str, list[tuple[int, int, float]]] = {"merged": [], "claude": [], "codex": []}
-
-    def close(session_id: str) -> None:
-        turn = active.pop(session_id, None)
-        if turn is None or turn["end"] is None:
-            return
-        e2e = (turn["end"] - turn["start"]).total_seconds()
-        if e2e <= 0:
-            return
-        record = (turn["steps"], turn["tools"], e2e)
-        samples["merged"].append(record)
-        if turn["provider"] in samples:
-            samples[turn["provider"]].append(record)
-
-    for round_pk, provider, session_id in con.execute(
-        "SELECT round_pk, provider, session_id FROM rounds ORDER BY round_pk"
-    ).fetchall():
-        events = events_by_round.get(round_pk, [])
-        provider = str(provider) if provider else "<unknown-provider>"
-        session_id = session_id if isinstance(session_id, str) else None
-
-        start = DEC.response_trigger_user_message_timestamp(events)
-        if start is not None and session_id is not None:
-            close(session_id)
-            active[session_id] = {
-                "provider": provider,
-                "start": start,
-                "end": None,
-                "steps": 0,
-                "tools": 0,
-            }
-
-        turn = active.get(session_id) if session_id is not None else None
-        if turn is None:
+def compute_turn_metrics(con):
+    """Count shared request groups; response durations require native lifecycle evidence."""
+    import request_timing as rt
+    events = rt.load_events(con)
+    tools = rt.load_tools(con)
+    samples = {scope: [] for scope in ("merged", "claude", "codex")}
+    for request in rt.collect_requests(con, events):
+        if not request.round_pks:
             continue
-        turn["steps"] += 1
-        response_end = DEC.last_response_end_timestamp(events)
-        if response_end is not None and (turn["end"] is None or response_end > turn["end"]):
-            turn["end"] = response_end
-        round_tools = tools_by_round.get(round_pk)
-        if round_tools is not None:
-            turn["tools"] += round_tools.tool_calls
-
-    for session_id in list(active):
-        close(session_id)
-
-    out: dict[str, dict[str, float]] = {}
+        measured = rt.timing_summary(request.round_pks, events, tools)
+        duration = None if measured["compressed_timestamps"] else request.elapsed_seconds
+        record = (len(request.round_pks), measured["tool_calls"], duration)
+        for scope in ("merged", request.provider):
+            if scope in samples:
+                samples[scope].append(record)
+    out = {}
     for scope, records in samples.items():
-        steps = np.asarray([r[0] for r in records], dtype=float)
-        tools = np.asarray([r[1] for r in records], dtype=float)
-        e2e = np.asarray([r[2] for r in records], dtype=float)
-        out[scope] = {
-            "turns": int(steps.size),
-            "steps_per_request": float(steps.mean()),
-            "tools_per_request": float(tools.mean()),
-            "mean_minutes": float(e2e.mean()) / 60,
-            "p90_minutes": float(np.percentile(e2e, 90)) / 60,
-        }
+        steps = [r[0] for r in records]
+        calls = [r[1] for r in records]
+        durations = [r[2] for r in records if r[2] is not None]
+        out[scope] = {"turns": len(records),
+            "steps_per_request": float(np.mean(steps)) if steps else 0.0,
+            "tools_per_request": float(np.mean(calls)) if calls else 0.0,
+            "mean_minutes": float(np.mean(durations)) / 60 if durations else float("nan"),
+            "p90_minutes": float(np.percentile(durations, 90)) / 60 if durations else float("nan")}
     return out
 
 
@@ -302,15 +257,15 @@ def build_macros(
         },
         {
             "name": "avgtimeperrequest",
-            "body": f"{turns['merged']['mean_minutes']:.1f}\\xspace",
+            "body": (f"{turns['merged']['mean_minutes']:.1f}\\xspace" if np.isfinite(turns["merged"]["mean_minutes"]) else "N/A\\xspace"),
             "scope": "merged",
-            "basis": f"{turns['merged']['mean_minutes']:.3f} min mean e2e",
+            "basis": (f"{turns['merged']['mean_minutes']:.3f} min mean native e2e" if np.isfinite(turns["merged"]["mean_minutes"]) else "N/A: no measurable native completed requests"),
         },
         {
             "name": "pntimeperrequest",
-            "body": f"{turns['merged']['p90_minutes']:.1f}\\xspace",
+            "body": (f"{turns['merged']['p90_minutes']:.1f}\\xspace" if np.isfinite(turns["merged"]["p90_minutes"]) else "N/A\\xspace"),
             "scope": "merged",
-            "basis": f"{turns['merged']['p90_minutes']:.3f} min p90 e2e",
+            "basis": (f"{turns['merged']['p90_minutes']:.3f} min p90 native e2e" if np.isfinite(turns["merged"]["p90_minutes"]) else "N/A: no measurable native completed requests"),
         },
         # --- LLM generation, per step ---
         {
@@ -449,6 +404,8 @@ def main() -> int:
         medians = compute_step_medians(con)
         turns = compute_turn_metrics(con)
         tools = compute_tool_stats(con)
+        from request_timing import request_ownership_coverage
+        coverage = request_ownership_coverage(con)
     finally:
         con.close()
 
@@ -456,7 +413,10 @@ def main() -> int:
 
     out_path = Path(args.output_dir) / "paper_macros.tex"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render_tex(macros), encoding="utf-8")
+    from request_timing import ownership_coverage_note, render_ownership_coverage
+    out_path.write_text(render_tex(macros) + "\n% " + ownership_coverage_note(coverage) + "\n", encoding="utf-8")
+    (out_path.parent / "request_ownership_coverage.md").write_text(
+        render_ownership_coverage(coverage) + "\n", encoding="utf-8")
 
     print("Result-number macros for the TraceLab paper:\n")
     print(render_table(macros))

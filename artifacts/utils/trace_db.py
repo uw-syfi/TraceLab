@@ -2,8 +2,8 @@
 """Shared DuckDB access layer for coding-trace experiments.
 
 Instead of every experiment re-parsing the normalized JSONL trace in Python (and ``run_all.py``
-doing it ~28× across subprocesses), we ingest the trace **once** into a small DuckDB with three
-tables — ``rounds`` / ``tool_calls`` / ``timing_events`` — and every experiment queries that.
+doing it ~28× across subprocesses), we ingest the trace **once** into a small DuckDB with
+``rounds`` / ``tool_calls`` / ``timing_events`` plus observed ``sessions``.
 
 The same code runs natively and under Pyodide: DuckDB ships in both (native here is newer; Pyodide
 pins **1.1.2**, so keep SQL within the 1.1 feature set — no 1.2+-only syntax).
@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -87,11 +89,14 @@ _TOOL_FIELDS = (
     ("executable_parse_status", "VARCHAR", "CAST(tc.executable_parse_status AS VARCHAR)"),
     ("executable_parse_reason", "VARCHAR", "CAST(tc.executable_parse_reason AS VARCHAR)"),
     ("command_skeleton", "VARCHAR", "CAST(tc.command_skeleton AS VARCHAR)"),
+    ("report_source", "VARCHAR", "CAST(tc.report_source AS VARCHAR)"),
+    ("report_session_ids", "VARCHAR[]", "CAST(tc.report_session_ids AS VARCHAR[])"),
 )
 _TIMING_FIELDS = (
     ("event_type", "VARCHAR", "te.event_type"),
     ("source", "VARCHAR", "te.source"),
     ("timestamp", "TIMESTAMP", _ts("te.timestamp")),
+    ("turn_id", "VARCHAR", "CAST(te.turn_id AS VARCHAR)"),
     ("tool_call_id", "VARCHAR", "te.tool_call_id"),
     ("tool_index", "BIGINT", "te.tool_index"),
     ("tool_name", "VARCHAR", "te.tool_name"),
@@ -183,6 +188,193 @@ def _empty_child(lead: list[str], specs) -> str:
     return "SELECT " + ", ".join(cols) + " WHERE FALSE"
 
 
+_SESSION_ORIGINS = {
+    "claude_top_level_layout", "claude_subagent_layout",
+    "codex_top_level_source", "codex_subagent_source", "unknown",
+}
+_TOP_ORIGINS = {"claude_top_level_layout", "codex_top_level_source"}
+_CHILD_ORIGINS = {"claude_subagent_layout", "codex_subagent_source"}
+_LINEAGE_ERRORS = {"invalid", "conflict", "cycle"}
+_SESSION_COLUMNS = (
+    "identity_scope_id", "provider", "session_id", "session_origin",
+    "observed_parent_session_id", "observed_root_session_id",
+    "parent_status", "root_status", "resolved_root_session_id", "depth",
+)
+
+
+def _identity_scope(con, raw_cols, trace_path) -> str | None:
+    if "identity_scope_id" not in raw_cols:
+        return None
+    scopes = set()
+    # Inference normalizes both UUID case and timestamps; validate the original JSON scalar.
+    for (encoded,) in con.execute(f"""
+        SELECT DISTINCT json_extract(json, '$.identity_scope_id')
+        FROM read_json_objects({_sql_quote(trace_path)}, format = 'newline_delimited',
+                               maximum_object_size = 67108864)
+    """).fetchall():
+        value = json.loads(encoded) if encoded is not None else None
+        if value is not None and (
+            not isinstance(value, str)
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value) is None
+        ):
+            raise ValueError("identity_scope_id must be a canonical lowercase UUID or null")
+        scopes.add(value)
+    if len(scopes) > 1:
+        raise ValueError("identity_scope_id must be one nonempty scope with no unscoped rows, or entirely unscoped")
+    return next(iter(scopes), None)
+
+
+def _valid_session_id(provider, value) -> bool:
+    return (
+        provider in ("claude", "codex") and isinstance(value, str)
+        and value.startswith(provider + ":") and value == value.strip()
+        and bool(value[len(provider) + 1:].strip())
+    )
+
+
+def _materialize_sessions(con, raw_cols, scope) -> None:
+    """Aggregate observed identities, then resolve the functional parent graph without recursion."""
+    fields = ("provider", "session_id", "session_origin", "parent_session_id", "root_session_id")
+    projection = ", ".join(f"to_json({name})" if name in raw_cols else "NULL" for name in fields)
+    evidence = {}
+    for row in con.execute(f"SELECT DISTINCT {projection} FROM _raw").fetchall():
+        provider, sid, *refs = [json.loads(v) if v is not None else None for v in row]
+        if not _valid_session_id(provider, sid):
+            continue
+        item = evidence.setdefault((provider, sid), [set(), set(), set(), set()])
+        for index, value in enumerate(refs):
+            if value is None or value == "" or (index == 0 and value == "unknown"):
+                continue
+            if not isinstance(value, str):
+                item[3].add(index)
+            else:
+                item[index].add(value)
+
+    nodes = {}
+    for (provider, sid), (origins, parents, roots, malformed) in evidence.items():
+        origin = next(iter(origins)) if len(origins) == 1 else "unknown"
+        parent = next(iter(parents)) if len(parents) == 1 else None
+        root = next(iter(roots)) if len(roots) == 1 else None
+        origin_status = (
+            "conflict" if len(origins) > 1 else
+            "invalid" if 0 in malformed or origin not in _SESSION_ORIGINS
+            or (origin != "unknown" and not origin.startswith(provider + "_")) else None
+        )
+        parent_status = (
+            "conflict" if len(parents) > 1 else
+            "invalid" if 1 in malformed or (parent is not None and
+                (not _valid_session_id(provider, parent) or parent == sid)) else
+            "conflict" if parent and origin in _TOP_ORIGINS else
+            "unknown" if parent is None else
+            "resolved" if (provider, parent) in evidence else "missing"
+        )
+        root_status = (
+            "conflict" if len(roots) > 1 else
+            "invalid" if 2 in malformed or (root is not None and
+                (not _valid_session_id(provider, root)
+                 or (root == sid and (origin in _CHILD_ORIGINS or parents)))) else
+            "conflict" if root and root != sid and origin in _TOP_ORIGINS else "unknown"
+        )
+        if origin_status:
+            parent_status = root_status = origin_status
+        elif parent_status in _LINEAGE_ERRORS:
+            root_status = "conflict" if "conflict" in (parent_status, root_status) else parent_status
+        nodes[provider, sid] = dict(zip(_SESSION_COLUMNS, (
+            scope, provider, sid, origin if not origin_status else "unknown",
+            parent, root, parent_status, root_status, None, None,
+        )))
+
+    if scope is not None:
+        # Parent-first order; cycle members are marked before any descendants are resolved.
+        done, order = set(), []
+        for start in nodes:
+            path, positions = [], {}
+            key = start
+            while key is not None and key not in done and key not in positions:
+                positions[key] = len(path)
+                path.append(key)
+                node = nodes[key]
+                key = (key[0], node["observed_parent_session_id"]) if node["parent_status"] == "resolved" else None
+            if key in positions:
+                for member in path[positions[key]:]:
+                    nodes[member].update(parent_status="cycle", root_status="cycle", resolved_root_session_id=None, depth=None)
+            done.update(path)
+            order.extend(reversed(path))
+
+        # Validate root targets from their own evidence, never by promoting an unknown origin.
+        target_statuses = {key: node["root_status"] for key, node in nodes.items()}
+        for (provider, sid), node in nodes.items():
+            if node["root_status"] in _LINEAGE_ERRORS:
+                continue
+            root = node["observed_root_session_id"]
+            if node["session_origin"] in _TOP_ORIGINS:
+                node.update(root_status="resolved_explicit", resolved_root_session_id=sid, depth=0)
+            elif root is not None and root != sid:
+                target = nodes.get((provider, root))
+                if target is None:
+                    node["root_status"] = "missing"
+                else:
+                    target_origins, target_parents, target_roots, malformed = evidence[provider, root]
+                    if target_statuses[provider, root] in _LINEAGE_ERRORS:
+                        node["root_status"] = target_statuses[provider, root]
+                    elif any(len(values) > 1 for values in (target_origins, target_parents, target_roots)):
+                        node["root_status"] = "conflict"
+                    elif malformed or target["session_origin"] in _CHILD_ORIGINS or target_parents:
+                        node["root_status"] = "invalid"
+                    elif target_roots and target_roots != {root}:
+                        node["root_status"] = "conflict"
+                    elif provider == "claude" or target["session_origin"] in _TOP_ORIGINS:
+                        node.update(root_status="resolved_explicit", resolved_root_session_id=root)
+
+        # Validate ancestry first; incoming explicit roots then constrain claims, not target origins.
+        for include_incoming in (False, True):
+            incoming_roots = {
+                (node["provider"], node["observed_root_session_id"])
+                for node in nodes.values()
+                if include_incoming and node["root_status"] == "resolved_explicit"
+                and node["observed_root_session_id"] is not None
+            }
+            claims = {}
+            for key in order:
+                node = nodes[key]
+                claim = (node["observed_root_session_id"] or node["resolved_root_session_id"]
+                         or (key[1] if key in incoming_roots else None))
+                if node["root_status"] not in _LINEAGE_ERRORS:
+                    if node["parent_status"] == "resolved":
+                        parent_key = (key[0], node["observed_parent_session_id"])
+                        parent = nodes[parent_key]
+                        parent_claim = claims.get(parent_key)
+                        if parent["root_status"] in _LINEAGE_ERRORS:
+                            node["root_status"] = parent["root_status"]
+                        elif claim and parent_claim and claim != parent_claim:
+                            node["root_status"] = "conflict"
+                        elif parent["resolved_root_session_id"] is not None:
+                            node.update(
+                                root_status="resolved_explicit" if node["root_status"] == "resolved_explicit" else "resolved_chain",
+                                resolved_root_session_id=parent["resolved_root_session_id"],
+                                depth=parent["depth"] + 1 if parent["depth"] is not None else None,
+                            )
+                        elif node["root_status"] == "unknown":
+                            node["root_status"] = parent["root_status"]
+                        claim = claim or parent_claim
+                    elif node["parent_status"] == "missing" and node["root_status"] == "unknown":
+                        node["root_status"] = "missing"
+                if node["root_status"] in _LINEAGE_ERRORS:
+                    node.update(resolved_root_session_id=None, depth=None)
+                claims[key] = claim
+    else:
+        for node in nodes.values():
+            node.update(parent_status="unavailable", root_status="unavailable")
+
+    con.execute("CREATE TABLE sessions (" + ", ".join(
+        f"{name} {'BIGINT' if name == 'depth' else 'VARCHAR'}" for name in _SESSION_COLUMNS
+    ) + ", PRIMARY KEY (provider, session_id))")
+    if nodes:
+        con.executemany("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+            tuple(node[name] for name in _SESSION_COLUMNS) for node in nodes.values()
+        ])
+
+
 def materialize(trace_path, db_path) -> Path:
     """Ingest a normalized JSONL trace into a fresh DuckDB at ``db_path``. Idempotent (overwrites).
 
@@ -192,11 +384,13 @@ def materialize(trace_path, db_path) -> Path:
     """
     trace_path = Path(trace_path)
     db_path = Path(db_path)
+    if trace_path.resolve() == db_path.resolve():
+        raise ValueError("trace input and database output must not be the same path")
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    if db_path.exists():
-        db_path.unlink()
-
-    con = duckdb.connect(str(db_path))
+    # A rejected identity scope (or failed build) must not destroy the previous database.
+    with tempfile.NamedTemporaryFile(prefix=f".{db_path.name}.", suffix=".duckdb", dir=db_path.parent) as fh:
+        staging = Path(fh.name)
+    con = duckdb.connect(str(staging))
     try:
         # Single-threaded so round_pk == file order (reproduces line-order tie-breaks).
         con.execute("SET threads TO 1")
@@ -229,7 +423,8 @@ def materialize(trace_path, db_path) -> Path:
         # Nullable fields newer than older traces get the same pin when present (absent stays absent;
         # readers null-fill via _has_round_column).
         pinned = [(c, t) for c, t in _PINNED_OPTIONAL_ROUND_COLUMNS if c in raw_cols]
-        exclude = [c for c in ("round_pk", "tools", "timing_events", "reasoning_output_tokens") if c in raw_cols]
+        scope = _identity_scope(con, raw_cols, trace_path)
+        exclude = [c for c in ("round_pk", "tools", "timing_events", "reasoning_output_tokens", "session_kind") if c in raw_cols]
         exclude += [c for c, _ in pinned]
         reason_select = (
             "TRY_CAST(reasoning_output_tokens AS BIGINT) AS reasoning_output_tokens"
@@ -238,12 +433,22 @@ def materialize(trace_path, db_path) -> Path:
         )
         reason_select += "".join(f", TRY_CAST({c} AS {t}) AS {c}" for c, t in pinned)
         user_select = "" if "user" in raw_cols else ', CAST(NULL AS VARCHAR) AS "user"'
+        lineage_select = "".join(
+            f", CAST(NULL AS VARCHAR) AS {name}"
+            for name in ("identity_scope_id", "session_origin", "parent_session_id", "root_session_id")
+            if name not in raw_cols
+        )
+        lineage_select += (
+            ", CASE WHEN CAST(session_kind AS VARCHAR) IN ('main', 'worker', 'guardian', 'unknown') "
+            "THEN CAST(session_kind AS VARCHAR) ELSE 'unknown' END AS session_kind"
+            if "session_kind" in raw_cols else ", 'unknown'::VARCHAR AS session_kind"
+        )
         con.execute(
             "CREATE TABLE rounds AS "
             "SELECT round_pk, round_pk AS ingest_seq, "
             f"       * EXCLUDE ({', '.join(exclude)}), "
             f"       {reason_select}"
-            f"{user_select} "
+            f"{user_select}{lineage_select} "
             "FROM _raw"
         )
         # A count column inferred as JSON (null in every row) is cast back to BIGINT, so SQL
@@ -284,6 +489,7 @@ def materialize(trace_path, db_path) -> Path:
                 "CREATE TABLE timing_events AS "
                 + _empty_child(["CAST(NULL AS BIGINT) AS round_pk", "CAST(NULL AS BIGINT) AS event_index"], _TIMING_FIELDS)
             )
+        _materialize_sessions(con, raw_cols, scope)
         con.execute("DROP TABLE _raw")
         # Provenance: the absolute source trace this DB was built from. Lets an experiment recover
         # data deliberately dropped from the slim schema (e.g. claude_long_tool_calls re-reads the
@@ -291,8 +497,11 @@ def materialize(trace_path, db_path) -> Path:
         con.execute(
             f"CREATE TABLE trace_source AS SELECT {_sql_quote(trace_path.resolve())} AS path"
         )
+        con.close()
+        staging.replace(db_path)
     finally:
         con.close()
+        staging.unlink(missing_ok=True)
     return db_path
 
 
@@ -385,12 +594,36 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
     1-based per-round index without modifying the read-only release asset.
     """
     db = _ident(_primary_database_name(con))
+    if not _has_column(con, "sessions", "session_id"):
+        identity = ", ".join(
+            f"CAST({_ident(name)} AS VARCHAR) AS {name}" if _has_column(con, "rounds", name)
+            else f"CAST(NULL AS VARCHAR) AS {name}"
+            for name in ("provider", "session_id")
+        )
+        con.execute(f"""
+            CREATE TEMP VIEW sessions AS
+            SELECT CAST(NULL AS VARCHAR) AS identity_scope_id, provider, session_id,
+                   'unknown'::VARCHAR AS session_origin,
+                   CAST(NULL AS VARCHAR) AS observed_parent_session_id,
+                   CAST(NULL AS VARCHAR) AS observed_root_session_id,
+                   'unavailable'::VARCHAR AS parent_status, 'unavailable'::VARCHAR AS root_status,
+                   CAST(NULL AS VARCHAR) AS resolved_root_session_id, CAST(NULL AS BIGINT) AS depth
+            FROM (SELECT DISTINCT {identity} FROM {db}.rounds)
+            WHERE provider IN ('claude', 'codex') AND starts_with(session_id, provider || ':')
+              AND session_id = trim(session_id)
+              AND length(trim(substr(session_id, length(provider) + 2))) > 0
+        """)
+    timing_additions = []
     if not _has_column(con, "timing_events", "event_index"):
+        timing_additions.append("row_number() OVER (PARTITION BY round_pk ORDER BY rowid) AS event_index")
+    if not _has_column(con, "timing_events", "turn_id"):
+        timing_additions.append("CAST(NULL AS VARCHAR) AS turn_id")
+    if timing_additions:
         con.execute(
             f"""
             CREATE TEMP VIEW timing_events AS
             SELECT
-              row_number() OVER (PARTITION BY round_pk ORDER BY rowid) AS event_index,
+              {', '.join(timing_additions)},
               *
             FROM {db}.timing_events
             """
@@ -409,6 +642,8 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
             "executable_parse_status",
             "executable_parse_reason",
             "command_skeleton",
+            "report_source",
+            "report_session_ids",
         )
         if not _has_column(con, "tool_calls", name)
     ]
@@ -451,6 +686,8 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
             "executable_parse_status": "CAST(NULL AS VARCHAR)",
             "executable_parse_reason": "CAST(NULL AS VARCHAR)",
             "command_skeleton": "CAST(NULL AS VARCHAR)",
+            "report_source": "CAST(NULL AS VARCHAR)",
+            "report_session_ids": "CAST(NULL AS VARCHAR[])",
         }
         additions = ", ".join(
             f"{derived[name]} AS {_ident(name)}" for name in missing
@@ -460,8 +697,11 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
     # Round fields newer than a DB read as typed NULLs:
     # unknown, not zero or "main".
     missing_round = [(c, t) for c, t in _PINNED_OPTIONAL_ROUND_COLUMNS if not _has_column(con, "rounds", c)]
-    if missing_round:
-        additions = ", ".join(f"CAST(NULL AS {t}) AS {_ident(c)}" for c, t in missing_round)
+    round_additions = [f"CAST(NULL AS {t}) AS {_ident(c)}" for c, t in missing_round]
+    if not _has_column(con, "rounds", "session_kind"):
+        round_additions.append("'unknown'::VARCHAR AS session_kind")
+    if round_additions:
+        additions = ", ".join(round_additions)
         con.execute(f"CREATE TEMP VIEW rounds AS SELECT *, {additions} FROM {db}.rounds")
 
 

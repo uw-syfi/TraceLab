@@ -37,6 +37,7 @@ from style import (
 from formatters import format_count_tick  # noqa: E402
 import trace_db  # noqa: E402
 import png_sidecar  # noqa: E402
+from tool_metrics import tool_aggregate_sql  # noqa: E402
 
 DEFAULT_TOP_TOOLS = 30
 DEFAULT_MIN_TOOL_CALLS = 20  # tools with fewer provider-local calls collapse into "Other"
@@ -117,8 +118,9 @@ def load_tool_counts_by_provider(
     `Other (<N calls/tool)` bucket (done here, summing — order-independent). `first_seen` (min
     global call ordinal) pins the equal-count ordering so output is stable across DB builds.
     """
+    agg = tool_aggregate_sql(error="o.is_error")
     rows = con.execute(
-        """
+        f"""
         WITH ordered AS (
             SELECT tc.round_pk, tc.tool_name, tc.is_error,
                    row_number() OVER (ORDER BY tc.round_pk, tc.tool_index) AS call_ord
@@ -127,8 +129,8 @@ def load_tool_counts_by_provider(
         SELECT r.provider AS provider,
                CASE WHEN o.tool_name LIKE 'mcp\\_%' ESCAPE '\\' THEN 'mcp'
                     ELSE o.tool_name END                        AS plot_name,
-               count(*)                                         AS calls,
-               count(*) FILTER (WHERE o.is_error)               AS error_calls,
+               {agg['calls']}                                  AS calls,
+               {agg['errors']}                                 AS error_calls,
                min(o.call_ord)                                  AS first_seen
         FROM ordered o JOIN rounds r USING (round_pk)
         GROUP BY 1, 2

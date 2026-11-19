@@ -40,7 +40,7 @@ from .store import LocalStore, make_contribution_entry, pool_preview
 # Privacy gate lives in scripts/trace_privacy (shared with the sanitizer).
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from trace_privacy import find_sensitive, row_has_leak  # noqa: E402
+from trace_privacy import find_sensitive, row_has_leak, validate_lineage_markers  # noqa: E402
 
 # ---- config (env-overridable) -------------------------------------------------------------
 MAX_UPLOAD_BYTES = int(os.environ.get("CONTRIB_MAX_UPLOAD_BYTES", 256 * 1024 * 1024))
@@ -206,6 +206,10 @@ def _parse_and_validate(raw: bytes) -> list[dict]:
         rows.append(row)
     if not rows:
         raise HTTPException(422, "Upload contained no rows.")
+    try:
+        validate_lineage_markers(rows)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     return rows
 
 

@@ -65,3 +65,11 @@ uv run python artifacts/trace_facts/paper_macros/analyze.py --db "$TMPDIR/trace.
 - stdout — a readable `macro / value / basis` table.
 
 No figures.
+
+## Shared request ownership update
+
+Request groups use `artifacts/utils/request_timing.py`. Native turn identity owns rows; legacy user-triggered groups remain countable for workload and attributed cost. Missing completion or nonpositive/contradictory timestamps no longer erase those counts. Only native completed lifecycles with consistent timestamps yield response duration. This can increase counts relative to historical tables that dropped groups solely for missing/nonpositive duration. Rebuild generated outputs for the intended capture.
+
+## Request ownership coverage
+
+The shared ownership audit reports recorded rounds that have no resolvable request owner, including their output tokens, tool-call count, known attributed tool work, and native lifecycle markers. Session and step totals retain these rows; request statistics exclude them. Their request identity and completion are not guessed. Count/cost tables include this coverage, and response-time/paper-macro outputs also write `request_ownership_coverage.md`. Session identity is always the pair `(provider, session_id)`.

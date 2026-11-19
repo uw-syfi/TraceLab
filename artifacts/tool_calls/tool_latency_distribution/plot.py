@@ -56,6 +56,7 @@ from cdf import (
 )  # noqa: E402
 import trace_db  # noqa: E402
 import png_sidecar  # noqa: E402
+from tool_metrics import tool_aggregate_sql  # noqa: E402
 
 DEFAULT_TOP_TOOLS = 30
 DEFAULT_MIN_TOOL_CALLS = 20  # tools with fewer provider-local calls collapse into "Other"
@@ -147,6 +148,7 @@ def _per_tool_query(plot_name_expr: str, *, by_provider: bool) -> str:
     providers_select = (
         "" if by_provider else "histogram(provider)                          AS providers,\n               "
     )
+    agg = tool_aggregate_sql()
     return f"""
         WITH ordered AS (
             SELECT
@@ -158,12 +160,12 @@ def _per_tool_query(plot_name_expr: str, *, by_provider: bool) -> str:
             FROM tool_calls tc JOIN rounds r USING (round_pk)
         )
         SELECT {provider_select}{plot_name_expr}                      AS plot_name,
-               {providers_select}count(*)                             AS calls,
-               count(*) FILTER (WHERE eff IS NOT NULL AND eff > 0)    AS latency_count,
-               count(*) FILTER (WHERE eff IS NULL)                    AS missing_latency,
-               count(*) FILTER (WHERE eff IS NOT NULL AND eff <= 0)   AS nonpositive_latency,
-               count(*) FILTER (WHERE is_error)                       AS error_calls,
-               sum(CASE WHEN eff IS NOT NULL AND eff > 0 THEN eff ELSE 0 END) AS latency_sum,
+               {providers_select}{agg['calls']}                       AS calls,
+               {agg['positive_latency_calls']}                        AS latency_count,
+               {agg['missing_latency_calls']}                         AS missing_latency,
+               {agg['nonpositive_latency_calls']}                     AS nonpositive_latency,
+               {agg['errors']}                                        AS error_calls,
+               {agg['latency_sum_zero']}                               AS latency_sum,
                min(eff) FILTER (WHERE eff IS NOT NULL AND eff > 0)    AS latency_min,
                max(eff) FILTER (WHERE eff IS NOT NULL AND eff > 0)    AS latency_max,
                list(eff) FILTER (WHERE eff IS NOT NULL AND eff > 0)   AS latency_values,
@@ -345,6 +347,7 @@ def load_tool_latency_bins(con, *, by_provider: bool) -> Any:
     provider_select = "provider AS provider, " if by_provider else ""
     provider_join = "JOIN rounds r USING (round_pk)" if by_provider else ""
     group_by = "provider, bin_index" if by_provider else "bin_index"
+    agg = tool_aggregate_sql()
     rows = con.execute(
         f"""
         WITH binned AS (
@@ -358,8 +361,8 @@ def load_tool_latency_bins(con, *, by_provider: bool) -> Any:
             WHERE ({_EFF}) IS NOT NULL AND ({_EFF}) > 0
         )
         SELECT {provider_select}bin_index,
-               count(*)                          AS tool_calls,
-               count(*) FILTER (WHERE is_error)  AS error_calls,
+               {agg['calls']}                    AS tool_calls,
+               {agg['errors']}                   AS error_calls,
                sum(eff)                          AS total_latency_ms
         FROM binned
         GROUP BY {group_by}

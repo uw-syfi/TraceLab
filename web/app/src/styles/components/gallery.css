@@ -37,6 +37,18 @@
     background: linear-gradient(155deg, var(--card-2), var(--card));
   }
   .fig .canvas--motif svg { width: 70%; height: auto; max-height: 76%; }
+  .fig .canvas--comparison {
+    aspect-ratio: 16 / 10; display: grid; align-items: center; padding: 14px 12px;
+  }
+  .subagent-preview { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  .subagent-preview th, .subagent-preview td { padding: 8px 4px; line-height: 1.25; }
+  .subagent-preview th { font-size: var(--fs-2xs); text-align: left; font-weight: 500; color: var(--muted); }
+  .subagent-preview th:first-child { width: 48%; }
+  .subagent-preview thead th:not(:first-child), .subagent-preview td { text-align: right; }
+  .subagent-preview thead th:nth-child(2) { color: var(--terra); }
+  .subagent-preview thead th:nth-child(3) { color: var(--sage); }
+  .subagent-preview td { font-size: var(--fs-sm); font-weight: 700; white-space: nowrap; }
+  .subagent-preview tbody tr { border-top: 1px dashed var(--line); }
   .fig .canvas--motif[data-motif="boxplot"] svg,
   .fig .canvas--motif[data-motif="providerCdf"] svg,
   .fig .canvas--motif[data-motif="ranked"] svg,

@@ -101,6 +101,26 @@ def test_gate_rejects_sensitive_and_tool_input():
             assert getattr(exc, "status_code", None) == 422
 
 
+def test_gate_rejects_lineage_conflicts_before_fingerprints():
+    clean = sanitize(make_raw_session("claude:scope", 1, 100), "s")[0]
+    other = sanitize(make_raw_session("claude:scope", 1, 100), "s")[0]
+    assert clean["session_id"] == other["session_id"]
+    assert clean["identity_scope_id"] != other["identity_scope_id"]
+    legacy = {k: v for k, v in clean.items() if k != "identity_scope_id"}
+    assert appmod._parse_and_validate(gz([legacy])) == [legacy]
+    batches = [[clean, other], [clean, legacy], [legacy, clean]]
+    for field, value in (("identity_scope_id", ""), ("identity_scope_id", 1),
+                         ("identity_scope_id", None), ("session_origin", "/private/path"),
+                         ("session_origin", {})):
+        batches.append([{**clean, field: value}])
+    for rows in batches:
+        try:
+            appmod._parse_and_validate(gz(rows))
+            raise AssertionError("expected lineage rejection before fingerprint/dedup")
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 422
+
+
 def test_full_dedup_and_bookkeeping_flow():
     raw1 = make_raw_session("claude:real-1", 4, 30000)
     raw2 = make_raw_session("claude:real-2", 4, 88000)
