@@ -301,29 +301,31 @@ def _extract_one_file(path: Path):
     """
     rs: dict[str, Any] = {}
     ts: dict[str, str] = {}
+    diagnostics: dict[str, int] = {}
     try:
         kind = classify_records(_iter_json_records(path.read_bytes(), limit=200))
     except Exception as exc:  # unreadable member — skip, keep going
-        return [], {}, {}, f"could not read {path.name}: {type(exc).__name__}", "skip"
+        return [], {}, {}, f"could not read {path.name}: {type(exc).__name__}", "skip", diagnostics
     if kind == "round":
         rows = [r for r in _iter_json_records(path.read_bytes()) if _looks_round(r)]
-        return rows, {}, {}, None, "round"
+        return rows, {}, {}, None, "round", diagnostics
     if kind == "claude":
         project, key, project_layout = _claude_project_and_key(path)
         rows = list(extract_session_with_key(
             path, project, key, raw_sink=rs, title_sink=ts,
             project_layout=project_layout,
+            diagnostics_sink=diagnostics,
         ))
     elif kind == "codex":
-        rows = list(extract_codex_session(path, raw_sink=rs, title_sink=ts))
+        rows = list(extract_codex_session(path, raw_sink=rs, title_sink=ts, diagnostics_sink=diagnostics))
     else:
-        return [], {}, {}, f"unrecognized file (no sessions or round rows): {path.name}", "skip"
+        return [], {}, {}, f"unrecognized file (no sessions or round rows): {path.name}", "skip", diagnostics
     rs = {k: _clip_raw(v) for k, v in rs.items()}  # clip in-worker; trace_key keys unchanged
-    return rows, rs, ts, None, kind
+    return rows, rs, ts, None, kind, diagnostics
 
 
 def _extract_normalized(
-    files, warnings, note, *, raw_sink=None, title_sink=None, jobs: int = 1
+    files, warnings, note, *, raw_sink=None, title_sink=None, jobs: int = 1, diagnostics_sink=None
 ) -> tuple[list[dict], bool]:
     """Classify each file and collect normalized rows. Returns (rows, extracted_any_raw).
 
@@ -348,7 +350,11 @@ def _extract_normalized(
     claude_sessions = []
 
     def _merge(result) -> tuple[list[dict], str]:
-        rows_i, rs, ts, warning, kind = result
+        rows_i, rs, ts, warning, kind, diagnostics = result
+        if diagnostics_sink is not None and diagnostics:
+            totals = diagnostics_sink.setdefault(kind, {})
+            for key, value in diagnostics.items():
+                totals[key] = totals.get(key, 0) + value
         if warning:
             warnings.append(warning)
         for k, v in rs.items():
@@ -500,8 +506,10 @@ def prepare(
     # extract from raw sessions; NEVER merged into normalized/sanitized rows (see below).
     raw_sink: dict[str, Any] = {}
     title_sink: dict[str, str] = {}
+    coverage_diagnostics: dict[str, dict[str, int]] = {}
     normalized_rows, extracted_raw = _extract_normalized(
-        candidate_files, warnings, note, raw_sink=raw_sink, title_sink=title_sink, jobs=jobs
+        candidate_files, warnings, note, raw_sink=raw_sink, title_sink=title_sink, jobs=jobs,
+        diagnostics_sink=coverage_diagnostics,
     )
     if not normalized_rows:
         raise IngestError(
@@ -598,6 +606,7 @@ def prepare(
         "tools": tools,
         "produced": produced,
         "warnings": warnings,
+        "coverage_diagnostics": coverage_diagnostics,
         "rawAvailable": raw_available,
         "titles": titles_by_session,
         "files": {

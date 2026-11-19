@@ -66,6 +66,7 @@ before materialization. Scope is a producer assertion, not proof that identifier
 | `session_id` | VARCHAR | non-unique across `(project, session_file)` |
 | `identity_scope_id` | VARCHAR | optional controlled-sanitization batch marker; missing column is null-filled |
 | `session_origin` | VARCHAR | optional allowlisted origin evidence; missing column is null-filled |
+| `session_kind` | VARCHAR | `main`, `worker`, `guardian`, or `unknown`; missing/unsupported evidence stays `unknown` |
 | `parent_session_id` | VARCHAR | observed direct parent; retained independently of resolved lineage |
 | `root_session_id` | VARCHAR | observed root; retained independently of resolved lineage |
 | `session_file` | VARCHAR | |
@@ -218,7 +219,33 @@ sum of linked tool-call time.
 
 ### `timing_events` — one row per timing event (FK `round_pk`)
 
-UNNEST of each round's `timing_events` list (union of 5 key variants → nulls where a key is absent).
+UNNEST of each round's `timing_events` list; absent optional fields become null.
+
+Native lifecycle events are `request_start` (`event_msg.task_started`), `request_end`
+(`event_msg.task_complete` or Claude `assistant.stop_reason`), and `request_aborted`
+(`event_msg.turn_aborted`). Claude completion requires `end_turn` or `stop_sequence`, never
+`tool_use`. Markers retain observed timestamps and optional native/context `turn_id`. They attach
+to existing usage-bearing rounds; no request or zero-token round is fabricated without usage.
+Older traces have no explicit completion evidence.
+
+`web_search_observation` preserves native built-in web activity without treating it as the next
+model call's input. Only an explicit `call_id` establishes a `web_search` tool row. Anonymous
+completions and response-item IDs do not establish extra calls. Missing native starts leave emission
+and duration null. Anonymous observations and missing-start tools prevent complete wall-time
+accounting. Private queries/actions are never copied into these events.
+
+`session_kind` describes native identity evidence: positive top-level origins are `main`, Claude
+subagent layouts and Codex `thread_spawn` are `worker`, and Codex `subagent.other == 'guardian'`
+is `guardian`. Unknown/conflicting evidence stays `unknown`. Replayed metadata is reconciled by
+native session identity. Kind does not alter lineage or rule out an external orchestrator.
+
+Raw extractors accept an optional numeric `diagnostics_sink`; their CLIs print these counters.
+Ingest returns provider totals in `coverage_diagnostics`. Counters distinguish malformed/incomplete
+records, unaccounted trailing output/tool calls, and unattached or partial lifecycle/web observations.
+Trailing output counts describe raw event records, not rounds or wholly lost sessions.
+`unaccounted_output_records` counts model-output entries (`reasoning`, `text`, `tool_call`) left in
+the parser's unclosed segment after its last accepted usage report. A syntactically valid replayed
+`token_count` does not close that segment, so scanning only after the last raw usage record can undercount.
 
 | column | type | notes |
 |---|---|---|
@@ -227,6 +254,7 @@ UNNEST of each round's `timing_events` list (union of 5 key variants → nulls w
 | `event_type` | VARCHAR | |
 | `source` | VARCHAR | raw record the event was read from, e.g. `response_item.function_call_output`, `assistant.content.tool_use`; a Codex `user_message` has `event_msg.user_message`, or `event_msg.item_completed` on the main thread of Codex CLI ≥ 0.147; automatic-review rounds of CLI ≥ 0.158 mostly have no prompt event |
 | `timestamp` | TIMESTAMP | normalized to naive UTC microseconds; fetch via `epoch_us` (see gotchas) |
+| `turn_id` | VARCHAR | optional native/context request identity; sanitized with the round-level turn-ID map; legacy null |
 | `tool_call_id` | VARCHAR | nullable |
 | `tool_index` | BIGINT | nullable |
 | `tool_name` | VARCHAR | nullable |

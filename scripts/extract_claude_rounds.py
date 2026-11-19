@@ -15,12 +15,18 @@ from trace_privacy import LineageMarkerValidator
 
 
 def parse_ts(value: str | None) -> datetime | None:
-    if not value:
+    if not isinstance(value, str) or not value:
         return None
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def coverage_count(sink: dict[str, int] | None, key: str, count: int = 1) -> None:
+    """Keep coverage diagnostics numeric and free of private source contents."""
+    if sink is not None and count:
+        sink[key] = sink.get(key, 0) + count
 
 
 def content_chars(value: Any) -> int:
@@ -522,6 +528,7 @@ def extract_session_with_key(
     raw_sink: dict[str, Any] | None = None,
     title_sink: dict[str, str] | None = None,
     project_layout: bool = False,
+    diagnostics_sink: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Extract one session's rounds.
 
@@ -567,6 +574,7 @@ def extract_session_with_key(
     raw_by_msg_id: dict[str, dict[str, Any]] = {}
     raw_tool_by_id: dict[str, dict[str, Any]] = {}
     pending_raw_in: list[dict[str, str]] = []
+    completion_events: dict[str, dict[str, Any]] = {}
 
     with session_file.open("r", encoding="utf-8") as fh:
         for line in fh:
@@ -575,11 +583,15 @@ def extract_session_with_key(
             try:
                 record = json.loads(line)
             except json.JSONDecodeError:
+                coverage_count(diagnostics_sink, "malformed_json_records")
                 continue
             if not isinstance(record, dict):
+                coverage_count(diagnostics_sink, "non_object_records")
                 continue
             msg = record.get("message")
             if not isinstance(msg, dict):
+                if record.get("type") in {"assistant", "user"}:
+                    coverage_count(diagnostics_sink, "incomplete_records")
                 # Title records carry no `message`. They're local-only (titles are user text), so
                 # capture them here before skipping — keyed by this session's id so they line up
                 # with the rounds. custom-title (explicit) wins over agent-name (fallback).
@@ -602,6 +614,8 @@ def extract_session_with_key(
             if record_type == "assistant" and role == "assistant":
                 msg_id = msg.get("id")
                 if not isinstance(msg_id, str) or msg_id == "<synthetic>":
+                    if not isinstance(msg_id, str):
+                        coverage_count(diagnostics_sink, "incomplete_records")
                     continue
                 if msg.get("model") == "<synthetic>":
                     continue
@@ -635,6 +649,16 @@ def extract_session_with_key(
                     if round_obj.get("model") is None:
                         round_obj["model"] = msg.get("model")
                     apply_usage(round_obj, msg)
+
+                if msg.get("stop_reason") in {"end_turn", "stop_sequence"}:
+                    if isinstance(timestamp, str) and parse_ts(timestamp) is not None:
+                        event = make_timing_event("request_end", timestamp, "assistant.stop_reason")
+                        previous = completion_events.get(msg_id)
+                        # Claude repeats message-level stop reasons on thinking/text snapshots.
+                        if previous is None or parse_ts(timestamp) > parse_ts(previous["timestamp"]):
+                            completion_events[msg_id] = event
+                    else:
+                        coverage_count(diagnostics_sink, "lifecycle_missing_timestamp")
 
                 assistant_uuid = record.get("uuid")
 
@@ -755,9 +779,15 @@ def extract_session_with_key(
 
     for index, round_obj in enumerate(rounds):
         round_obj["session_origin"] = session_origin
+        round_obj["session_kind"] = (
+            "main" if session_origin == "claude_top_level_layout" else
+            "worker" if session_origin == "claude_subagent_layout" else "unknown"
+        )
         round_obj["parent_session_id"] = parent_session_id
         round_obj["root_session_id"] = root_session_id
         round_obj["round_index"] = index
+        if (completion := completion_events.get(round_obj["round_id"])) is not None:
+            round_obj["timing_events"].append(completion)
         apply_input_event_summary(round_obj)
         round_obj.pop("_usage_score", None)
         for tool_index, tool in enumerate(round_obj["tools"]):
@@ -803,11 +833,13 @@ def main() -> int:
 
     all_rounds: list[dict[str, Any]] = []
     extracted = []
+    diagnostics: dict[str, int] = {}
     for session_file in session_files:
         session_key = str(session_file.relative_to(project_dir).with_suffix(""))
         rows = extract_session_with_key(
             session_file, project, session_key,
             project_layout=project_dir.parent.name == "projects",
+            diagnostics_sink=diagnostics,
         )
         extracted.append((session_file, rows))
         all_rounds.extend(rows)
@@ -824,6 +856,7 @@ def main() -> int:
     print(f"tool_results={tool_results}")
     print(f"written_rounds={write_stats['written_rounds']}")
     print(f"skipped_duplicate_rounds={write_stats['skipped_duplicate_rounds']}")
+    print(f"coverage_diagnostics={json.dumps(diagnostics, sort_keys=True)}")
     print(f"output={args.output}")
     return 0
 

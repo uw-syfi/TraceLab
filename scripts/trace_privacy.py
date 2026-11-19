@@ -25,6 +25,7 @@ SESSION_ORIGINS = frozenset({
     "claude_top_level_layout", "claude_subagent_layout",
     "codex_top_level_source", "codex_subagent_source", "unknown",
 })
+SESSION_KINDS = frozenset({"main", "worker", "guardian", "unknown"})
 _SCOPE_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 REPORT_SOURCE_PROVIDERS = {
     "codex_wait_completed": "codex",
@@ -63,6 +64,8 @@ def validate_report_fields(tool: dict[str, Any], provider: Any) -> None:
 
 
 def invalid_lineage_marker(key: str, value: Any) -> bool:
+    if key == "session_kind":
+        return not isinstance(value, str) or value not in SESSION_KINDS
     if key == "session_origin":
         return not isinstance(value, str) or value not in SESSION_ORIGINS
     if key == "identity_scope_id":
@@ -78,7 +81,7 @@ class LineageMarkerValidator:
         self.seen = False
 
     def add(self, row: dict[str, Any]) -> None:
-        for key in ("session_origin", "identity_scope_id"):
+        for key in ("session_origin", "identity_scope_id", "session_kind"):
             if key in row and invalid_lineage_marker(key, row[key]):
                 raise ValueError(f"invalid {key}")
         tools = row.get("tools")

@@ -96,6 +96,7 @@ _TIMING_FIELDS = (
     ("event_type", "VARCHAR", "te.event_type"),
     ("source", "VARCHAR", "te.source"),
     ("timestamp", "TIMESTAMP", _ts("te.timestamp")),
+    ("turn_id", "VARCHAR", "CAST(te.turn_id AS VARCHAR)"),
     ("tool_call_id", "VARCHAR", "te.tool_call_id"),
     ("tool_index", "BIGINT", "te.tool_index"),
     ("tool_name", "VARCHAR", "te.tool_name"),
@@ -423,7 +424,7 @@ def materialize(trace_path, db_path) -> Path:
         # readers null-fill via _has_round_column).
         pinned = [(c, t) for c, t in _PINNED_OPTIONAL_ROUND_COLUMNS if c in raw_cols]
         scope = _identity_scope(con, raw_cols, trace_path)
-        exclude = [c for c in ("round_pk", "tools", "timing_events", "reasoning_output_tokens") if c in raw_cols]
+        exclude = [c for c in ("round_pk", "tools", "timing_events", "reasoning_output_tokens", "session_kind") if c in raw_cols]
         exclude += [c for c, _ in pinned]
         reason_select = (
             "TRY_CAST(reasoning_output_tokens AS BIGINT) AS reasoning_output_tokens"
@@ -436,6 +437,11 @@ def materialize(trace_path, db_path) -> Path:
             f", CAST(NULL AS VARCHAR) AS {name}"
             for name in ("identity_scope_id", "session_origin", "parent_session_id", "root_session_id")
             if name not in raw_cols
+        )
+        lineage_select += (
+            ", CASE WHEN CAST(session_kind AS VARCHAR) IN ('main', 'worker', 'guardian', 'unknown') "
+            "THEN CAST(session_kind AS VARCHAR) ELSE 'unknown' END AS session_kind"
+            if "session_kind" in raw_cols else ", 'unknown'::VARCHAR AS session_kind"
         )
         con.execute(
             "CREATE TABLE rounds AS "
@@ -607,12 +613,17 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
               AND session_id = trim(session_id)
               AND length(trim(substr(session_id, length(provider) + 2))) > 0
         """)
+    timing_additions = []
     if not _has_column(con, "timing_events", "event_index"):
+        timing_additions.append("row_number() OVER (PARTITION BY round_pk ORDER BY rowid) AS event_index")
+    if not _has_column(con, "timing_events", "turn_id"):
+        timing_additions.append("CAST(NULL AS VARCHAR) AS turn_id")
+    if timing_additions:
         con.execute(
             f"""
             CREATE TEMP VIEW timing_events AS
             SELECT
-              row_number() OVER (PARTITION BY round_pk ORDER BY rowid) AS event_index,
+              {', '.join(timing_additions)},
               *
             FROM {db}.timing_events
             """
@@ -686,8 +697,11 @@ def _install_compat_views(con: "duckdb.DuckDBPyConnection") -> None:
     # Round fields newer than a DB read as typed NULLs:
     # unknown, not zero or "main".
     missing_round = [(c, t) for c, t in _PINNED_OPTIONAL_ROUND_COLUMNS if not _has_column(con, "rounds", c)]
-    if missing_round:
-        additions = ", ".join(f"CAST(NULL AS {t}) AS {_ident(c)}" for c, t in missing_round)
+    round_additions = [f"CAST(NULL AS {t}) AS {_ident(c)}" for c, t in missing_round]
+    if not _has_column(con, "rounds", "session_kind"):
+        round_additions.append("'unknown'::VARCHAR AS session_kind")
+    if round_additions:
+        additions = ", ".join(round_additions)
         con.execute(f"CREATE TEMP VIEW rounds AS SELECT *, {additions} FROM {db}.rounds")
 
 

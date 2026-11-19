@@ -364,6 +364,8 @@ def sanitize_row(row: dict[str, Any], ids: StableIdSanitizer) -> dict[str, Any]:
             original_event = (
                 original_timing_events[index] if index < len(original_timing_events) else {}
             )
+            if isinstance(original_event, dict) and "turn_id" in original_event:
+                event["turn_id"] = ids.atomic_id("turn_id", original_event["turn_id"], fallback_prefix="turn_")
             if isinstance(original_event, dict) and "tool_call_id" in original_event:
                 event["tool_call_id"] = ids.atomic_id(
                     "tool_call_id",

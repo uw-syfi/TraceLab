@@ -287,6 +287,7 @@ def append_claude_round_trace(
         "output": str(output_path),
         "existing_rounds": len(existing_keys),
         "project_dirs": 0,
+        "coverage_diagnostics": {},
         "session_files": 0,
         "candidate_rounds": 0,
         "written_rounds": 0,
@@ -337,6 +338,7 @@ def append_claude_round_trace(
                     rounds = extract_session_with_key(
                         session_file, project_name, session_key,
                         project_layout=project_dir.parent.name == "projects",
+                        diagnostics_sink=stats["coverage_diagnostics"],
                     )
                 except Exception as exc:
                     stats["errors"].append(
@@ -406,6 +408,7 @@ def append_codex_round_trace(
         "output": str(output_path),
         "existing_rounds": len(existing_keys),
         "session_dirs": 0,
+        "coverage_diagnostics": {},
         "session_files": 0,
         "candidate_rounds": 0,
         "written_rounds": 0,
@@ -441,7 +444,7 @@ def append_codex_round_trace(
             )
             for session_index, session_file in enumerate(session_files, start=1):
                 try:
-                    rounds = extract_codex_session(session_file)
+                    rounds = extract_codex_session(session_file, diagnostics_sink=stats["coverage_diagnostics"])
                 except Exception as exc:
                     stats["errors"].append(
                         {"session_file": str(session_file), "error": f"{type(exc).__name__}: {exc}"}
