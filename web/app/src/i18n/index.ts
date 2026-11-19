@@ -753,7 +753,7 @@ export const uiCopy = {
         },
         'Subagent workload': {
           title: '子智能体工作负载',
-          blurb: '主会话及其关联子智能体中记录的模型轮次与工具调用。',
+          blurb: '全部会话、委派主会话和关联子智能体中记录的模型轮次与工具调用。',
         },
         'Subagent tokens and reports': {
           title: '子智能体 token 与报告',
@@ -940,9 +940,9 @@ export const uiCopy = {
       captions: {
         'Elapsed time, time with tool calls outstanding, and per-subagent tool share, by provider.': '按提供方展示经过时间、工具调用尚未返回结果的时间，以及每个子智能体的工具时间占比。',
         'Session counts, family size, and depth, with missing links shown for Claude and Codex.': 'Claude 与 Codex 的会话数、家族规模和深度，并标明缺失的关联。',
-        'Rounds and tool calls per session and per round, including zero-call and one-round sessions, with coverage for each group.': '每个会话的轮次与工具调用、每轮工具调用，包括零调用和单轮会话，并展示各组数据覆盖情况。',
+        'Session populations, mean and median workloads, zero-call rounds, and outlier concentration. Main counts exclude child rounds.': '会话样本、工作负载均值与中位数、零调用轮次及离群值集中度。主会话计数不包含子会话轮次。',
         'Token totals, first and peak input, and input changes around subagent replies. Claude shows possible replies; Codex shows completed replies recorded by wait. Neither measures report-body tokens.': 'token 总量、首次及峰值输入，以及子智能体回复前后的输入变化。Claude 展示可能的回复；Codex 展示 wait 工具记录的已完成回复。两者都不能衡量报告正文的 token 数。',
-        'Main and linked-subagent tool use for the same displayed tool list. Time sums positive call latencies, not elapsed runtime; missing linked data is labeled.': '用同一工具列表展示主会话和关联子智能体的工具使用。耗时为正调用延迟之和，不是实际经过时间；缺失关联数据会明确标注。',
+        'Main and linked-subagent tool use: tools ranked by calls on the left and summed positive call time on the right. Omitted shares are shown; time is not elapsed runtime.': '主会话和关联子智能体的工具使用：左侧按调用数排序，右侧按正调用耗时之和排序。显示未绘制部分的占比；耗时不是实际经过时间。',
         'Main-session and subagent summaries: call counts, errors among known outcomes, outcome and timing coverage, distinct tools per session, and summed positive call time.': '主会话和子智能体汇总：调用数、已知结果中的错误、结果与耗时覆盖情况、每个会话的工具种类数，以及正调用耗时之和。',
         'Per-session, per-request, and per-step counts (avg / p25 / p50 / p90 / p99).':
           '按会话、按请求、按步骤的计数（avg / p25 / p50 / p90 / p99）。',

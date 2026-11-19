@@ -18,6 +18,7 @@ import png_sidecar  # noqa: E402
 import trace_db  # noqa: E402
 from subagent_cohorts import COHORT_SQL, summarize  # noqa: E402
 from tool_metrics import tool_aggregate_sql  # noqa: E402
+from tool_stats import plot_tool_name  # noqa: E402
 from style import (  # noqa: E402
     BAR_BLUE, BAR_GREEN, PROVIDER_COMPARISON_ORDER, mticker, plt,
     polish_axes, provider_title, save_plot, short_label,
@@ -91,13 +92,29 @@ def load_metrics(con):
     return groups, tools
 
 
-def selected_names(tools):
-    """One ranked union for every panel; exact names, no MCP aliases or role-local ranks."""
-    counts = {}
+def chart_rows(tools, metric):
+    """Use the overall tool sections' MCP aliases; retain exact names in tables/CSV."""
+    buckets = {}
+    for row in tools:
+        name = row["tool_name"] or "<unknown-tool>"
+        if metric == "latency_ms":
+            name = name.strip()  # The overall tool-time section trims names before plotting.
+        name = plot_tool_name(name)
+        key = row["provider"], row["role"], name
+        bucket = buckets.setdefault(key, {"provider": row["provider"], "role": row["role"],
+                                          "tool_name": name, metric: 0})
+        bucket[metric] += row[metric] or 0
+    return list(buckets.values())
+
+
+def selected_names(tools, metric="calls"):
+    """Rank counts by calls and time by canonical summed positive effective latency."""
+    totals = {}
     for row in tools:
         name = row["tool_name"]
-        counts[name] = counts.get(name, 0) + row["calls"]
-    return sorted(counts, key=lambda name: (-counts[name], name is None, name or ""))[:TOP_TOOLS]
+        totals[name] = totals.get(name, 0) + (row[metric] or 0)
+    return sorted((name for name in totals if totals[name] > 0),
+                  key=lambda name: (-totals[name], name is None, name or ""))[:TOP_TOOLS]
 
 
 def display_name(name):
@@ -105,17 +122,21 @@ def display_name(name):
 
 
 def plot_usage(groups, tools, output_dir):
-    names = selected_names(tools)
-    fig, axes = plt.subplots(2, 2, figsize=(16, max(9, len(names) * 0.8 + 3)), squeeze=False)
+    panels = {metric: chart_rows(tools, metric) for metric in ("calls", "latency_ms")}
+    selected = {metric: selected_names(rows, metric) for metric, rows in panels.items()}
+    fig, axes = plt.subplots(2, 2, figsize=(16, max(9, max(map(len, selected.values())) * 0.8 + 3)), squeeze=False)
     try:
         fig.suptitle("Tool usage in linked subagent families", fontsize=18)
-        lookup = {(r["provider"], r["role"], r["tool_name"]): r for r in tools}
-        latency_max = max((r["latency_ms"] or 0 for r in tools), default=0) / 3_600_000
+        latency_max = max((r["latency_ms"] for r in panels["latency_ms"]
+                           if r["tool_name"] in selected["latency_ms"]), default=0) / 3_600_000
         for index, provider in enumerate(PROVIDER_COMPARISON_ORDER):
             provider_groups = [r for r in groups if r["provider"] == provider]
-            for column, metric in enumerate(("call_share", "latency_ms")):
+            for column, metric in enumerate(("calls", "latency_ms")):
+                names = selected[metric]
+                rows = panels[metric]
+                lookup = {(r["provider"], r["role"], r["tool_name"]): r for r in rows}
                 ax = axes[index, column]
-                title = "Call mix within each role" if column == 0 else "Additive positive tool time"
+                title = "Top tools by calls" if column == 0 else "Top tools by summed positive tool time"
                 ax.set_title(f"{provider_title(provider)} — {title}", loc="left", pad=12)
                 if not any(r["diversity_n"] for r in provider_groups):
                     ax.text(0.5, 0.5, "No linked data", ha="center", va="center", transform=ax.transAxes)
@@ -130,16 +151,20 @@ def plot_usage(groups, tools, output_dir):
                         message = "no calls" if not group["calls"] else "no positive latency recorded"
                         notes.append(f"{role.title()}: {message}")
                         continue
+                    total = group[metric]
+                    omitted = sum(r[metric] for r in rows if (r["provider"], r["role"]) == (provider, role)
+                                  and r["tool_name"] not in names)
+                    notes.append(f"{role.title()} omitted: {100 * omitted / total:.1f}%")
                     available = True
                     positions, values = [], []
                     for i, name in enumerate(names):
                         row = lookup.get((provider, role, name))
                         # Missing latency is unavailable, not a measured zero-duration bar.
-                        if column == 1 and (row is None or row[metric] is None):
+                        if column == 1 and (row is None or row[metric] <= 0):
                             continue
                         positions.append(i + (role_index - 0.5) * 0.36)
                         value = row[metric] if row else 0
-                        values.append(value if column == 0 else value / 3_600_000)
+                        values.append(value / group["calls"] if column == 0 else value / 3_600_000)
                     ax.barh(positions, values, height=0.34, color=color, alpha=0.78,
                             label=f"{role.title()} (sessions: {group['diversity_n']:,})")
                 if notes:
@@ -154,10 +179,10 @@ def plot_usage(groups, tools, output_dir):
                 polish_axes(ax, grid_axis="x")
                 if available:
                     ax.legend(loc="lower right")
-        omitted = sum(r["calls"] for r in tools if r["tool_name"] not in names)
         fig.text(0.5, 0.01,
-                 f"Shared top {len(names)} names by combined calls; omitted tail: {omitted:,} calls. "
-                 "All tool rows and coverage are in the tables/CSV.", ha="center", fontsize=10)
+                 f"Each column selects its top {TOP_TOOLS} categories across providers and roles; mcp_* tools merge as mcp. "
+                 "Time adds call latencies, not elapsed runtime. Tail shares and coverage are in the tables/CSV.",
+                 ha="center", fontsize=10)
         fig.tight_layout(rect=(0, 0.04, 1, 0.96), h_pad=2, w_pad=3)
         save_plot(fig, output_dir / "tool_usage.png")
     finally:
@@ -194,7 +219,6 @@ def render_md(groups, tools):
             blocks.append(f"**{provider_title(provider)}: no linked data.**\n")
     group_lookup = {(r["provider"], r["role"]): r for r in groups}
     tool_lookup = {(r["provider"], r["role"], r["tool_name"]): r for r in tools}
-    names = selected_names(tools)
     for role, label in (("main", "Main sessions"), ("descendant", "Subagents")):
         pair = [group_lookup[p, role] for p in PROVIDER_COMPARISON_ORDER]
         rows = [[label] + [format_value(r[key]) for r in pair] for key, label in (
@@ -216,18 +240,28 @@ def render_md(groups, tools):
     blocks.append("Distinct tools counts exact, nonblank names; sessions with no named tools count as zero. "
                   "Avg is the average; P25/P50/P90/P99 are percentiles, with P50 the median.\n")
     blocks += ["## Tools outside the figure\n",
-                f"The figure shows the top {len(names)} tool names. "
-                "Ranked by combined calls across providers and roles; ties by exact name. "
-                "The same names and axes are used in both provider rows and both panels. "
-                "Only the figure omits these calls; all tools remain in the tables below.\n"]
+                f"Each column selects up to {TOP_TOOLS} categories across providers and roles: "
+                "the call column ranks by calls; the time column ranks by summed positive effective time. "
+                "Both provider rows share that column's categories and scale. MCP names merge as mcp in the figure, "
+                "following the overall tool sections; the time column also trims surrounding whitespace. "
+                "Exact names and every call remain in the tables/CSV. Omitted shares use all calls or all positive "
+                "effective time in the same provider and role. No positive timing means N/A.\n"]
     for role, label in (("main", "Main sessions"), ("descendant", "Subagents")):
         rows = []
         for provider in PROVIDER_COMPARISON_ORDER:
             group = group_lookup[provider, role]
-            omitted = [r for r in tools if (r["provider"], r["role"]) == (provider, role) and r["tool_name"] not in names]
-            calls = sum(r["calls"] for r in omitted)
-            rows.append([provider_title(provider), len(omitted), f"{calls:,}", percent(calls / group["calls"] if group["calls"] else None)])
-        blocks += [f"### {label}\n", md_table.gfm_table(["Provider", "Tools (including unnamed)", "Calls", "Call share"], rows)]
+            for metric, panel in (("calls", "Calls"), ("latency_ms", "Positive time (ms)")):
+                plotted = chart_rows(tools, metric)
+                names = selected_names(plotted, metric)
+                omitted = [r for r in plotted if (r["provider"], r["role"]) == (provider, role)
+                           and r["tool_name"] not in names]
+                value = sum(r[metric] for r in omitted)
+                total = group[metric]
+                rows.append([provider_title(provider), panel, len(omitted),
+                             format_value(value if metric == "calls" or total else None),
+                             percent(value / total if total else None)])
+        blocks += [f"### {label}\n", md_table.gfm_table(
+            ["Provider", "Panel", "Omitted categories", "Omitted value", "Omitted share"], rows)]
     blocks += ["## Every recorded tool\n",
                "Names are kept exactly as recorded; matching names do not guarantee matching behavior. "
                "Blank or missing names share one unnamed-call group, excluded from distinct-tool counts.\n"]

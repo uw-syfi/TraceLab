@@ -25,6 +25,8 @@ The unit of identity is an observed valid `(provider, session_id)` in `sessions`
 
 Each descendant-count and direct-child-count distribution has **one observation per F main**, not one per child. A known direct child has `parent_status = 'resolved'` and the observed parent equals its matched root. A zero in the direct-child distribution means **zero known direct children**, not proof of zero real children. The known-parent count includes resolved parent edges to another member of the same matched family; a resolved edge to an unclassified/outside-family ancestor does not qualify.
 
+The linked worker/guardian/unknown-kind rows partition `D`. Kind comes from recorded `rounds.session_kind`, aggregated by provider/session, never from observed tool use or session length. Absent/legacy evidence and conflicting known kinds remain unknown. These rows reveal source composition without changing cohort eligibility or inventing task boundaries. Workload reports the corresponding counts, means and medians alongside all-session and all-main baselines.
+
 - **Nested:** at least one validated descendant-to-descendant edge within the matched family, even if other edges or all depths are unknown.
 - **Flat:** every matched descendant has a resolved direct edge to the root.
 - **Unknown:** neither condition holds. Root-only membership cannot establish flatness.

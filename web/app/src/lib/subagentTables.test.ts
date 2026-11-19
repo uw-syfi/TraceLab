@@ -42,7 +42,7 @@ async function curated(slug: string, md: string) {
   return (await processor.render(md)).code;
 }
 
-test('adoption removes duplicates and quiet diagnostics, retaining unknown coverage', async () => {
+test('adoption keeps cohort, unknown, and zero coverage visible', async () => {
   const code = await curated('subagents/adoption', '## Sessions\n\n' + comparison(
     '| Main sessions | 4 | 8 |\n| Main sessions with confirmed roots | 4 | 7 |\n' +
     '| Subagents (linked or not) | 2 | 3 |\n| Subagents in these families | 2 | 3 |\n' +
@@ -50,17 +50,21 @@ test('adoption removes duplicates and quiet diagnostics, retaining unknown cover
   ));
   assert.match(code, /Main sessions with confirmed roots/);
   assert.match(code, /Sessions with unavailable family links/);
-  assert.doesNotMatch(code, /Subagents in these families|Sessions with unknown origin/);
+  assert.match(code, /Subagents in these families/);
+  assert.match(code, /Sessions with unknown origin/);
 });
 
-test('workload removes an empty coverage block but keeps meaningful zero comparisons', async () => {
+test('workload retains population coverage and zero-round comparisons', async () => {
   const code = await curated('subagents/workload', '## Sessions and coverage\n\n' + comparison(
     '| Observed sessions | 10 | 20 |\n| Sessions outside these groups | 2 | 3 |\n' +
     '| Linked sessions outside these families | 0 | 0 |\n| Sessions with unavailable family links | 0 | 0 |',
   ) + '\n\n## Subagents\n\n' + comparison(
     '| Sessions with no tool calls | 0 (0.0%) | 36 (18.6%) |\n| Sessions with one round | 0 (0.0%) | 0 (0.0%) |',
   ));
-  assert.doesNotMatch(code, /Sessions and coverage|Sessions with one round/);
+  assert.match(code, /Sessions and coverage/);
+  assert.match(code, /Observed sessions/);
+  assert.match(code, /Sessions outside these groups/);
+  assert.match(code, /Sessions with one round/);
   assert.match(code, /Sessions with no tool calls/);
   assert.match(code, />0 \(0\.0%\)<\/td>/);
 });
@@ -94,9 +98,12 @@ test('tool usage retains summaries and coverage while omitting the exhaustive to
     comparison('| Calls | 9 | N/A |'),
     '\n## End note\nKeep this note.',
   ].join('\n'));
-  assert.equal((code.match(/<table>/g) ?? []).length, 1);
+  assert.equal((code.match(/<table>/g) ?? []).length, 2);
   assert.match(code, /Outcome coverage/);
   assert.match(code, /Calls with missing time/);
-  assert.doesNotMatch(code, /Known successes|Unknown outcomes|Tools outside the figure|Every recorded tool|Bash/);
+  assert.match(code, /Known successes/);
+  assert.match(code, /Unknown outcomes/);
+  assert.match(code, /Tools outside the figure/);
+  assert.doesNotMatch(code, /Every recorded tool|Bash/);
   assert.match(code, /Keep this note/);
 });

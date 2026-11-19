@@ -42,6 +42,8 @@ export function subagentHeadlineRows(stats: HeadlineStat[]) {
   const measures = [
     ['main sessions with subagents', 'Main sessions with subagents'],
     ['average subagents per main session', 'Avg subagents / delegating main'],
+    ['median rounds per main session', 'Median rounds / delegating main'],
+    ['median rounds per subagent', 'Median rounds / subagent'],
     ['average rounds per main session', 'Avg rounds / delegating main'],
     ['average rounds per subagent', 'Avg rounds / subagent'],
     ['median input tokens per complete family', 'Median input tokens / family'],

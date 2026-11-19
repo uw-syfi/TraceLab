@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 
 import md_table  # noqa: E402
 import trace_db  # noqa: E402
-from subagent_cohorts import COHORT_SQL, summarize  # noqa: E402
+from subagent_cohorts import COHORT_SQL, session_kinds_sql, summarize  # noqa: E402
 
 PROVIDERS = (("claude", "Claude"), ("codex", "Codex"))
 
@@ -26,6 +26,8 @@ def collect(con) -> dict:
         "eligible_mains", "unavailable_lineage", "resolved_descendants",
     )
     out: dict = {provider: dict.fromkeys(count_keys, 0) for provider, _ in PROVIDERS}
+    for data in out.values():
+        data["linked_kinds"] = dict.fromkeys(("worker", "guardian", "unknown"), 0)
     for provider, *counts in con.execute("""
         SELECT provider, count(*),
                count(*) FILTER (WHERE session_origin IN ('claude_top_level_layout', 'codex_top_level_source')),
@@ -44,16 +46,18 @@ def collect(con) -> dict:
 
     families = {}
     depths = {provider: [] for provider, _ in PROVIDERS}
-    for provider, root, parent_status, parent_role, depth in con.execute(f"""
-        WITH cohort AS ({COHORT_SQL})
-        SELECT c.provider, c.root_session_id, s.parent_status, p.role, s.depth
+    for provider, root, parent_status, parent_role, depth, kind in con.execute(f"""
+        WITH cohort AS ({COHORT_SQL}), kinds AS ({session_kinds_sql(con)})
+        SELECT c.provider, c.root_session_id, s.parent_status, p.role, s.depth, k.session_kind
         FROM cohort c
         JOIN sessions s ON s.provider = c.provider AND s.session_id = c.session_id
+        LEFT JOIN kinds k ON k.provider = c.provider AND k.session_id = c.session_id
         LEFT JOIN cohort p ON p.provider = c.provider
                           AND p.session_id = s.observed_parent_session_id
                           AND p.root_session_id = c.root_session_id
         WHERE c.role = 'descendant'
     """).fetchall():
+        out[provider]["linked_kinds"][kind if kind in ("worker", "guardian") else "unknown"] += 1
         family = families.setdefault((provider, root), {"descendants": 0, "direct": 0, "nested": 0})
         family["descendants"] += 1
         if parent_status == "resolved":
@@ -109,6 +113,9 @@ def render_md(data: dict) -> str:
             ["Main sessions with confirmed roots", d["eligible_mains"]],
             ["Main sessions with subagents", d["delegating_mains"]],
             ["Subagents in these families", d["matched_descendants"]],
+            ["Linked workers", d["linked_kinds"]["worker"]],
+            ["Linked guardians", d["linked_kinds"]["guardian"]],
+            ["Linked subagents with unknown kind", d["linked_kinds"]["unknown"]],
             ["Linked sessions outside these families", d["excluded_resolved_descendants"]],
             ["Sessions with unavailable family links", d["unavailable_lineage"]],
         ])
@@ -120,7 +127,9 @@ def render_md(data: dict) -> str:
         ])
     for heading, note, pair in (
         ("", "Origin comes from provider source or file layout, not incoming links. "
-         "The headline percentage uses main sessions with confirmed roots.", populations),
+         "The headline percentage uses main sessions with confirmed roots. "
+         "Worker and guardian are recorded source kinds, not classifications inferred from behavior. "
+         "Unknown includes absent, legacy or conflicting kind evidence. These three linked-kind rows sum to linked subagents.", populations),
         ("Family structure", """These are synthetic examples, not reconstructions of actual data. Each family has **4 sessions: one main + three subagents**. Arrows mean recorded, validated **direct launch links**, not just family membership.
 
 **Flat:** Main directly launched A, B and C. Every subagent's direct parent is known to be Main.

@@ -21,6 +21,11 @@ as stored in the sanitized input: no case folding, MCP merging, or inferred alia
 Null and whitespace-only names form an unnamed-call bucket for call and time
 accounting, but never count as a distinct named tool. Other names are not trimmed.
 
+The figure reuses the overall tool sections' display policy: `mcp_*` names merge as
+`mcp`, and the time column trims surrounding whitespace. This changes display
+categories, not call totals or exact-name table/CSV rows. The shared raw-call
+aggregate expressions and effective-latency precedence match the overall sections.
+
 - **Calls:** all recorded calls for a provider, role, and exact tool name.
 - **Call share:** tool calls / all calls in the same provider and role, including
   unnamed calls. A role with no calls has an unavailable share, not zero percent.
@@ -44,14 +49,17 @@ accounting, but never count as a distinct named tool. Other names are not trimme
 
 The figure uses the existing shared Matplotlib style and save helper. Claude and
 Codex occupy separate rows; blue means main and green means descendant in both.
-Call-share and summed-time panels use the same set of up to 12 names, ranked by
-combined call count across both providers and roles, with exact-name tie breaks.
-“Shared” means a common display list, not tools required to occur in every group.
-An unnamed-call bucket can appear in that list. Long display labels are shortened;
-full names remain in the tables and CSV. Time panels use a common hours scale.
+The two columns use different top-12 lists: call panels rank by combined calls,
+while time panels rank by summed positive effective latency across providers and
+roles. Each column shares its list and scale between provider rows; tools need not
+occur in every group. Ties use display names. An unnamed-call category can appear.
+Long display labels are shortened; exact names remain in tables/CSV. Time panels
+use a common hours scale derived only from the displayed categories, so a hidden
+tool cannot stretch the visible axis.
 
-The figure names the omitted call tail; the Markdown breaks it down by provider
-and role. Neither the full tool tables nor the CSV drops the tail. The call mix is
+The figure shows omitted shares for each provider and role; the Markdown reports
+omitted calls and time separately, including category counts and shares. Neither
+the full tool tables nor the CSV drops the tail. The call mix is
 not renormalized to the displayed names. Empty provider panels say “No linked
 data”; linked roles without calls and roles without positive latency are labeled
 separately. Missing latency is not drawn as measured zero.

@@ -27,3 +27,15 @@ test('headline comparisons preserve zero and missing provider measurements', () 
   ]);
   assert.deepEqual(subagentHeadlineRows([]), []);
 });
+
+test('workload previews label medians separately from legacy mean values', () => {
+  const rows = subagentHeadlineRows([
+    { label: 'Claude median rounds per main session', value: '146.50' },
+    { label: 'Codex median rounds per main session', value: '156.00' },
+    { label: 'Claude median rounds per subagent', value: '23.00' },
+  ]);
+  assert.equal(rows[0].label, 'Median rounds / delegating main');
+  assert.deepEqual(rows[0].values.map((row) => row.value), ['146.50', '156.00']);
+  assert.equal(rows[1].label, 'Median rounds / subagent');
+  assert.equal(rows[1].values[1].value, 'N/A');
+});

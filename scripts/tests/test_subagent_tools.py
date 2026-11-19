@@ -152,6 +152,54 @@ def test_display_aligns_asymmetric_tool_names_and_missing_latency(con):
     assert "<br>" not in page and "; mean" not in page
 
 
+def test_time_selection_includes_rare_slow_tool_and_keeps_exact_csv_names(con, tmp_path, monkeypatch):
+    family(con, "claude")
+    con.execute("""
+        INSERT INTO tool_calls VALUES
+        (0, 'mcp_one', FALSE, 10, 500), (0, 'mcp_one', FALSE, 10, 500),
+        (0, 'mcp_two', FALSE, 10, 500), (0, 'mcp_two', FALSE, 10, 500),
+        (0, 'rare-slow', FALSE, 1000, 9999);
+    """)
+    monkeypatch.setattr(plot, "TOP_TOOLS", 1)
+    groups, tools = plot.load_metrics(con)
+    calls = plot.chart_rows(tools, "calls")
+    times = plot.chart_rows(tools, "latency_ms")
+    assert plot.selected_names(calls, "calls") == ["mcp"]
+    assert plot.selected_names(times, "latency_ms") == ["rare-slow"]
+    assert next(r for r in times if r["tool_name"] == "rare-slow")["latency_ms"] == 1000
+    saved = []
+    monkeypatch.setattr(plot, "save_plot", lambda fig, path: saved.append(fig))
+    plot.plot_usage(groups, tools, tmp_path)
+    figure = saved[0]
+    assert [tick.get_text() for tick in figure.axes[0].get_yticklabels()] == ["mcp"]
+    assert [tick.get_text() for tick in figure.axes[1].get_yticklabels()] == ["rare-slow"]
+    assert "Main omitted: 3.8%" in figure.axes[1].get_title(loc="left")
+    plot.write_tables(groups, tools, tmp_path)
+    with (tmp_path / "tool_usage.csv").open() as fh:
+        assert {r["tool_name"] for r in csv.DictReader(fh) if r["row_type"] == "tool"} == {
+            "mcp_one", "mcp_two", "rare-slow",
+        }
+    assert "Positive time (ms)" in (tmp_path / "tool_usage.md").read_text()
+
+
+def test_hidden_time_category_cannot_set_displayed_axis(con, tmp_path, monkeypatch):
+    family(con, "claude")
+    family(con, "codex", 10)
+    con.execute("""
+        INSERT INTO tool_calls VALUES
+        (0, 'displayed', FALSE, 100, NULL), (10, 'displayed', FALSE, 100, NULL),
+        (0, 'hidden', FALSE, 150, NULL);
+    """)
+    monkeypatch.setattr(plot, "TOP_TOOLS", 1)
+    saved = []
+    monkeypatch.setattr(plot, "save_plot", lambda fig, path: saved.append(fig))
+    groups, tools = plot.load_metrics(con)
+    plot.plot_usage(groups, tools, tmp_path)
+    assert saved[0].axes[1].get_xlim()[1] == pytest.approx(100 * 1.08 / 3_600_000)
+    assert saved[0].axes[3].get_xlim() == saved[0].axes[1].get_xlim()
+    assert "| Claude | Positive time (ms) | 1 | 150 | 60% |" in plot.render_md(groups, tools)
+
+
 @pytest.mark.parametrize("population", ["empty", "zero", "calls"])
 def test_main_synthetic_plot_smoke(con, tmp_path, monkeypatch, population):
     if population != "empty":

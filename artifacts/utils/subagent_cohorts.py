@@ -32,6 +32,20 @@ SELECT provider, session_id, root_session_id, 'descendant' AS role FROM descenda
 """.strip()
 
 
+def session_kinds_sql(con) -> str:
+    """Session-level source kinds; legacy, absent and conflicting evidence stays unknown."""
+    columns = {row[1] for row in con.execute("PRAGMA table_info('rounds')").fetchall()}
+    if "session_kind" not in columns:
+        return "SELECT provider, session_id, 'unknown' AS session_kind FROM rounds GROUP BY 1, 2"
+    known = "CASE WHEN session_kind IN ('main', 'worker', 'guardian') THEN session_kind END"
+    return f"""
+        SELECT provider, session_id,
+               CASE WHEN count(DISTINCT {known}) = 1 THEN max({known})
+                    ELSE 'unknown' END AS session_kind
+        FROM rounds GROUP BY provider, session_id
+    """
+
+
 def summarize(values) -> dict[str, int | float | None]:
     """Summarize finite, nonmissing observations; preserve genuine zero and signed values."""
     arr = np.asarray([value for value in values if value is not None], dtype=float)

@@ -141,13 +141,13 @@ export const experiments: Experiment[] = [
     slug: 'subagents/workload',
     category: 'subagents',
     title: 'Subagent workload',
-    blurb: 'Recorded rounds and tool calls in main sessions and their subagents.',
+    blurb: 'Recorded rounds and tool calls across all sessions, delegating mains, and linked subagents.',
     readme: 'artifacts/subagents/workload/README.md',
     figures: [],
     tables: [
       {
         src: 'artifacts/subagents/workload/workload.md',
-        caption: 'Rounds and tool calls per session and per round, including zero-call and one-round sessions, with coverage for each group.',
+        caption: 'Session populations, mean and median workloads, zero-call rounds, and outlier concentration. Main counts exclude child rounds.',
       },
     ],
   },
@@ -174,7 +174,7 @@ export const experiments: Experiment[] = [
     figures: [
       {
         src: '/figures/subagents/tool_usage.png',
-        caption: 'Main and linked-subagent tool use for the same displayed tool list. Time sums positive call latencies, not elapsed runtime; missing linked data is labeled.',
+        caption: 'Main and linked-subagent tool use: tools ranked by calls on the left and summed positive call time on the right. Omitted shares are shown; time is not elapsed runtime.',
       },
     ],
     tables: [

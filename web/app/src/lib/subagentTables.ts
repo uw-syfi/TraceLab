@@ -17,6 +17,7 @@ const quietRows = new Set([
 function curateTable(table: Element, slug: string, headings: string[]): boolean {
   const body = elements(table).find((child) => child.tagName === 'tbody');
   if (!body) return true;
+  if (['subagents/adoption', 'subagents/workload', 'subagents/tool_usage'].includes(slug)) return true;
   const rows = elements(body);
   const values = (row: Element) => elements(row).slice(1).map(textOf);
   const label = (row: Element) => textOf(elements(row)[0]);
@@ -36,12 +37,6 @@ function curateTable(table: Element, slug: string, headings: string[]): boolean 
     if (node.type !== 'element' || node.tagName !== 'tr') return true;
     const name = label(node);
     if (quietRows.has(name) && allZero(node)) return false;
-    if (slug === 'subagents/adoption') {
-      if (name === 'Main sessions with confirmed roots' && same(name, 'Main sessions')) return false;
-      if (name === 'Subagents in these families' && same(name, 'Subagents (linked or not)')) return false;
-    }
-    if (slug === 'subagents/workload' && section === 'Sessions and coverage' &&
-        ['Observed sessions', 'Sessions outside these groups'].includes(name)) return false;
     if (slug === 'subagents/tokens_and_reports') {
       if (section === 'Coverage and subagent share') {
         if (name === 'Rounds') return false;
@@ -54,7 +49,6 @@ function curateTable(table: Element, slug: string, headings: string[]): boolean 
         if (!['Calls with valid report evidence', 'Calls with valid timing', 'Rounds receiving results'].includes(name) && allZero(node)) return false;
       }
     }
-    if (slug === 'subagents/tool_usage' && ['Known successes', 'Unknown outcomes'].includes(name)) return false;
     return true;
   });
   return elements(body).length > 0;
@@ -75,7 +69,7 @@ function curateSections(tree: Root, slug: string) {
       headings.length = depth;
       headings[depth - 1] = textOf(first);
       if (skippedDepth && depth <= skippedDepth) skippedDepth = 0;
-      if ((slug === 'subagents/tool_usage' && ['Every recorded tool', 'Tools outside the figure'].includes(textOf(first))) ||
+      if ((slug === 'subagents/tool_usage' && textOf(first) === 'Every recorded tool') ||
           (slug === 'subagents/tokens_and_reports' && headings.includes('Report evidence coverage') && textOf(first) === 'Other recipients')) skippedDepth = depth;
     }
     if (skippedDepth) continue;

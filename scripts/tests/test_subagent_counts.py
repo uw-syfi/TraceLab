@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "artifacts" / "utils"))
 
 import trace_db  # noqa: E402
-from subagent_cohorts import COHORT_SQL, summarize  # noqa: E402
+from subagent_cohorts import COHORT_SQL, session_kinds_sql, summarize  # noqa: E402
 
 SCOPE = "10000000-0000-4000-8000-000000000001"
 ORIGINS = {
@@ -254,10 +254,10 @@ def test_unscoped_known_origins_keep_classification_not_linkage(db_for, family_r
         {"label": "Codex average subagents per main session", "value": "1.33"},
     ]),
     ("workload", workload, [
-        {"label": "Claude average rounds per main session", "value": "1.33"},
-        {"label": "Claude average rounds per subagent", "value": "1.00"},
-        {"label": "Codex average rounds per main session", "value": "1.67"},
-        {"label": "Codex average rounds per subagent", "value": "1.25"},
+        {"label": "Claude median rounds per main session", "value": "1.00"},
+        {"label": "Claude median rounds per subagent", "value": "1.00"},
+        {"label": "Codex median rounds per main session", "value": "1.00"},
+        {"label": "Codex median rounds per subagent", "value": "1.00"},
     ]),
 ])
 @pytest.mark.parametrize("source", ["db", "input"])
@@ -282,6 +282,53 @@ def test_main_emits_only_expected_artifacts_with_computed_provider_values(
     assert db.read_bytes() == before
     stdout = capsys.readouterr().out
     assert "| Claude | Codex |" in stdout
+
+
+def test_population_baselines_outlier_and_zero_round_coverage(db_for):
+    main, child = ORIGINS["claude"]
+    rows = [
+        *[_row("claude", "long", main, tools=2) for _ in range(10)],
+        _row("claude", "short", main),
+        *[_row("claude", f"long-child-{i}", child, parent="long") for i in range(3)],
+        _row("claude", "short-child", child, parent="short", tools=3),
+        _row("claude", "solo", main),
+    ]
+    data = workload.collect(db_for(rows))
+    d = data["claude"]
+    assert {key: d["populations"][key]["sessions"] for key in ("all", "all_main", "other_main", "main", "descendant")} == {
+        "all": 7, "all_main": 3, "other_main": 1, "main": 2, "descendant": 4,
+    }
+    assert d["populations"]["all"]["rounds_per_session"]["avg"] == pytest.approx(16 / 7)
+    assert d["populations"]["all_main"]["rounds_per_session"]["avg"] == 4
+    assert d["populations"]["descendant"]["rounds_per_session"]["p50"] == 1
+    assert d["main"]["rounds"] == 11  # Children stay separate, regardless of family sizes.
+    assert d["descendant"]["rounds"] == 4
+    assert d["main"]["largest_session_rounds"] == 10
+    assert d["main"]["rounds_without_largest_mean"] == 1
+    assert d["main"]["zero_tool_rounds"] == 1
+    assert d["main"]["multi_tool_rounds"] == 10
+    md = workload.render_md(data)
+    assert "| Largest session's rounds | 10 (90.9%) | N/A |" in md
+    assert "a main never includes its children's rows" in md
+    assert "unrelated mains are excluded only from matched tables" in md
+    assert "do not measure task difficulty or efficiency" in md
+
+
+def test_kinds_partition_children_without_guessing_legacy_or_conflicting_evidence(db_for):
+    main, child = ORIGINS["codex"]
+    rows = [_row("codex", "root", main)]
+    for sid, kinds in (("worker", ["worker"]), ("guardian", ["guardian"]),
+                       ("mixed", ["worker", "guardian"]), ("legacy", [None])):
+        for kind in kinds:
+            row = _row("codex", sid, child, parent="root")
+            row["session_kind"] = kind
+            rows.append(row)
+    con = db_for(rows)
+    kinds = dict((sid.rsplit(":", 1)[-1], kind) for _, sid, kind in con.execute(session_kinds_sql(con)).fetchall())
+    assert kinds == {"root": "unknown", "worker": "worker", "guardian": "guardian", "mixed": "unknown", "legacy": "unknown"}
+    d = workload.collect(con)["codex"]["populations"]
+    assert [d[key]["sessions"] for key in ("worker", "guardian", "unknown_kind")] == [1, 1, 2]
+    assert adoption.collect(con)["codex"]["linked_kinds"] == {"worker": 1, "guardian": 1, "unknown": 2}
 
 
 @pytest.mark.parametrize("name,module", [("adoption", adoption), ("workload", workload)])
