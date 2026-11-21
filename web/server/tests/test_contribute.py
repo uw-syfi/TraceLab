@@ -26,6 +26,7 @@ import trace_privacy as tp  # noqa: E402
 from web.server import stats  # noqa: E402
 from web.server import app as appmod  # noqa: E402
 from web.server.fingerprint import session_fingerprints  # noqa: E402
+from web.server.store import LocalStore  # noqa: E402
 
 
 # ---- fixtures -----------------------------------------------------------------------------
@@ -101,8 +102,15 @@ def test_gate_rejects_sensitive_and_tool_input():
             assert getattr(exc, "status_code", None) == 422
 
 
+def _fresh_store() -> None:
+    """Give the app an empty contribution store, so a test's totals don't depend on which tests
+    ran before it (pytest runs them in file order, the script runner below in name order)."""
+    appmod._store = LocalStore(tempfile.mkdtemp(prefix="contrib-test-"))
+
+
 def test_full_dedup_and_bookkeeping_flow():
-    raw1 = make_raw_session("claude:real-1", 4, 30000)
+    _fresh_store()
+    raw1 =make_raw_session("claude:real-1", 4, 30000)
     raw2 = make_raw_session("claude:real-2", 4, 88000)
     a = sanitize(raw1, "seed-A")
     bytes_a = gz(a)
@@ -141,7 +149,8 @@ def test_full_dedup_and_bookkeeping_flow():
 def test_chunk_assembly_reorders_and_validates():
     """The finish step concatenates chunks by offset, so shuffled arrival assembles byte-identically
     and gaps/short uploads are rejected — the integrity guarantee the chunked client relies on."""
-    payload = gz(sanitize(make_raw_session("claude:real-1", 6, 30000), "s"))
+    _fresh_store()
+    payload =gz(sanitize(make_raw_session("claude:real-1", 6, 30000), "s"))
     size = max(1, len(payload) // 5)  # guarantee several chunks regardless of gz size
     chunks = {off: payload[off:off + size] for off in range(0, len(payload), size)}
     assert len(chunks) >= 3  # the gap/reorder assertions below need multiple chunks
