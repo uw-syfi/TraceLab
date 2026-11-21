@@ -14,7 +14,9 @@ from extract_codex_rounds import extract_codex_session  # noqa: E402
 
 SESSION = "019a0000-0000-7000-8000-000000000001"
 PARENT = "019a0000-0000-7000-8000-000000000000"
-TURN = "019a0000-0000-7000-8000-00000000000a"
+# Older than SESSION, so in a subagent file this turn is a replay of the parent's history
+# and its round is credited to the parent; in a normal file it stays with SESSION.
+TURN = "019a0000-0000-6000-8000-00000000000a"
 
 
 def _rec(ts: str, top: str, payload: dict) -> dict:
@@ -53,3 +55,4 @@ def test_non_object_thread_spawn_is_treated_as_absent(tmp_path: Path, bad: objec
 def test_object_thread_spawn_still_marks_a_subagent(tmp_path: Path) -> None:
     rounds = extract_codex_session(_write(tmp_path, _rollout({"parent_thread_id": PARENT})))
     assert len(rounds) == 1
+    assert rounds[0]["session_id"] == f"codex:{PARENT}"       # replayed turn is credited to the parent
