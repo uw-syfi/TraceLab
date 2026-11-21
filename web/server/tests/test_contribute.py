@@ -170,6 +170,30 @@ def test_chunk_assembly_reorders_and_validates():
     assert appmod._process_accept(payload, appmod._parse_and_validate(payload))["accepted"] == 6
 
 
+def test_ingest_skips_subagent_meta_json_quietly():
+    """Each Claude subagent transcript has an `agent-<id>.meta.json` beside it. An archive upload
+    skips those without a warning, so a session with many subagents doesn't bury real warnings."""
+    from web.payload.ingest import _extract_one_file
+
+    root = Path(tempfile.mkdtemp(prefix="ingest-meta-"))
+
+    def write(rel: str, record: dict) -> Path:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record), encoding="utf-8")
+        return path
+
+    meta = {"agentType": "Explore", "description": "search the repo"}
+    for rel in ("projects/demo/sess-1/subagents/agent-abc.meta.json",
+                "projects/demo/sess-1/subagents/workflows/wf_x/agent-def.meta.json"):
+        rows, _raw, _titles, warning, kind = _extract_one_file(write(rel, meta))
+        assert (rows, warning, kind) == ([], None, "skip")
+
+    # the same kind of file outside a subagents folder, or with another name, still gets a warning
+    for rel in ("projects/demo/agent-abc.meta.json", "projects/demo/sess-1/subagents/notes.meta.json"):
+        assert _extract_one_file(write(rel, meta))[3] is not None
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:
