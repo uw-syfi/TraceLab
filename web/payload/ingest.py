@@ -297,6 +297,11 @@ def _extract_one_file(path: Path):
     """
     rs: dict[str, Any] = {}
     ts: dict[str, str] = {}
+    name = path.name
+    if name.startswith("agent-") and name.endswith(".meta.json") and "subagents" in path.parts[:-1]:
+        # Claude Code writes a small description (agent type, task) next to each subagent transcript.
+        # It holds no rounds and nothing is wrong with it: skip it quietly so real warnings stay visible.
+        return [], {}, {}, None, "skip"
     try:
         kind = classify_records(_iter_json_records(path.read_bytes(), limit=200))
     except Exception as exc:  # unreadable member — skip, keep going
