@@ -418,6 +418,8 @@ def extract_codex_session(
                                 if isinstance(source.get("subagent"), dict)
                                 else {}
                             )
+                            if not isinstance(spawn, dict):
+                                spawn = {}
                             parent_id = spawn.get("parent_thread_id")
                             if isinstance(parent_id, str) and parent_id:
                                 parent_session_meta_id = parent_id
